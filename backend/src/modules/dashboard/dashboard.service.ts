@@ -13,65 +13,69 @@ export class DashboardService {
     const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
 
-    // Doanh thu hôm nay
     let todayQuery = this.supabase
       .from('sales_orders')
       .select('total_amount, paid_amount')
       .eq('status', 'completed')
       .gte('sold_at', startOfDay);
     if (branchId) todayQuery = todayQuery.eq('branch_id', branchId);
-    const { data: todayOrders } = await todayQuery;
+    const { data: todayOrders, error: todayOrdersError } = await todayQuery;
+    if (todayOrdersError) throw new Error(todayOrdersError.message);
 
-    // Doanh thu tháng này
     let monthQuery = this.supabase
       .from('sales_orders')
       .select('total_amount, paid_amount')
       .eq('status', 'completed')
       .gte('sold_at', startOfMonth);
     if (branchId) monthQuery = monthQuery.eq('branch_id', branchId);
-    const { data: monthOrders } = await monthQuery;
+    const { data: monthOrders, error: monthOrdersError } = await monthQuery;
+    if (monthOrdersError) throw new Error(monthOrdersError.message);
 
-    // Đơn hàng hôm nay (mọi trạng thái)
     let todayOrdersCountQuery = this.supabase
       .from('sales_orders')
       .select('id', { count: 'exact' })
       .gte('sold_at', startOfDay);
     if (branchId) todayOrdersCountQuery = todayOrdersCountQuery.eq('branch_id', branchId);
-    const { count: todayOrderCount } = await todayOrdersCountQuery;
+    const { count: todayOrderCount, error: todayOrderCountError } = await todayOrdersCountQuery;
+    if (todayOrderCountError) throw new Error(todayOrderCountError.message);
 
-    // Tổng nợ khách hàng
-    const { data: debtData } = await this.supabase
+    const { data: debtData, error: debtDataError } = await this.supabase
       .from('customer_debt_summary')
       .select('current_debt');
+    if (debtDataError) throw new Error(debtDataError.message);
 
-    // Hàng sắp hết (dưới reorder level)
-    const { data: lowStockData } = await this.supabase
-      .from('product_stock_summary')
-      .select('product_id, name, total_on_hand_qty, reorder_level')
-      .lt('total_on_hand_qty', this.supabase.rpc as any)
-      .limit(10);
-
-    // Lấy tồn kho thấp bằng cách khác
-    const { data: allStocks } = await this.supabase
+    const { data: allStocks, error: allStocksError } = await this.supabase
       .from('product_stock_summary')
       .select('*');
+    if (allStocksError) throw new Error(allStocksError.message);
 
     const lowStock = (allStocks ?? []).filter(
-      (p: any) => p.total_on_hand_qty <= p.reorder_level && p.reorder_level > 0,
+      (product: any) =>
+        Number(product.total_on_hand_qty) <= Number(product.reorder_level) &&
+        Number(product.reorder_level) > 0,
     );
 
-    // Đơn hàng gần nhất
     let recentOrdersQuery = this.supabase
       .from('sales_orders')
-      .select(`*, customers(full_name)`)
+      .select('*, customers(full_name)')
       .order('sold_at', { ascending: false })
       .limit(10);
     if (branchId) recentOrdersQuery = recentOrdersQuery.eq('branch_id', branchId);
-    const { data: recentOrders } = await recentOrdersQuery;
+    const { data: recentOrders, error: recentOrdersError } = await recentOrdersQuery;
+    if (recentOrdersError) throw new Error(recentOrdersError.message);
 
-    const todayRevenue = (todayOrders ?? []).reduce((s: number, o: any) => s + Number(o.total_amount), 0);
-    const monthRevenue = (monthOrders ?? []).reduce((s: number, o: any) => s + Number(o.total_amount), 0);
-    const totalDebt = (debtData ?? []).reduce((s: number, d: any) => s + Number(d.current_debt), 0);
+    const todayRevenue = (todayOrders ?? []).reduce(
+      (sum: number, order: any) => sum + Number(order.total_amount),
+      0,
+    );
+    const monthRevenue = (monthOrders ?? []).reduce(
+      (sum: number, order: any) => sum + Number(order.total_amount),
+      0,
+    );
+    const totalDebt = (debtData ?? []).reduce(
+      (sum: number, debt: any) => sum + Number(debt.current_debt),
+      0,
+    );
 
     return {
       today_revenue: todayRevenue,
@@ -88,22 +92,21 @@ export class DashboardService {
     const from = new Date();
     from.setDate(from.getDate() - days);
 
-    let q = this.supabase
+    let query = this.supabase
       .from('sales_orders')
       .select('sold_at, total_amount, paid_amount')
       .eq('status', 'completed')
       .gte('sold_at', from.toISOString())
       .order('sold_at');
 
-    if (branchId) q = q.eq('branch_id', branchId);
-    const { data, error } = await q;
+    if (branchId) query = query.eq('branch_id', branchId);
+    const { data, error } = await query;
     if (error) throw new Error(error.message);
 
-    // Group by date
     const grouped: Record<string, number> = {};
-    (data ?? []).forEach((o: any) => {
-      const date = o.sold_at.slice(0, 10);
-      grouped[date] = (grouped[date] ?? 0) + Number(o.total_amount);
+    (data ?? []).forEach((order: any) => {
+      const date = order.sold_at.slice(0, 10);
+      grouped[date] = (grouped[date] ?? 0) + Number(order.total_amount);
     });
 
     return Object.entries(grouped).map(([date, revenue]) => ({ date, revenue }));
