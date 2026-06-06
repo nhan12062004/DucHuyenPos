@@ -87,6 +87,21 @@ export interface CreateSalesOrderPayload {
   }[];
 }
 
+export interface UpdateSalesOrderPayload {
+  branch_id?: string;
+  customer_id?: string;
+  source?: SalesOrder['source'];
+  status?: SalesOrder['status'];
+  payment_status?: SalesOrder['payment_status'];
+  discount_amount?: number;
+  shipping_fee?: number;
+  tax_amount?: number;
+  paid_amount?: number;
+  note?: string;
+  delivery_address?: string;
+  items?: CreateSalesOrderPayload['items'];
+}
+
 // ─── Service ─────────────────────────────────────────────────────────────────
 
 export const salesOrdersService = {
@@ -99,7 +114,7 @@ export const salesOrdersService = {
   create: (dto: CreateSalesOrderPayload) =>
     api.post<SalesOrder>('/sales-orders', dto),
 
-  update: (id: string, dto: Partial<Pick<SalesOrder, 'status' | 'payment_status' | 'paid_amount' | 'note'>>) =>
+  update: (id: string, dto: UpdateSalesOrderPayload) =>
     api.put<SalesOrder>(`/sales-orders/${id}`, dto),
 
   cancel: (id: string) =>

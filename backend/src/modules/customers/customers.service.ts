@@ -2,6 +2,7 @@ import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../supabase/supabase.constants.js';
 import { CreateCustomerDto, UpdateCustomerDto } from './dto/customer.dto.js';
+import { CreateCustomerGroupDto, UpdateCustomerGroupDto } from './dto/customer-group.dto.js';
 import { PaginationDto, PaginatedResult } from '../../common/dto/pagination.dto.js';
 import { generateNextCode, normalizeManualCode } from '../../common/code-generator.js';
 
@@ -113,5 +114,69 @@ export class CustomersService {
       .order('name');
     if (error) throw new Error(error.message);
     return data ?? [];
+  }
+
+  async createGroup(dto: CreateCustomerGroupDto) {
+    const normalizedCode = normalizeManualCode(dto.code);
+    const derivedCode = dto.name
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '')
+      .slice(0, 12);
+    const generatedCode = await generateNextCode(this.supabase, {
+      table: 'customer_groups',
+      column: 'code',
+      prefix: 'NHOM',
+    });
+    const code = normalizedCode ?? (derivedCode || generatedCode);
+
+    const { data, error } = await this.supabase
+      .from('customer_groups')
+      .insert({
+        ...dto,
+        code,
+      })
+      .select()
+      .single();
+
+    if (error || !data) throw new Error(error?.message ?? 'Tạo nhóm khách hàng thất bại');
+    return data;
+  }
+
+  async updateGroup(id: string, dto: UpdateCustomerGroupDto) {
+    const payload = {
+      ...dto,
+      code: dto.code ? normalizeManualCode(dto.code) : undefined,
+    };
+
+    const { data, error } = await this.supabase
+      .from('customer_groups')
+      .update(payload)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error || !data) throw new NotFoundException('Không tìm thấy nhóm khách hàng');
+    return data;
+  }
+
+  async removeGroup(id: string) {
+    const { count, error: customersError } = await this.supabase
+      .from('customers')
+      .select('id', { count: 'exact', head: true })
+      .eq('customer_group_id', id);
+
+    if (customersError) throw new Error(customersError.message);
+    if ((count ?? 0) > 0) {
+      throw new Error('Nhóm khách hàng đang được sử dụng, không thể xóa');
+    }
+
+    const { error } = await this.supabase
+      .from('customer_groups')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw new Error(error.message);
+    return { message: 'Đã xóa nhóm khách hàng' };
   }
 }

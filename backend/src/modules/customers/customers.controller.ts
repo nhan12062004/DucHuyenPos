@@ -3,6 +3,7 @@ import {
 } from '@nestjs/common';
 import { CustomersService } from './customers.service.js';
 import { CreateCustomerDto, UpdateCustomerDto } from './dto/customer.dto.js';
+import { CreateCustomerGroupDto, UpdateCustomerGroupDto } from './dto/customer-group.dto.js';
 import { PaginationDto } from '../../common/dto/pagination.dto.js';
 
 @Controller('customers')
@@ -22,6 +23,21 @@ export class CustomersController {
   @Get('groups')
   getGroups() {
     return this.customersService.getGroups();
+  }
+
+  @Post('groups')
+  createGroup(@Body() dto: CreateCustomerGroupDto) {
+    return this.customersService.createGroup(dto);
+  }
+
+  @Put('groups/:id')
+  updateGroup(@Param('id') id: string, @Body() dto: UpdateCustomerGroupDto) {
+    return this.customersService.updateGroup(id, dto);
+  }
+
+  @Delete('groups/:id')
+  removeGroup(@Param('id') id: string) {
+    return this.customersService.removeGroup(id);
   }
 
   @Get(':id')

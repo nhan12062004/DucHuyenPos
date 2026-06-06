@@ -1,343 +1,943 @@
-import React, { useState } from 'react';
-import { Search, ChevronDown, Filter, Settings, Download, Upload, Plus, ChevronLeft } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Search,
+  ChevronDown,
+  Filter,
+  Settings,
+  ChevronLeft,
+} from 'lucide-react';
+import {
+  customersService,
+  type Customer,
+  type CustomerDebtSummary,
+  type CustomerGroup,
+} from '../services/customersService';
+import {
+  salesOrdersService,
+  type SalesOrder,
+} from '../services/salesOrdersService';
 
-const customersData = [
-  { id: '1', code: 'CUZN01506', name: 'Test', phone: '', group: 'Bán lẻ', debt: 0, totalSpent: 0, ordersCount: 0 },
-  { id: '2', code: 'CUZN01505', name: 'ỦY BAN AN SƠN', phone: '', group: 'Bán lẻ', debt: 0, totalSpent: 32400000, ordersCount: 1 },
-  { id: '3', code: 'CUZN01504', name: 'E THẮM', phone: '', group: 'Bán lẻ', debt: 0, totalSpent: 23348044, ordersCount: 1 },
-  { id: '4', code: 'CUZN01503', name: 'CÔ HÁT 5/59 Q THẮNG', phone: '0979319662', group: 'Bán lẻ', debt: 0, totalSpent: 19670000, ordersCount: 1 },
-  { id: '5', code: 'CUZN01409', name: 'A TÙNG 315 AN ĐỊNH', phone: '0978291079', group: 'Bán lẻ', debt: 0, totalSpent: 35463714, ordersCount: 7, totalProducts: 1778, totalReturned: 0, lastOrderDate: '01/04/2026' },
-  { id: '6', code: 'CUZN01408', name: 'Bà Muộn( A Thảo)', phone: '', group: 'Bán lẻ', debt: 0, totalSpent: 124835464, ordersCount: 10 },
-  { id: '7', code: 'CUZN01407', name: 'E Luật', phone: '', group: 'Bán lẻ', debt: 0, totalSpent: 2622500, ordersCount: 1 },
-];
+type CustomerTab = 'all' | 'trading';
+type CustomerDetailTab =
+  | 'history'
+  | 'debt'
+  | 'contact'
+  | 'address'
+  | 'notes'
+  | 'group';
 
-const customerHistory = [
-  { id: '1', code: 'SON15857', status: 'Hoàn thành', payment: true, export: true, total: 2453300, branch: 'Chi nhánh mặc định', source: 'Pos', staff: 'Lương Thị Hồng', date: '01/04/2026' },
-  { id: '2', code: 'SON15830', status: 'Hoàn thành', payment: true, export: true, total: 1538728, branch: 'Chi nhánh mặc định', source: 'Pos', staff: 'Lương Thị Hồng', date: '27/03/2026' },
-  { id: '3', code: 'SON15776', status: 'Hoàn thành', payment: true, export: true, total: 1769328, branch: 'Chi nhánh mặc định', source: 'Pos', staff: 'Lương Thị Hồng', date: '19/03/2026' },
-  { id: '4', code: 'SON15775', status: 'Đã hủy', payment: false, export: false, total: 1629328, branch: 'Chi nhánh mặc định', source: 'Pos', staff: 'Lương Thị Hồng', date: '19/03/2026' },
-  { id: '5', code: 'SON15772', status: 'Hoàn thành', payment: true, export: true, total: 16808382, branch: 'Chi nhánh mặc định', source: 'Pos', staff: 'Lương Thị Hồng', date: '18/03/2026' },
-];
+type CustomerListItem = Customer & {
+  debt: number;
+  totalSpent: number;
+  ordersCount: number;
+  totalProducts: number;
+  totalReturned: number;
+  lastOrderDate?: string;
+  groupName: string;
+};
+
+const CUSTOMER_FILTERS_KEY = 'duc-huyen-pos.customers.filters';
+
+function formatCurrency(value: number) {
+  return value.toLocaleString('vi-VN');
+}
+
+function formatDate(value?: string) {
+  if (!value) {
+    return '---';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleDateString('vi-VN');
+}
+
+function getOrderStatusMeta(status?: SalesOrder['status']) {
+  switch (status) {
+    case 'completed':
+      return 'border-emerald-300 text-emerald-600 bg-emerald-50';
+    case 'cancelled':
+      return 'border-red-300 text-red-500 bg-red-50';
+    case 'pending':
+      return 'border-blue-300 text-blue-600 bg-blue-50';
+    default:
+      return 'border-orange-300 text-orange-600 bg-orange-50';
+  }
+}
+
+function buildCustomersData(
+  customers: Customer[],
+  debtMap: Record<string, CustomerDebtSummary>,
+  ordersByCustomer: Record<string, SalesOrder[]>,
+): CustomerListItem[] {
+  return customers.map((customer) => {
+    const matchedOrders = ordersByCustomer[customer.id] ?? [];
+    const debt = Number(debtMap[customer.id]?.current_debt ?? 0);
+    const totalSpent = Number(debtMap[customer.id]?.total_sales ?? 0);
+    const totalProducts = matchedOrders.reduce(
+      (sum, order) =>
+        sum +
+        (order.sales_order_items ?? []).reduce(
+          (itemSum, item) => itemSum + Number(item.quantity || 0),
+          0,
+        ),
+      0,
+    );
+
+    return {
+      ...customer,
+      debt,
+      totalSpent,
+      ordersCount: matchedOrders.length,
+      totalProducts,
+      totalReturned: 0,
+      lastOrderDate: matchedOrders[0]?.sold_at,
+      groupName: customer.customer_groups?.name ?? 'Bán lẻ',
+    };
+  });
+}
 
 export function Customers() {
-  const [activeTab, setActiveTab] = useState('all');
+  const [activeTab, setActiveTab] = useState<CustomerTab>('all');
+  const [detailTab, setDetailTab] = useState<CustomerDetailTab>('history');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(100);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [totalCustomers, setTotalCustomers] = useState(0);
+  const [selectedCustomerDetail, setSelectedCustomerDetail] = useState<Customer | null>(null);
+  const [customerGroups, setCustomerGroups] = useState<CustomerGroup[]>([]);
+  const [debtMap, setDebtMap] = useState<Record<string, CustomerDebtSummary>>({});
+  const [orderMap, setOrderMap] = useState<Record<string, SalesOrder[]>>({});
+  const [isListLoading, setIsListLoading] = useState(true);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const navigate = useNavigate();
 
-  const selectedCustomer = customersData.find(c => c.id === selectedCustomerId);
+  useEffect(() => {
+    try {
+      const savedFilters = window.localStorage.getItem(CUSTOMER_FILTERS_KEY);
+      if (!savedFilters) {
+        return;
+      }
+
+      const parsed = JSON.parse(savedFilters) as {
+        activeTab?: CustomerTab;
+        searchTerm?: string;
+        statusFilter?: 'all' | 'active' | 'inactive';
+        limit?: number;
+      };
+
+      if (parsed.activeTab === 'all' || parsed.activeTab === 'trading') {
+        setActiveTab(parsed.activeTab);
+      }
+      if (typeof parsed.searchTerm === 'string') {
+        setSearchTerm(parsed.searchTerm);
+      }
+      if (
+        parsed.statusFilter === 'all' ||
+        parsed.statusFilter === 'active' ||
+        parsed.statusFilter === 'inactive'
+      ) {
+        setStatusFilter(parsed.statusFilter);
+      }
+      if (typeof parsed.limit === 'number' && parsed.limit > 0) {
+        setLimit(parsed.limit);
+      }
+    } catch {
+      window.localStorage.removeItem(CUSTOMER_FILTERS_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadListData() {
+      setIsListLoading(true);
+      setListError(null);
+
+      try {
+        const [customersResponse, debtSummary, groups, ordersResponse] = await Promise.all([
+          customersService.getAll({
+            page,
+            limit,
+            search: searchTerm || undefined,
+            status: statusFilter === 'all' ? undefined : statusFilter,
+          }),
+          customersService.getDebtSummary(),
+          customersService.getGroups(),
+          salesOrdersService.getAll({ page: 1, limit: 200 }),
+        ]);
+
+        if (!active) {
+          return;
+        }
+
+        const nextDebtMap = debtSummary.reduce<Record<string, CustomerDebtSummary>>((acc, item) => {
+          acc[item.customer_id] = item;
+          return acc;
+        }, {});
+        const nextOrderMap = ordersResponse.data.reduce<Record<string, SalesOrder[]>>((acc, order) => {
+          if (!order.customer_id) {
+            return acc;
+          }
+          if (!acc[order.customer_id]) {
+            acc[order.customer_id] = [];
+          }
+          acc[order.customer_id].push(order);
+          return acc;
+        }, {});
+
+        setCustomers(customersResponse.data);
+        setTotalCustomers(customersResponse.total);
+        setDebtMap(nextDebtMap);
+        setCustomerGroups(groups);
+        setOrderMap(nextOrderMap);
+      } catch (error: any) {
+        if (!active) {
+          return;
+        }
+        setListError(error?.message ?? 'Không tải được danh sách khách hàng.');
+      } finally {
+        if (active) {
+          setIsListLoading(false);
+        }
+      }
+    }
+
+    loadListData();
+
+    return () => {
+      active = false;
+    };
+  }, [page, limit, searchTerm, statusFilter]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadCustomerDetail(customerId: string) {
+      setIsDetailLoading(true);
+      setDetailError(null);
+
+      try {
+        const detail = await customersService.getOne(customerId);
+        if (!active) {
+          return;
+        }
+        setSelectedCustomerDetail(detail);
+      } catch (error: any) {
+        if (!active) {
+          return;
+        }
+        setDetailError(error?.message ?? 'Không tải được chi tiết khách hàng.');
+      } finally {
+        if (active) {
+          setIsDetailLoading(false);
+        }
+      }
+    }
+
+    if (!selectedCustomerId) {
+      setSelectedCustomerDetail(null);
+      return;
+    }
+
+    loadCustomerDetail(selectedCustomerId);
+
+    return () => {
+      active = false;
+    };
+  }, [selectedCustomerId]);
+
+  const customersData = useMemo(
+    () => buildCustomersData(customers, debtMap, orderMap),
+    [customers, debtMap, orderMap],
+  );
+
+  const visibleCustomers = useMemo(() => {
+    if (activeTab === 'all') {
+      return customersData;
+    }
+
+    return customersData.filter((customer) => customer.ordersCount > 0);
+  }, [activeTab, customersData]);
+
+  const selectedCustomer =
+    selectedCustomerDetail ??
+    customersData.find((customer) => customer.id === selectedCustomerId) ??
+    null;
+
+  const selectedCustomerOrders = selectedCustomerId ? orderMap[selectedCustomerId] ?? [] : [];
+  const selectedCustomerDebt = selectedCustomerId ? debtMap[selectedCustomerId] : undefined;
+  const totalRows = activeTab === 'all' ? totalCustomers : visibleCustomers.length;
+  const pageStart = visibleCustomers.length === 0 ? 0 : (page - 1) * limit + 1;
+  const pageEnd = visibleCustomers.length === 0 ? 0 : pageStart + visibleCustomers.length - 1;
+
+  const handleSaveFilters = () => {
+    window.localStorage.setItem(
+      CUSTOMER_FILTERS_KEY,
+      JSON.stringify({ activeTab, searchTerm, statusFilter, limit }),
+    );
+    setInfoMessage('Đã lưu bộ lọc khách hàng.');
+  };
+
+  const handleToggleStatusFilter = () => {
+    const next =
+      statusFilter === 'all'
+        ? 'active'
+        : statusFilter === 'active'
+        ? 'inactive'
+        : 'all';
+    setStatusFilter(next);
+    setPage(1);
+    setInfoMessage(
+      next === 'all'
+        ? 'Đang hiển thị tất cả trạng thái khách hàng.'
+        : next === 'active'
+        ? 'Đang lọc khách hàng còn hoạt động.'
+        : 'Đang lọc khách hàng đã vô hiệu hóa.',
+    );
+  };
+
+  const handleDeleteCustomer = async () => {
+    if (!selectedCustomer) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Vô hiệu hóa khách hàng ${selectedCustomer.full_name}?`);
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await customersService.delete(selectedCustomer.id);
+      setCustomers((current) =>
+        current.map((customer) =>
+          customer.id === selectedCustomer.id ? { ...customer, status: 'inactive' } : customer,
+        ),
+      );
+      setSelectedCustomerDetail((current) =>
+        current ? { ...current, status: 'inactive' } : current,
+      );
+      setInfoMessage(`Đã vô hiệu hóa khách hàng ${selectedCustomer.full_name}.`);
+    } catch (error: any) {
+      setDetailError(error?.message ?? 'Xóa khách hàng thất bại.');
+    }
+  };
+
+  const handleUpdateCustomer = async (mode: 'basic' | 'note' = 'basic') => {
+    if (!selectedCustomer) {
+      return;
+    }
+
+    try {
+      if (mode === 'note') {
+        const notes = window.prompt('Cập nhật ghi chú khách hàng', selectedCustomer.notes ?? '');
+        if (notes === null) {
+          return;
+        }
+        const updated = await customersService.update(selectedCustomer.id, { notes });
+        setSelectedCustomerDetail(updated);
+        setCustomers((current) =>
+          current.map((customer) => (customer.id === updated.id ? { ...customer, ...updated } : customer)),
+        );
+        setInfoMessage(`Đã cập nhật ghi chú của ${updated.full_name}.`);
+        return;
+      }
+
+      const fullName = window.prompt('Tên khách hàng', selectedCustomer.full_name);
+      if (!fullName?.trim()) {
+        return;
+      }
+
+      const phone = window.prompt('Số điện thoại', selectedCustomer.phone ?? '');
+      if (phone === null) {
+        return;
+      }
+      const email = window.prompt('Email', selectedCustomer.email ?? '');
+      if (email === null) {
+        return;
+      }
+      const address = window.prompt('Địa chỉ', selectedCustomer.address ?? '');
+      if (address === null) {
+        return;
+      }
+
+      const updated = await customersService.update(selectedCustomer.id, {
+        full_name: fullName.trim(),
+        phone: phone.trim() || undefined,
+        email: email.trim() || undefined,
+        address: address.trim() || undefined,
+      });
+
+      setSelectedCustomerDetail(updated);
+      setCustomers((current) =>
+        current.map((customer) => (customer.id === updated.id ? { ...customer, ...updated } : customer)),
+      );
+      setInfoMessage(`Đã cập nhật khách hàng ${updated.full_name}.`);
+    } catch (error: any) {
+      setDetailError(error?.message ?? 'Cập nhật khách hàng thất bại.');
+    }
+  };
+
+  const handleOpenCustomerOrders = () => {
+    if (!selectedCustomer) {
+      return;
+    }
+
+    const firstOrder = selectedCustomerOrders[0];
+    navigate('/orders', {
+      state: firstOrder
+        ? {
+            selectedOrderId: firstOrder.id,
+            message: `Đang mở đơn gần nhất của ${selectedCustomer.full_name}.`,
+          }
+        : {
+            message: `Khách hàng ${selectedCustomer.full_name} chưa có đơn hàng để mở.`,
+          },
+    });
+  };
 
   if (selectedCustomer) {
+    const historyRows = selectedCustomerOrders;
+
     return (
-      <div className="flex flex-col h-full bg-[#f3f4f6]">
-        {/* Details Header */}
-        <div className="bg-white p-3 px-6 border-b flex justify-between items-center z-10 shrink-0">
-           <button onClick={() => setSelectedCustomerId(null)} className="flex items-center gap-2 text-slate-600 hover:text-[#0088FF] font-medium text-[14px] transition-colors">
-             <ChevronLeft size={16} /> Quay lại danh sách khách hàng
-           </button>
-           <div className="flex gap-3">
-              <button className="px-4 py-1.5 border border-red-500 text-red-500 rounded hover:bg-red-50 transition-colors text-[13px] font-medium bg-white">Xóa khách hàng</button>
-              <div className="flex border border-blue-600 rounded">
-                <button className="flex items-center gap-2 bg-[#0088FF] hover:bg-blue-700 text-white px-4 py-1.5 text-[13px] font-medium transition-colors border-r border-blue-700">
-                  Tạo phiếu thu/chi
-                </button>
-                <button className="bg-[#0088FF] hover:bg-blue-700 text-white px-2 flex items-center transition-colors">
-                  <ChevronDown size={14} />
-                </button>
-              </div>
-           </div>
+      <div className="flex h-full flex-col bg-[#f3f4f6]">
+        <div className="z-10 flex shrink-0 items-center justify-between border-b bg-white p-3 px-6">
+          <button
+            onClick={() => setSelectedCustomerId(null)}
+            className="flex items-center gap-2 text-[14px] font-medium text-slate-600 transition-colors hover:text-[#0088FF]"
+          >
+            <ChevronLeft size={16} /> Quay lại danh sách khách hàng
+          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={handleDeleteCustomer}
+              className="rounded border border-red-500 bg-white px-4 py-1.5 text-[13px] font-medium text-red-500 transition-colors hover:bg-red-50"
+            >
+              Xóa khách hàng
+            </button>
+            <div className="flex rounded border border-blue-600">
+              <button
+                onClick={() => navigate('/debts')}
+                className="flex items-center gap-2 border-r border-blue-700 bg-[#0088FF] px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-blue-700"
+              >
+                Tạo phiếu thu/chi
+              </button>
+              <button
+                onClick={() => navigate('/debts')}
+                className="flex items-center bg-[#0088FF] px-2 text-white transition-colors hover:bg-blue-700"
+              >
+                <ChevronDown size={14} />
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* Details Body */}
-        <div className="flex-1 overflow-auto p-4 md:p-6 custom-scrollbar pb-20">
-            <div className="mb-4">
-              <h1 className="text-[22px] font-semibold text-[#182537] mb-0">{selectedCustomer.name}</h1>
+        <div className="custom-scrollbar flex-1 overflow-auto p-4 pb-20 md:p-6">
+          {infoMessage ? (
+            <div className="mb-4 rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+              {infoMessage}
             </div>
+          ) : null}
 
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-              <div className="xl:col-span-2 space-y-6">
-                 {/* Thông tin cá nhân */}
-                 <div className="ui-card ui-card-body-compact">
-                    <div className="flex justify-between items-center mb-5">
-                       <div className="flex items-center gap-3">
-                          <h3 className="font-semibold text-[#182537] text-[15px]">Thông tin cá nhân</h3>
-                          <span className="px-2.5 py-0.5 rounded-full text-[12px] font-medium border border-orange-300 text-orange-600 bg-orange-50">Đang giao dịch</span>
-                       </div>
-                       <button className="text-[#0088FF] hover:underline text-[13px] font-medium">Cập nhật</button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-[13px]">
-                        <div className="flex"><div className="w-40 text-slate-600">Ngày sinh</div><div className="text-[#182537]">: ---</div></div>
-                        <div className="flex"><div className="w-40 text-slate-600">Nhóm khách hàng</div><div className="text-[#0088FF] hover:underline cursor-pointer">: {selectedCustomer.group}</div></div>
-                        <div className="flex"><div className="w-40 text-slate-600">Giới tính</div><div className="text-[#182537]">: Khác</div></div>
-                        <div className="flex"><div className="w-40 text-slate-600">Mã khách hàng</div><div className="text-[#182537]">: {selectedCustomer.code}</div></div>
-                        <div className="flex"><div className="w-40 text-slate-600">Số điện thoại</div><div className="text-[#182537]">: {selectedCustomer.phone || '---'}</div></div>
-                        <div className="flex"><div className="w-40 text-slate-600">Mã số thuế</div><div className="text-[#182537]">: ---</div></div>
-                        <div className="flex"><div className="w-40 text-slate-600">Email</div><div className="text-[#182537]">: ---</div></div>
-                        <div className="flex"><div className="w-40 text-slate-600">Website</div><div className="text-[#182537]">: ---</div></div>
-                        <div className="flex"><div className="w-40 text-slate-600">Nhân viên phụ trách</div><div className="text-[#182537]">: Lương Thị Hồng</div></div>
-                        <div className="flex"><div className="w-40 text-slate-600">Mô tả</div><div className="text-[#182537]">: ---</div></div>
-                        <div className="flex"><div className="w-40 text-slate-600">Tags</div><div className="text-[#182537]">: ---</div></div>
-                    </div>
-                 </div>
+          {detailError ? (
+            <div className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+              {detailError}
+            </div>
+          ) : null}
 
-                 {/* Thông tin mua hàng */}
-                 <div className="ui-card">
-                    <div className="p-5 border-b border-slate-100 flex justify-between items-center">
-                       <h3 className="font-semibold text-[#182537] text-[15px]">Thông tin mua hàng</h3>
-                       <button className="text-[#0088FF] hover:underline text-[13px] font-medium">Chi tiết</button>
-                    </div>
-                    <div className="p-5 grid grid-cols-2 gap-x-8 gap-y-4 text-[13px]">
-                        <div className="flex"><div className="w-48 text-slate-600">Tổng chi tiêu</div><div className="text-[#182537]">: {selectedCustomer.totalSpent.toLocaleString()}</div></div>
-                        <div className="flex"><div className="w-48 text-slate-600">Tổng SL sản phẩm đã mua</div><div className="text-[#182537]">: {selectedCustomer.totalProducts || 0}</div></div>
-                        <div className="flex"><div className="w-48 text-slate-600">Tổng SL đơn hàng</div><div className="text-[#182537]">: {selectedCustomer.ordersCount}</div></div>
-                        <div className="flex"><div className="w-48 text-slate-600">Tổng SL sản phẩm hoàn trả</div><div className="text-[#182537]">: {selectedCustomer.totalReturned || 0}</div></div>
-                        <div className="flex"><div className="w-48 text-slate-600">Ngày cuối cùng mua hàng</div><div className="text-[#182537]">: {selectedCustomer.lastOrderDate || '---'}</div></div>
-                        <div className="flex"><div className="w-48 text-slate-600">Công nợ hiện tại</div><div className="text-[#182537]">: {selectedCustomer.debt}</div></div>
-                    </div>
-                 </div>
+          {isDetailLoading ? (
+            <div className="mb-4 rounded border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+              Đang cập nhật chi tiết khách hàng...
+            </div>
+          ) : null}
 
-                 {/* Lịch sử */}
-                 <div className="ui-card">
-                    <div className="flex border-b border-slate-200 px-4 pt-1">
-                       <button className="px-4 py-3 text-[14px] font-medium border-b-2 mr-4 transition-colors border-[#0088FF] text-[#0088FF]">
-                         Lịch sử mua hàng
-                       </button>
-                       <button className="px-4 py-3 text-[14px] font-medium border-b-2 mr-4 transition-colors border-transparent text-slate-600 hover:text-[#0088FF]">Công nợ</button>
-                       <button className="px-4 py-3 text-[14px] font-medium border-b-2 mr-4 transition-colors border-transparent text-slate-600 hover:text-[#0088FF]">Liên hệ</button>
-                       <button className="px-4 py-3 text-[14px] font-medium border-b-2 mr-4 transition-colors border-transparent text-slate-600 hover:text-[#0088FF]">Địa chỉ</button>
-                       <button className="px-4 py-3 text-[14px] font-medium border-b-2 mr-4 transition-colors border-transparent text-slate-600 hover:text-[#0088FF]">Ghi chú</button>
-                       <button className="px-4 py-3 text-[14px] font-medium border-b-2 transition-colors border-transparent text-slate-600 hover:text-[#0088FF]">Nhóm khách hàng</button>
-                    </div>
+          <div className="mb-4">
+            <h1 className="mb-0 text-[22px] font-semibold text-[#182537]">{selectedCustomer.full_name}</h1>
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+            <div className="space-y-6 xl:col-span-2">
+              <div className="ui-card ui-card-body-compact">
+                <div className="mb-5 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-[15px] font-semibold text-[#182537]">Thông tin cá nhân</h3>
+                    <span className="rounded-full border border-orange-300 bg-orange-50 px-2.5 py-0.5 text-[12px] font-medium text-orange-600">
+                      {selectedCustomer.status === 'active' ? 'Đang giao dịch' : 'Đã ngừng'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleUpdateCustomer('basic')}
+                    className="text-[13px] font-medium text-[#0088FF] hover:underline"
+                  >
+                    Cập nhật
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-[13px]">
+                  <div className="flex"><div className="w-40 text-slate-600">Ngày sinh</div><div className="text-[#182537]">: ---</div></div>
+                  <div className="flex"><div className="w-40 text-slate-600">Nhóm khách hàng</div><div className="cursor-pointer text-[#0088FF] hover:underline">: {selectedCustomer.customer_groups?.name ?? 'Bán lẻ'}</div></div>
+                  <div className="flex"><div className="w-40 text-slate-600">Giới tính</div><div className="text-[#182537]">: Khác</div></div>
+                  <div className="flex"><div className="w-40 text-slate-600">Mã khách hàng</div><div className="text-[#182537]">: {selectedCustomer.code}</div></div>
+                  <div className="flex"><div className="w-40 text-slate-600">Số điện thoại</div><div className="text-[#182537]">: {selectedCustomer.phone || '---'}</div></div>
+                  <div className="flex"><div className="w-40 text-slate-600">Mã số thuế</div><div className="text-[#182537]">: {selectedCustomer.tax_code || '---'}</div></div>
+                  <div className="flex"><div className="w-40 text-slate-600">Email</div><div className="text-[#182537]">: {selectedCustomer.email || '---'}</div></div>
+                  <div className="flex"><div className="w-40 text-slate-600">Website</div><div className="text-[#182537]">: ---</div></div>
+                  <div className="flex"><div className="w-40 text-slate-600">Nhân viên phụ trách</div><div className="text-[#182537]">: ---</div></div>
+                  <div className="flex"><div className="w-40 text-slate-600">Mô tả</div><div className="text-[#182537]">: {selectedCustomer.company_name || '---'}</div></div>
+                  <div className="flex"><div className="w-40 text-slate-600">Tags</div><div className="text-[#182537]">: ---</div></div>
+                </div>
+              </div>
+
+              <div className="ui-card">
+                <div className="flex items-center justify-between border-b border-slate-100 p-5">
+                  <h3 className="text-[15px] font-semibold text-[#182537]">Thông tin mua hàng</h3>
+                  <button
+                    onClick={handleOpenCustomerOrders}
+                    className="text-[13px] font-medium text-[#0088FF] hover:underline"
+                  >
+                    Chi tiết
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-x-8 gap-y-4 p-5 text-[13px]">
+                  <div className="flex"><div className="w-48 text-slate-600">Tổng chi tiêu</div><div className="text-[#182537]">: {formatCurrency(Number(selectedCustomerDebt?.total_sales ?? 0))}</div></div>
+                  <div className="flex"><div className="w-48 text-slate-600">Tổng SL sản phẩm đã mua</div><div className="text-[#182537]">: {selectedCustomerOrders.reduce((sum, order) => sum + (order.sales_order_items ?? []).reduce((itemSum, item) => itemSum + Number(item.quantity || 0), 0), 0)}</div></div>
+                  <div className="flex"><div className="w-48 text-slate-600">Tổng SL đơn hàng</div><div className="text-[#182537]">: {selectedCustomerOrders.length}</div></div>
+                  <div className="flex"><div className="w-48 text-slate-600">Tổng SL sản phẩm hoàn trả</div><div className="text-[#182537]">: 0</div></div>
+                  <div className="flex"><div className="w-48 text-slate-600">Ngày cuối cùng mua hàng</div><div className="text-[#182537]">: {formatDate(selectedCustomerOrders[0]?.sold_at)}</div></div>
+                  <div className="flex"><div className="w-48 text-slate-600">Công nợ hiện tại</div><div className="text-[#182537]">: {formatCurrency(Number(selectedCustomerDebt?.current_debt ?? 0))}</div></div>
+                </div>
+              </div>
+
+              <div className="ui-card">
+                <div className="flex border-b border-slate-200 px-4 pt-1">
+                  <button
+                    onClick={() => setDetailTab('history')}
+                    className={`mr-4 border-b-2 px-4 py-3 text-[14px] font-medium transition-colors ${
+                      detailTab === 'history'
+                        ? 'border-[#0088FF] text-[#0088FF]'
+                        : 'border-transparent text-slate-600 hover:text-[#0088FF]'
+                    }`}
+                  >
+                    Lịch sử mua hàng
+                  </button>
+                  <button
+                    onClick={() => setDetailTab('debt')}
+                    className={`mr-4 border-b-2 px-4 py-3 text-[14px] font-medium transition-colors ${
+                      detailTab === 'debt'
+                        ? 'border-[#0088FF] text-[#0088FF]'
+                        : 'border-transparent text-slate-600 hover:text-[#0088FF]'
+                    }`}
+                  >
+                    Công nợ
+                  </button>
+                  <button
+                    onClick={() => setDetailTab('contact')}
+                    className={`mr-4 border-b-2 px-4 py-3 text-[14px] font-medium transition-colors ${
+                      detailTab === 'contact'
+                        ? 'border-[#0088FF] text-[#0088FF]'
+                        : 'border-transparent text-slate-600 hover:text-[#0088FF]'
+                    }`}
+                  >
+                    Liên hệ
+                  </button>
+                  <button
+                    onClick={() => setDetailTab('address')}
+                    className={`mr-4 border-b-2 px-4 py-3 text-[14px] font-medium transition-colors ${
+                      detailTab === 'address'
+                        ? 'border-[#0088FF] text-[#0088FF]'
+                        : 'border-transparent text-slate-600 hover:text-[#0088FF]'
+                    }`}
+                  >
+                    Địa chỉ
+                  </button>
+                  <button
+                    onClick={() => setDetailTab('notes')}
+                    className={`mr-4 border-b-2 px-4 py-3 text-[14px] font-medium transition-colors ${
+                      detailTab === 'notes'
+                        ? 'border-[#0088FF] text-[#0088FF]'
+                        : 'border-transparent text-slate-600 hover:text-[#0088FF]'
+                    }`}
+                  >
+                    Ghi chú
+                  </button>
+                  <button
+                    onClick={() => setDetailTab('group')}
+                    className={`border-b-2 px-4 py-3 text-[14px] font-medium transition-colors ${
+                      detailTab === 'group'
+                        ? 'border-[#0088FF] text-[#0088FF]'
+                        : 'border-transparent text-slate-600 hover:text-[#0088FF]'
+                    }`}
+                  >
+                    Nhóm khách hàng
+                  </button>
+                </div>
+
+                {detailTab === 'history' ? (
+                  <>
                     <div className="overflow-x-auto">
                       <table className="w-full text-left">
                         <thead>
-                          <tr className="border-b border-slate-200 bg-slate-50/50 text-[13px] text-[#182537] font-semibold">
-                            <th className="py-3 px-5">Mã đơn hàng</th>
-                            <th className="py-3 px-2 text-center">Trạng thái</th>
-                            <th className="py-3 px-2 text-center">Thanh toán</th>
-                            <th className="py-3 px-2 text-center">Xuất kho</th>
-                            <th className="py-3 px-4 text-right">Giá trị</th>
-                            <th className="py-3 px-4">Chi nhánh</th>
-                            <th className="py-3 px-2">Nguồn đơn</th>
-                            <th className="py-3 px-4">Nhân viên xử lý đơn</th>
-                            <th className="py-3 px-5 text-right">Ngày ghi nhận</th>
+                          <tr className="border-b border-slate-200 bg-slate-50/50 text-[13px] font-semibold text-[#182537]">
+                            <th className="px-5 py-3">Mã đơn hàng</th>
+                            <th className="px-2 py-3 text-center">Trạng thái</th>
+                            <th className="px-2 py-3 text-center">Thanh toán</th>
+                            <th className="px-2 py-3 text-center">Xuất kho</th>
+                            <th className="px-4 py-3 text-right">Giá trị</th>
+                            <th className="px-4 py-3">Chi nhánh</th>
+                            <th className="px-2 py-3">Nguồn đơn</th>
+                            <th className="px-4 py-3">Nhân viên xử lý đơn</th>
+                            <th className="px-5 py-3 text-right">Ngày ghi nhận</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-[13.5px]">
-                          {customerHistory.map((h) => (
-                            <tr key={h.id} className="hover:bg-slate-50 transition-colors">
-                              <td className="py-4 px-5 text-[#0088FF] hover:underline cursor-pointer">{h.code}</td>
-                              <td className="py-4 px-2 text-center">
-                                <span className={`inline-flex px-3 py-0.5 rounded-full text-[12px] border ${
-                                  h.status === 'Hoàn thành' ? 'border-emerald-300 text-emerald-600 bg-emerald-50' : 'border-red-300 text-red-500 bg-red-50'
-                                }`}>
-                                  {h.status}
-                                </span>
+                          {historyRows.length === 0 ? (
+                            <tr>
+                              <td colSpan={9} className="px-5 py-8 text-center text-slate-500">
+                                Chưa có lịch sử mua hàng.
                               </td>
-                              <td className="py-4 px-2 text-center">
-                                {h.payment 
-                                  ? <div className="w-2.5 h-2.5 bg-[#182537] rounded-full mx-auto" />
-                                  : <div className="w-2.5 h-2.5 border-2 border-slate-400 rounded-full mx-auto" />
-                                }
-                              </td>
-                              <td className="py-4 px-2 text-center">
-                                {h.export 
-                                  ? <div className="w-2.5 h-2.5 bg-[#182537] rounded-full mx-auto" />
-                                  : <div className="w-2.5 h-2.5 border-2 border-slate-400 rounded-full mx-auto" />
-                                }
-                              </td>
-                              <td className="py-4 px-4 text-right text-[#182537]">{h.total.toLocaleString()}</td>
-                              <td className="py-4 px-4 text-[#182537]">{h.branch}</td>
-                              <td className="py-4 px-2 text-[#182537]">{h.source}</td>
-                              <td className="py-4 px-4 text-[#182537]">{h.staff}</td>
-                              <td className="py-4 px-5 text-right text-[#182537]">{h.date}</td>
                             </tr>
-                          ))}
+                          ) : (
+                            historyRows.map((order) => (
+                              <tr key={order.id} className="transition-colors hover:bg-slate-50">
+                                <td
+                                  className="cursor-pointer px-5 py-4 text-[#0088FF] hover:underline"
+                                  onClick={() =>
+                                    navigate('/orders', {
+                                      state: { selectedOrderId: order.id },
+                                    })
+                                  }
+                                >
+                                  {order.order_no}
+                                </td>
+                                <td className="px-2 py-4 text-center">
+                                  <span className={`inline-flex rounded-full border px-3 py-0.5 text-[12px] ${getOrderStatusMeta(order.status)}`}>
+                                    {order.status}
+                                  </span>
+                                </td>
+                                <td className="px-2 py-4 text-center">
+                                  {order.payment_status === 'paid' || order.payment_status === 'partial' ? (
+                                    <div className="mx-auto h-2.5 w-2.5 rounded-full bg-[#182537]" />
+                                  ) : (
+                                    <div className="mx-auto h-2.5 w-2.5 rounded-full border-2 border-slate-400" />
+                                  )}
+                                </td>
+                                <td className="px-2 py-4 text-center">
+                                  {order.status === 'completed' ? (
+                                    <div className="mx-auto h-2.5 w-2.5 rounded-full bg-[#182537]" />
+                                  ) : (
+                                    <div className="mx-auto h-2.5 w-2.5 rounded-full border-2 border-slate-400" />
+                                  )}
+                                </td>
+                                <td className="px-4 py-4 text-right text-[#182537]">{formatCurrency(Number(order.total_amount || 0))}</td>
+                                <td className="px-4 py-4 text-[#182537]">{order.branches?.name ?? 'Chi nhánh mặc định'}</td>
+                                <td className="px-2 py-4 text-[#182537]">{order.source.toUpperCase()}</td>
+                                <td className="px-4 py-4 text-[#182537]">---</td>
+                                <td className="px-5 py-4 text-right text-[#182537]">{formatDate(order.sold_at)}</td>
+                              </tr>
+                            ))
+                          )}
                         </tbody>
                       </table>
                     </div>
-                    <div className="flex items-center justify-end px-5 py-4 border-t border-slate-200 text-[13px] text-slate-600">
-                       <div className="flex items-center gap-2 mr-6">
-                         <span>Hiển thị</span>
-                         <div className="relative">
-                           <select className="appearance-none border border-slate-300 rounded px-3 py-1 pr-8 focus:outline-none focus:border-[#0088FF] bg-white text-[#182537]">
-                             <option>20</option>
-                             <option>50</option>
-                             <option>100</option>
-                           </select>
-                           <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-                         </div>
-                         <span>kết quả</span>
-                       </div>
-                       <div className="mr-6">
-                         Từ 1 đến 9 trên tổng 9
-                       </div>
-                       <div className="flex items-center gap-1">
-                         <button className="w-7 h-7 flex items-center justify-center rounded text-slate-400 opacity-50 cursor-not-allowed">
-                           <ChevronLeft size={16} />
-                         </button>
-                         <button className="w-7 h-7 flex items-center justify-center rounded bg-[#0088FF] text-white font-medium">
-                           1
-                         </button>
-                         <button className="w-7 h-7 flex items-center justify-center rounded text-slate-400 opacity-50 cursor-not-allowed rotate-180">
-                           <ChevronLeft size={16} />
-                         </button>
-                       </div>
+                    <div className="flex items-center justify-end border-t border-slate-200 px-5 py-4 text-[13px] text-slate-600">
+                      <div className="mr-6">Từ 1 đến {historyRows.length} trên tổng {historyRows.length}</div>
                     </div>
-                 </div>
-              </div>
+                  </>
+                ) : null}
 
-              {/* Cột phải */}
-              <div className="xl:col-span-1 space-y-6">
-                 {/* Thông tin gợi ý mua hàng */}
-                 <div className="ui-card ui-card-body-compact">
-                    <div className="flex justify-between items-center mb-5">
-                      <h3 className="font-semibold text-[#182537] text-[15px]">Thông tin gợi ý khi bán hàng</h3>
-                      <button className="text-[#0088FF] hover:underline text-[13px] font-medium">Cập nhật</button>
-                    </div>
-                    <div className="space-y-3 text-[13px]">
-                        <div className="flex"><div className="w-48 text-slate-600">Chính sách giá mặc định</div><div className="text-[#182537]">: ---</div></div>
-                        <div className="flex"><div className="w-48 text-slate-600">Chiết khấu khách hàng</div><div className="text-[#182537]">: ---</div></div>
-                        <div className="flex"><div className="w-48 text-slate-600">Hình thức thanh toán mặc định</div><div className="text-[#182537]">: ---</div></div>
-                    </div>
-                 </div>
+                {detailTab === 'debt' ? (
+                  <div className="space-y-4 p-5 text-[13px] text-[#182537]">
+                    <div className="flex justify-between"><span className="text-slate-600">Tổng doanh số</span><span>{formatCurrency(Number(selectedCustomerDebt?.total_sales ?? 0))}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-600">Đã thanh toán</span><span>{formatCurrency(Number(selectedCustomerDebt?.total_paid ?? 0))}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-600">Công nợ hiện tại</span><span>{formatCurrency(Number(selectedCustomerDebt?.current_debt ?? 0))}</span></div>
+                    <button onClick={() => navigate('/debts')} className="text-[13px] font-medium text-[#0088FF] hover:underline">
+                      Mở trang công nợ
+                    </button>
+                  </div>
+                ) : null}
 
-                 <div className="ui-card ui-card-body-compact">
-                    <h3 className="font-semibold text-[#182537] mb-5 text-[15px]">Thông tin tích điểm</h3>
-                    <div className="space-y-3 text-[13px]">
-                        <div className="flex"><div className="w-48 text-slate-600">Điểm hiện tại</div><div className="text-[#182537]">: 0</div></div>
-                        <div className="flex"><div className="w-48 text-slate-600">Hạng thẻ hiện tại</div><div className="text-[#182537]">: ---</div></div>
-                        <div className="flex"><div className="w-48 text-slate-600">Ngày hết hạn thẻ</div><div className="text-[#182537]">: ---</div></div>
-                        <div className="flex"><div className="w-48 text-slate-600">Giá trị còn lại để lên hạng</div><div className="text-[#182537]">: 0</div></div>
-                    </div>
-                 </div>
+                {detailTab === 'contact' ? (
+                  <div className="space-y-4 p-5 text-[13px] text-[#182537]">
+                    <div>Số điện thoại: {selectedCustomer.phone || '---'}</div>
+                    <div>Email: {selectedCustomer.email || '---'}</div>
+                    <div>Công ty: {selectedCustomer.company_name || '---'}</div>
+                    <div>Mã số thuế: {selectedCustomer.tax_code || '---'}</div>
+                  </div>
+                ) : null}
+
+                {detailTab === 'address' ? (
+                  <div className="space-y-4 p-5 text-[13px] text-[#182537]">
+                    <div>Địa chỉ chính: {selectedCustomer.address || '---'}</div>
+                    {selectedCustomer.customer_addresses?.length ? (
+                      selectedCustomer.customer_addresses.map((address) => (
+                        <div key={address.id} className="rounded border border-slate-200 p-3">
+                          <div>{address.address_line}</div>
+                          <div className="text-slate-500">
+                            {[address.ward, address.district, address.province].filter(Boolean).join(', ') || '---'}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-slate-500">Chưa có địa chỉ phụ.</div>
+                    )}
+                  </div>
+                ) : null}
+
+                {detailTab === 'notes' ? (
+                  <div className="space-y-4 p-5 text-[13px] text-[#182537]">
+                    <div>{selectedCustomer.notes || 'Chưa có ghi chú.'}</div>
+                    <button
+                      onClick={() => handleUpdateCustomer('note')}
+                      className="text-[13px] font-medium text-[#0088FF] hover:underline"
+                    >
+                      Cập nhật ghi chú
+                    </button>
+                  </div>
+                ) : null}
+
+                {detailTab === 'group' ? (
+                  <div className="space-y-4 p-5 text-[13px] text-[#182537]">
+                    <div>Nhóm hiện tại: {selectedCustomer.customer_groups?.name ?? 'Bán lẻ'}</div>
+                    <div>Các nhóm đang có: {customerGroups.map((group) => group.name).join(', ') || '---'}</div>
+                    <button
+                      onClick={() => navigate('/customer-groups')}
+                      className="text-[13px] font-medium text-[#0088FF] hover:underline"
+                    >
+                      Mở trang nhóm khách hàng
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </div>
+
+            <div className="space-y-6 xl:col-span-1">
+              <div className="ui-card ui-card-body-compact">
+                <div className="mb-5 flex items-center justify-between">
+                  <h3 className="text-[15px] font-semibold text-[#182537]">Thông tin gợi ý khi bán hàng</h3>
+                  <button
+                    onClick={() => handleUpdateCustomer('note')}
+                    className="text-[13px] font-medium text-[#0088FF] hover:underline"
+                  >
+                    Cập nhật
+                  </button>
+                </div>
+                <div className="space-y-3 text-[13px]">
+                  <div className="flex"><div className="w-48 text-slate-600">Chính sách giá mặc định</div><div className="text-[#182537]">: ---</div></div>
+                  <div className="flex"><div className="w-48 text-slate-600">Chiết khấu khách hàng</div><div className="text-[#182537]">: ---</div></div>
+                  <div className="flex"><div className="w-48 text-slate-600">Hình thức thanh toán mặc định</div><div className="text-[#182537]">: ---</div></div>
+                </div>
+              </div>
+
+              <div className="ui-card ui-card-body-compact">
+                <h3 className="mb-5 text-[15px] font-semibold text-[#182537]">Thông tin tích điểm</h3>
+                <div className="space-y-3 text-[13px]">
+                  <div className="flex"><div className="w-48 text-slate-600">Điểm hiện tại</div><div className="text-[#182537]">: 0</div></div>
+                  <div className="flex"><div className="w-48 text-slate-600">Hạng thẻ hiện tại</div><div className="text-[#182537]">: ---</div></div>
+                  <div className="flex"><div className="w-48 text-slate-600">Ngày hết hạn thẻ</div><div className="text-[#182537]">: ---</div></div>
+                  <div className="flex"><div className="w-48 text-slate-600">Giá trị còn lại để lên hạng</div><div className="text-[#182537]">: 0</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
+  const totalPages = Math.max(1, Math.ceil((totalRows || 1) / limit));
+  const pageNumbers = Array.from({ length: Math.min(5, totalPages) }, (_, index) => {
+    if (totalPages <= 5) {
+      return index + 1;
+    }
+    const start = Math.max(1, Math.min(page - 2, totalPages - 4));
+    return start + index;
+  });
+
   return (
-    <div className="flex flex-col h-full bg-[#f3f4f6]">
-      <div className="bg-white p-3 border-b flex justify-between items-center z-10 shrink-0">
-        <div className="flex items-center gap-4 text-sm font-medium">
-           <button className="flex items-center gap-1.5 text-slate-600 hover:text-[#0088FF] transition-colors">
-              <Download size={16} /> Xuất file <ChevronDown size={14} />
-           </button>
-           <button className="flex items-center gap-1.5 text-slate-600 hover:text-[#0088FF] transition-colors">
-              <Upload size={16} /> Nhập file
-           </button>
+    <div className="flex h-full flex-col bg-[#f3f4f6]">
+      <div className="custom-scrollbar flex-1 overflow-auto px-5 pb-5">
+        <div className="mb-4 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1)]">
+          {infoMessage ? (
+            <div className="border-b border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+              {infoMessage}
+            </div>
+          ) : null}
+
+          {listError ? (
+            <div className="border-b border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+              {listError}
+            </div>
+          ) : null}
+
+          <div className="flex border-b border-slate-200 px-4 pt-1">
+            <button
+              className={`mr-4 border-b-2 px-4 py-3 text-[14px] font-medium transition-colors ${activeTab === 'all' ? 'border-[#0088FF] text-[#0088FF]' : 'border-transparent text-slate-600 hover:text-[#0088FF]'}`}
+              onClick={() => {
+                setActiveTab('all');
+                setPage(1);
+              }}
+            >
+              Tất cả khách hàng
+            </button>
+            <button
+              className={`border-b-2 px-4 py-3 text-[14px] font-medium transition-colors ${activeTab === 'trading' ? 'border-[#0088FF] text-[#0088FF]' : 'border-transparent text-slate-600 hover:text-[#0088FF]'}`}
+              onClick={() => {
+                setActiveTab('trading');
+                setPage(1);
+              }}
+            >
+              Đang giao dịch
+            </button>
+          </div>
+
+          <div className="flex items-center gap-3 border-b border-slate-100 p-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(event) => {
+                  setSearchTerm(event.target.value);
+                  setPage(1);
+                }}
+                placeholder="Tìm kiếm theo mã khách hàng, tên, SĐT khách hàng"
+                className="w-full rounded border border-slate-300 bg-white py-2 pl-9 pr-4 text-[13px] transition-colors focus:border-[#0088FF] focus:outline-none focus:ring-1 focus:ring-[#0088FF]"
+              />
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                onClick={handleToggleStatusFilter}
+                className="flex w-32 items-center justify-between rounded border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
+              >
+                <span>Bộ lọc</span>
+                <Filter size={14} className="text-slate-400" />
+              </button>
+              <button
+                onClick={handleSaveFilters}
+                className="ml-2 rounded bg-slate-100 px-5 py-2 text-[13px] font-medium text-slate-600 transition-colors hover:bg-slate-200"
+              >
+                Lưu bộ lọc
+              </button>
+            </div>
+          </div>
+
+          {isListLoading ? (
+            <div className="flex min-h-[500px] items-center justify-center text-slate-500">
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#0088FF] border-t-transparent" />
+                <p className="text-sm font-medium">Đang tải danh sách khách hàng...</p>
+              </div>
+            </div>
+          ) : (
+            <div className="min-h-[500px] w-full overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50/50 text-[13px] font-semibold text-[#182537]">
+                    <th className="w-12 border-r border-slate-100 px-4 py-3 text-center">
+                      <Settings size={16} className="mx-auto cursor-pointer text-slate-400 hover:text-slate-600" />
+                    </th>
+                    <th className="w-10 px-2 py-3 text-center"><input type="checkbox" className="rounded border-slate-300 text-[#0088FF]" /></th>
+                    <th className="px-4 py-3 font-semibold">Mã khách hàng</th>
+                    <th className="flex items-center gap-1 px-4 py-3 font-semibold">Tên khách hàng <div className="flex flex-col"><ChevronDown size={10} className="-mb-1 rotate-180" /><ChevronDown size={10} /></div></th>
+                    <th className="px-4 py-3 font-semibold">Số điện thoại</th>
+                    <th className="px-4 py-3 font-semibold">Nhóm khách hàng</th>
+                    <th className="flex items-center justify-end gap-1 px-4 py-3 text-right font-semibold">Công nợ hiện tại <div className="flex flex-col"><ChevronDown size={10} className="-mb-1 rotate-180" /><ChevronDown size={10} /></div></th>
+                    <th className="px-4 py-3 text-right font-semibold">Tổng chi tiêu <ChevronDown size={10} className="ml-1 inline" /></th>
+                    <th className="px-5 py-3 text-center font-semibold">Tổng SL đơn hàng</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-[13.5px] text-[#182537]">
+                  {visibleCustomers.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="px-4 py-10 text-center text-slate-500">
+                        Chưa có khách hàng phù hợp.
+                      </td>
+                    </tr>
+                  ) : (
+                    visibleCustomers.map((customer) => (
+                      <tr key={customer.id} className="group transition-colors hover:bg-slate-50">
+                        <td className="border-r border-slate-100 px-4 py-3.5 text-center text-slate-400"></td>
+                        <td className="px-2 py-3.5 text-center"><input type="checkbox" className="rounded border-slate-300 text-[#0088FF]" /></td>
+                        <td
+                          className="cursor-pointer px-4 py-3.5 text-[#0088FF] hover:underline"
+                          onClick={() => {
+                            setSelectedCustomerId(customer.id);
+                            setDetailTab('history');
+                          }}
+                        >
+                          {customer.code}
+                        </td>
+                        <td className="px-4 py-3.5">{customer.full_name}</td>
+                        <td className="px-4 py-3.5">{customer.phone || '---'}</td>
+                        <td className="px-4 py-3.5">{customer.groupName}</td>
+                        <td className="px-4 py-3.5 text-right">{formatCurrency(customer.debt)}</td>
+                        <td className="px-4 py-3.5 text-right">{customer.totalSpent > 0 ? formatCurrency(customer.totalSpent) : '0'}</td>
+                        <td className="px-5 py-3.5 text-center">{customer.ordersCount}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-[13px] text-[#182537]">
+            <div className="flex items-center gap-2">
+              <span>Hiển thị</span>
+              <select
+                value={limit}
+                onChange={(event) => {
+                  setLimit(Number(event.target.value));
+                  setPage(1);
+                }}
+                className="rounded border border-slate-300 bg-white px-2 py-1 outline-none focus:border-[#0088FF]"
+              >
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span>kết quả</span>
+              <span className="ml-2 text-slate-500">Từ {pageStart} đến {pageEnd} trên tổng {totalRows}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={page === 1}
+                className="flex h-8 w-8 items-center justify-center rounded text-slate-400 disabled:opacity-50"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              {pageNumbers.map((pageNumber) => (
+                <button
+                  key={pageNumber}
+                  onClick={() => setPage(pageNumber)}
+                  className={`flex h-8 w-8 items-center justify-center rounded transition-colors ${
+                    pageNumber === page ? 'bg-[#0088FF] font-medium text-white' : 'hover:bg-slate-100'
+                  }`}
+                >
+                  {pageNumber}
+                </button>
+              ))}
+              <button
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                disabled={page === totalPages}
+                className="flex h-8 w-8 rotate-180 items-center justify-center rounded transition-colors hover:bg-slate-100 disabled:opacity-50"
+              >
+                <ChevronLeft size={16} />
+              </button>
+            </div>
+          </div>
         </div>
-        <button className="flex items-center gap-2 bg-[#0088FF] hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors">
-          <Plus size={16} /> Thêm khách hàng
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-auto custom-scrollbar p-0">
-         <div className="bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1)] mb-4">
-           {/* Tabs */}
-           <div className="flex border-b border-slate-200 px-4 pt-1">
-             <button 
-               className={`px-4 py-3 text-[14px] font-medium border-b-2 mr-4 transition-colors ${activeTab === 'all' ? 'border-[#0088FF] text-[#0088FF]' : 'border-transparent text-slate-600 hover:text-[#0088FF]'}`}
-               onClick={() => setActiveTab('all')}
-             >
-               Tất cả khách hàng
-             </button>
-             <button 
-               className={`px-4 py-3 text-[14px] font-medium border-b-2 transition-colors ${activeTab === 'trading' ? 'border-[#0088FF] text-[#0088FF]' : 'border-transparent text-slate-600 hover:text-[#0088FF]'}`}
-               onClick={() => setActiveTab('trading')}
-             >
-               Đang giao dịch
-             </button>
-           </div>
-
-           {/* Filter & Search */}
-           <div className="p-4 flex items-center gap-3 border-b border-slate-100">
-             <div className="relative flex-1">
-               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-               <input 
-                 type="text" 
-                 placeholder="Tìm kiếm theo mã khách hàng, tên, SĐT khách hàng" 
-                 className="w-full pl-9 pr-4 py-2 bg-white border border-slate-300 rounded text-[13px] focus:outline-none focus:border-[#0088FF] focus:ring-1 focus:ring-[#0088FF] transition-colors"
-               />
-             </div>
-             
-             <div className="flex items-center gap-2 shrink-0">
-               <button className="flex items-center justify-between w-32 px-3 py-2 text-[13px] text-slate-700 bg-white border border-slate-300 rounded hover:bg-slate-50 transition-colors">
-                 <span>Bộ lọc</span>
-                 <Filter size={14} className="text-slate-400" />
-               </button>
-               <button className="px-5 py-2 text-[13px] font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded transition-colors ml-2">
-                 Lưu bộ lọc
-               </button>
-             </div>
-           </div>
-
-           {/* Table */}
-           <div className="w-full overflow-x-auto min-h-[500px]">
-             <table className="w-full text-left">
-               <thead>
-                 <tr className="border-b border-slate-200 bg-slate-50/50 text-[13px] text-[#182537] font-semibold">
-                   <th className="py-3 px-4 w-12 text-center border-r border-slate-100">
-                     <Settings size={16} className="text-slate-400 mx-auto cursor-pointer hover:text-slate-600" />
-                   </th>
-                   <th className="py-3 px-2 w-10 text-center"><input type="checkbox" className="rounded border-slate-300 text-[#0088FF]" /></th>
-                   <th className="py-3 px-4 font-semibold">Mã khách hàng</th>
-                   <th className="py-3 px-4 font-semibold flex items-center gap-1 cursor-pointer hover:text-[#0088FF]">Tên khách hàng <div className="flex flex-col"><ChevronDown size={10} className="rotate-180 -mb-1" /><ChevronDown size={10} /></div></th>
-                   <th className="py-3 px-4 font-semibold">Số điện thoại</th>
-                   <th className="py-3 px-4 font-semibold">Nhóm khách hàng</th>
-                   <th className="py-3 px-4 font-semibold text-right flex items-center justify-end gap-1 cursor-pointer hover:text-[#0088FF]">Công nợ hiện tại <div className="flex flex-col"><ChevronDown size={10} className="rotate-180 -mb-1" /><ChevronDown size={10} /></div></th>
-                   <th className="py-3 px-4 font-semibold text-right">Tổng chi tiêu <ChevronDown size={10} className="inline ml-1" /></th>
-                   <th className="py-3 px-5 font-semibold text-center">Tổng SL đơn hàng</th>
-                 </tr>
-               </thead>
-               <tbody className="divide-y divide-slate-100 text-[13.5px] text-[#182537]">
-                 {customersData.map((customer) => (
-                   <tr key={customer.id} className="hover:bg-slate-50 transition-colors group">
-                     <td className="py-3.5 px-4 text-center border-r border-slate-100 text-slate-400">
-                     </td>
-                     <td className="py-3.5 px-2 text-center"><input type="checkbox" className="rounded border-slate-300 text-[#0088FF]" /></td>
-                     <td className="py-3.5 px-4 text-[#0088FF] cursor-pointer hover:underline" onClick={() => setSelectedCustomerId(customer.id)}>
-                       {customer.code}
-                     </td>
-                     <td className="py-3.5 px-4">{customer.name}</td>
-                     <td className="py-3.5 px-4">{customer.phone}</td>
-                     <td className="py-3.5 px-4">{customer.group}</td>
-                     <td className="py-3.5 px-4 text-right">{customer.debt}</td>
-                     <td className="py-3.5 px-4 text-right">
-                       {customer.totalSpent > 0 ? customer.totalSpent.toLocaleString() : '0'}
-                     </td>
-                     <td className="py-3.5 px-5 text-center">{customer.ordersCount}</td>
-                   </tr>
-                 ))}
-               </tbody>
-             </table>
-           </div>
-
-           {/* Pagination */}
-           <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 text-[13px] text-[#182537]">
-              <div className="flex items-center gap-2">
-                <span>Hiển thị</span>
-                <select defaultValue="100" className="border border-slate-300 rounded px-2 py-1 outline-none focus:border-[#0088FF] bg-white">
-                  <option>20</option>
-                  <option>50</option>
-                  <option value="100">100</option>
-                </select>
-                <span>kết quả</span>
-                <span className="ml-2 text-slate-500">Từ 1 đến 100 trên tổng 1494</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <button className="w-8 h-8 flex items-center justify-center rounded text-slate-400 opacity-50"><ChevronLeft size={16} /></button>
-                <button className="w-8 h-8 flex items-center justify-center rounded bg-[#0088FF] text-white font-medium">1</button>
-                <button className="w-8 h-8 flex items-center justify-center rounded hover:bg-slate-100 transition-colors">2</button>
-                <button className="w-8 h-8 flex items-center justify-center rounded hover:bg-slate-100 transition-colors">3</button>
-                <button className="w-8 h-8 flex items-center justify-center rounded hover:bg-slate-100 transition-colors">4</button>
-                <button className="w-8 h-8 flex items-center justify-center rounded hover:bg-slate-100 transition-colors">5</button>
-                <span className="mx-1 text-slate-400">...</span>
-                <button className="w-8 h-8 flex items-center justify-center rounded hover:bg-slate-100 transition-colors">15</button>
-                <button className="w-8 h-8 flex items-center justify-center rounded hover:bg-slate-100 rotate-180 transition-colors"><ChevronLeft size={16} /></button>
-              </div>
-           </div>
-         </div>
       </div>
     </div>
   );

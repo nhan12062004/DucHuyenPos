@@ -370,9 +370,7 @@ export function Sidebar({ expanded, setExpanded }: SidebarProps) {
             <span className="font-medium text-[15px]">Cài đặt</span>
           </SidebarLabel>
         </NavLink>
-
       </div>
     </motion.aside>
   );
 }
-

@@ -40,6 +40,8 @@ export interface CustomerGroup {
   name: string;
   group_type: 'fixed' | 'dynamic';
   description?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface CustomerDebtSummary {
@@ -81,4 +83,13 @@ export const customersService = {
 
   getGroups: () =>
     api.get<CustomerGroup[]>('/customers/groups'),
+
+  createGroup: (dto: Partial<CustomerGroup>) =>
+    api.post<CustomerGroup>('/customers/groups', dto),
+
+  updateGroup: (id: string, dto: Partial<CustomerGroup>) =>
+    api.put<CustomerGroup>(`/customers/groups/${id}`, dto),
+
+  deleteGroup: (id: string) =>
+    api.delete<{ message: string }>(`/customers/groups/${id}`),
 };

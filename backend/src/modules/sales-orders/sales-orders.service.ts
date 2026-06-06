@@ -61,14 +61,13 @@ export class SalesOrdersService {
       .eq('id', id)
       .single();
 
-    if (error || !data) throw new NotFoundException('Không tìm thấy đơn hàng');
+    if (error || !data) throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n hÃ ng');
     return data;
   }
 
   async create(dto: CreateSalesOrderDto) {
     const { items, ...orderData } = dto;
 
-    // Generate order_no nếu chưa có
     orderData.order_no =
       normalizeManualCode(orderData.order_no) ??
       await generateNextCode(this.supabase, {
@@ -77,7 +76,6 @@ export class SalesOrdersService {
         prefix: 'HD',
       });
 
-    // Tính subtotal
     const subtotal = items.reduce((sum, item) => {
       const lineTotal = item.quantity * item.unit_price - (item.discount_amount ?? 0);
       return sum + lineTotal;
@@ -95,15 +93,14 @@ export class SalesOrdersService {
       .select()
       .single();
 
-    if (orderErr || !order) throw new Error(orderErr?.message ?? 'Tạo đơn hàng thất bại');
+    if (orderErr || !order) throw new Error(orderErr?.message ?? 'Táº¡o Ä‘Æ¡n hÃ ng tháº¥t báº¡i');
 
-    // Insert items
     const itemsToInsert = items.map((item) => ({
       sales_order_id: order.id,
       product_id: item.product_id,
       product_name: item.product_name,
       sku: item.sku,
-      unit_name: item.unit_name ?? 'cái',
+      unit_name: item.unit_name ?? 'cÃ¡i',
       quantity: item.quantity,
       unit_price: item.unit_price,
       discount_amount: item.discount_amount ?? 0,
@@ -120,15 +117,65 @@ export class SalesOrdersService {
   }
 
   async update(id: string, dto: UpdateSalesOrderDto) {
-    const { data, error } = await this.supabase
+    const currentOrder = await this.findOne(id);
+    const { items, ...orderData } = dto;
+
+    const orderItems = items ?? currentOrder.sales_order_items ?? [];
+    const subtotal = orderItems.reduce((sum: number, item: any) => {
+      const quantity = Number(item.quantity ?? 0);
+      const unitPrice = Number(item.unit_price ?? 0);
+      const discountAmount = Number(item.discount_amount ?? 0);
+      return sum + quantity * unitPrice - discountAmount;
+    }, 0);
+
+    const discountAmount = Number(orderData.discount_amount ?? currentOrder.discount_amount ?? 0);
+    const shippingFee = Number(orderData.shipping_fee ?? currentOrder.shipping_fee ?? 0);
+    const taxAmount = Number(orderData.tax_amount ?? currentOrder.tax_amount ?? 0);
+    const totalAmount = subtotal - discountAmount + shippingFee + taxAmount;
+
+    const { error } = await this.supabase
       .from('sales_orders')
-      .update(dto)
+      .update({
+        ...orderData,
+        subtotal,
+        total_amount: totalAmount,
+      })
       .eq('id', id)
-      .select()
+      .select('id')
       .single();
 
-    if (error || !data) throw new NotFoundException('Không tìm thấy đơn hàng');
-    return data;
+    if (error) throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n hÃ ng');
+
+    if (items) {
+      const { error: deleteItemsError } = await this.supabase
+        .from('sales_order_items')
+        .delete()
+        .eq('sales_order_id', id);
+
+      if (deleteItemsError) throw new Error(deleteItemsError.message);
+
+      if (items.length > 0) {
+        const itemsToInsert = items.map((item) => ({
+          sales_order_id: id,
+          product_id: item.product_id,
+          product_name: item.product_name,
+          sku: item.sku,
+          unit_name: item.unit_name ?? 'cÃ¡i',
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          discount_amount: item.discount_amount ?? 0,
+          line_total: item.quantity * item.unit_price - (item.discount_amount ?? 0),
+        }));
+
+        const { error: insertItemsError } = await this.supabase
+          .from('sales_order_items')
+          .insert(itemsToInsert);
+
+        if (insertItemsError) throw new Error(insertItemsError.message);
+      }
+    }
+
+    return this.findOne(id);
   }
 
   async cancel(id: string) {

@@ -96,6 +96,18 @@ export class CreateSalesOrderDto {
 
 export class UpdateSalesOrderDto {
   @IsOptional()
+  @IsUUID()
+  branch_id?: string;
+
+  @IsOptional()
+  @IsUUID()
+  customer_id?: string;
+
+  @IsOptional()
+  @IsIn(['pos', 'web', 'phone', 'manual'])
+  source?: string;
+
+  @IsOptional()
   @IsIn(['draft', 'pending', 'completed', 'cancelled'])
   status?: string;
 
@@ -106,9 +118,34 @@ export class UpdateSalesOrderDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
+  discount_amount?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  shipping_fee?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  tax_amount?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
   paid_amount?: number;
 
   @IsOptional()
   @IsString()
   note?: string;
+
+  @IsOptional()
+  @IsString()
+  delivery_address?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateSalesOrderItemDto)
+  items?: CreateSalesOrderItemDto[];
 }

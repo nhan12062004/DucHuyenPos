@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
   Box,
@@ -25,7 +26,7 @@ import {
   type Product,
   type ProductStockSummary,
 } from '../services/productsService';
-import { salesOrdersService } from '../services/salesOrdersService';
+import { salesOrdersService, type SalesOrder } from '../services/salesOrdersService';
 import { cn } from '../utils/cn';
 
 type CartProduct = {
@@ -54,7 +55,22 @@ function parseNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function getPaymentStatus(totalAmount: number, paidAmount: number): SalesOrder['payment_status'] {
+  if (paidAmount <= 0) {
+    return 'unpaid';
+  }
+  if (paidAmount >= totalAmount) {
+    return 'paid';
+  }
+  return 'partial';
+}
+
 export function POS() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const routeState = location.state as { orderId?: string } | null;
+  const editingOrderIdFromRoute = routeState?.orderId ?? '';
+
   const [activeDeliveryTab, setActiveDeliveryTab] = useState<DeliveryTab>('hang_van_chuyen');
   const [issueInvoice, setIssueInvoice] = useState(false);
   const [customerId, setCustomerId] = useState('');
@@ -69,12 +85,18 @@ export function POS() {
   const [orderNo, setOrderNo] = useState('');
   const [orderNote, setOrderNote] = useState('');
   const [tags, setTags] = useState('');
+  const [orderDiscount, setOrderDiscount] = useState(0);
+  const [shippingFee, setShippingFee] = useState(0);
+  const [paidAmount, setPaidAmount] = useState(0);
+  const [editingOrderId, setEditingOrderId] = useState('');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [stockSummary, setStockSummary] = useState<Record<string, ProductStockSummary>>({});
   const [debtSummary, setDebtSummary] = useState<Record<string, CustomerDebtSummary>>({});
   const [loading, setLoading] = useState(true);
+  const [hydratingOrder, setHydratingOrder] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [hasHydratedRouteOrder, setHasHydratedRouteOrder] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -133,6 +155,68 @@ export function POS() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!editingOrderIdFromRoute || loading || hasHydratedRouteOrder) {
+      return;
+    }
+
+    let active = true;
+
+    async function hydrateOrder() {
+      setHydratingOrder(true);
+      setError(null);
+
+      try {
+        const order = await salesOrdersService.getOne(editingOrderIdFromRoute);
+        if (!active) {
+          return;
+        }
+
+        setEditingOrderId(order.id);
+        setCustomerId(order.customer_id ?? '');
+        setBranchId(order.branch_id);
+        setSource(order.source);
+        setOrderNo(order.order_no);
+        setOrderNote(order.note ?? '');
+        setTags('');
+        setDeliveryDue('');
+        setIssueInvoice(false);
+        setOrderDiscount(Number(order.discount_amount ?? 0));
+        setShippingFee(Number(order.shipping_fee ?? 0));
+        setPaidAmount(Number(order.paid_amount ?? 0));
+        setActiveDeliveryTab(order.status === 'completed' ? 'nhan_tai_cua_hang' : 'hang_van_chuyen');
+        setCartProducts(
+          (order.sales_order_items ?? []).map((item) => ({
+            id: item.product_id,
+            name: item.product_name,
+            subName: item.unit_name || 'Mặc định',
+            code: item.sku ?? '',
+            qty: Number(item.quantity ?? 0),
+            price: Number(item.unit_price ?? 0),
+            discount: Number(item.discount_amount ?? 0),
+            unitName: item.unit_name || 'cái',
+          })),
+        );
+      } catch (loadError: any) {
+        if (!active) {
+          return;
+        }
+        setError(loadError?.message ?? 'Không tải được đơn hàng để chỉnh sửa.');
+      } finally {
+        if (active) {
+          setHydratingOrder(false);
+          setHasHydratedRouteOrder(true);
+        }
+      }
+    }
+
+    hydrateOrder();
+
+    return () => {
+      active = false;
+    };
+  }, [editingOrderIdFromRoute, hasHydratedRouteOrder, loading]);
+
   const selectedCustomer = customers.find((customer) => customer.id === customerId) ?? null;
   const selectedDebt = selectedCustomer ? debtSummary[selectedCustomer.id] : null;
   const hasCustomer = !!selectedCustomer;
@@ -166,6 +250,7 @@ export function POS() {
   const handleCustomerSelect = (customer: Customer) => {
     setCustomerId(customer.id);
     setCustomerQuery('');
+    setSuccessMessage(null);
   };
 
   const handleProductSelect = (product: Product) => {
@@ -217,10 +302,25 @@ export function POS() {
     );
   };
 
-  const totalAmount = cartProducts.reduce(
-    (sum, item) => sum + item.price * item.qty - item.discount,
-    0,
-  );
+  const subtotal = cartProducts.reduce((sum, item) => sum + item.price * item.qty - item.discount, 0);
+  const totalAmount = Math.max(0, subtotal - orderDiscount + shippingFee);
+  const remainingAmount = Math.max(0, totalAmount - paidAmount);
+
+  const handleApplyDiscount = () => {
+    const nextValue = window.prompt('Nhập chiết khấu đơn hàng', String(orderDiscount));
+    if (nextValue === null) {
+      return;
+    }
+    setOrderDiscount(Math.max(0, parseNumber(nextValue)));
+  };
+
+  const handleApplyShippingFee = () => {
+    const nextValue = window.prompt('Nhập phí giao hàng', String(shippingFee));
+    if (nextValue === null) {
+      return;
+    }
+    setShippingFee(Math.max(0, parseNumber(nextValue)));
+  };
 
   const handleSubmit = async () => {
     if (!branchId) {
@@ -238,6 +338,8 @@ export function POS() {
     setSuccessMessage(null);
 
     try {
+      const orderStatus: SalesOrder['status'] =
+        activeDeliveryTab === 'nhan_tai_cua_hang' ? 'completed' : 'pending';
       const deliveryLabel =
         activeDeliveryTab === 'hang_van_chuyen'
           ? 'Đẩy qua hãng vận chuyển'
@@ -255,16 +357,16 @@ export function POS() {
         issueInvoice ? 'Phát hành hóa đơn điện tử' : '',
       ].filter(Boolean);
 
-      const createdOrder = await salesOrdersService.create({
+      const payload = {
         branch_id: branchId,
         customer_id: customerId || undefined,
         order_no: orderNo.trim() || undefined,
         source,
-        status: activeDeliveryTab === 'nhan_tai_cua_hang' ? 'completed' : 'pending',
-        payment_status: 'unpaid',
-        paid_amount: 0,
-        shipping_fee: 0,
-        discount_amount: 0,
+        status: orderStatus,
+        payment_status: getPaymentStatus(totalAmount, paidAmount),
+        paid_amount: paidAmount,
+        shipping_fee: shippingFee,
+        discount_amount: orderDiscount,
         note: noteParts.join('\n'),
         delivery_address: selectedCustomer?.address || undefined,
         items: cartProducts.map((item) => ({
@@ -276,14 +378,31 @@ export function POS() {
           unit_price: item.price,
           discount_amount: item.discount,
         })),
-      });
+      };
 
-      setSuccessMessage(`Đã tạo đơn hàng ${createdOrder.order_no}.`);
+      const savedOrder = editingOrderId
+        ? await salesOrdersService.update(editingOrderId, payload)
+        : await salesOrdersService.create(payload);
+
+      if (editingOrderId) {
+        navigate('/orders', {
+          state: {
+            selectedOrderId: savedOrder.id,
+            message: `Đã cập nhật đơn hàng ${savedOrder.order_no}.`,
+          },
+        });
+        return;
+      }
+
+      setSuccessMessage(`Đã tạo đơn hàng ${savedOrder.order_no}.`);
       setCartProducts([]);
       setOrderNo('');
       setOrderNote('');
       setTags('');
       setProductQuery('');
+      setOrderDiscount(0);
+      setShippingFee(0);
+      setPaidAmount(0);
     } catch (submitError: any) {
       setError(submitError?.message ?? 'Tạo đơn hàng thất bại.');
     } finally {
@@ -291,12 +410,14 @@ export function POS() {
     }
   };
 
-  if (loading) {
+  if (loading || hydratingOrder) {
     return (
       <div className="page-shell flex min-h-[60vh] items-center justify-center">
         <div className="flex flex-col items-center gap-3 text-slate-400">
           <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-          <p className="text-sm font-medium">Đang tải dữ liệu...</p>
+          <p className="text-sm font-medium">
+            {hydratingOrder ? 'Đang tải đơn hàng để chỉnh sửa...' : 'Đang tải dữ liệu...'}
+          </p>
         </div>
       </div>
     );
@@ -370,6 +491,7 @@ export function POS() {
                   <div className="relative mb-4">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                     <input
+                      id="pos-customer-search"
                       type="text"
                       value={customerQuery}
                       onChange={(event) => setCustomerQuery(event.target.value)}
@@ -470,7 +592,10 @@ export function POS() {
                     </div>
                   </div>
                   <div className="mt-4 flex justify-center border-t border-slate-50 pt-4">
-                    <button className="flex items-center gap-1 font-medium text-blue-600 hover:text-blue-700">
+                    <button
+                      onClick={() => navigate('/customers')}
+                      className="flex items-center gap-1 font-medium text-blue-600 hover:text-blue-700"
+                    >
                       Xem thêm
                       <svg
                         width="14"
@@ -525,7 +650,9 @@ export function POS() {
                   <label className="w-20 text-[13px] text-slate-600">Nguồn</label>
                   <select
                     value={source}
-                    onChange={(event) => setSource(event.target.value as 'pos' | 'web' | 'phone' | 'manual')}
+                    onChange={(event) =>
+                      setSource(event.target.value as 'pos' | 'web' | 'phone' | 'manual')
+                    }
                     className="flex-1 rounded border border-slate-300 bg-white px-3 py-1.5 text-[13px] focus:border-blue-500 focus:outline-none"
                   >
                     <option value="web">Web</option>
@@ -568,7 +695,12 @@ export function POS() {
                 <input type="checkbox" className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
                 Tách dòng
               </label>
-              <button className="font-medium text-blue-600 hover:text-blue-700">Kiểm tra tồn kho</button>
+              <button
+                onClick={() => navigate('/inventory')}
+                className="font-medium text-blue-600 hover:text-blue-700"
+              >
+                Kiểm tra tồn kho
+              </button>
               <button className="text-slate-400 hover:text-slate-600">
                 <Settings size={16} />
               </button>
@@ -607,6 +739,7 @@ export function POS() {
                 <div className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded border border-slate-200 bg-white shadow-lg">
                   <button
                     type="button"
+                    onClick={() => navigate('/products')}
                     className="flex w-full items-center gap-2 border-b border-slate-100 px-4 py-3 text-left font-medium text-blue-600 hover:bg-blue-50"
                   >
                     <PlusCircle size={16} /> Thêm mới sản phẩm
@@ -652,10 +785,16 @@ export function POS() {
               )}
             </div>
 
-            <button className="shrink-0 rounded border border-slate-300 bg-white px-4 py-2 text-[13px] font-medium text-slate-700 transition-colors hover:bg-slate-50">
+            <button
+              onClick={() => setIsDropdownOpen(true)}
+              className="shrink-0 rounded border border-slate-300 bg-white px-4 py-2 text-[13px] font-medium text-slate-700 transition-colors hover:bg-slate-50"
+            >
               Chọn nhanh
             </button>
-            <button className="flex shrink-0 items-center gap-2 rounded border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50">
+            <button
+              onClick={() => setSuccessMessage('Bạn có thể dùng ô tìm sản phẩm để lọc nhanh theo tên hoặc SKU.')}
+              className="flex shrink-0 items-center gap-2 rounded border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
+            >
               <svg
                 width="14"
                 height="14"
@@ -801,10 +940,18 @@ export function POS() {
           )}
 
           <div className="relative z-10 flex items-center justify-between border-t border-slate-100 bg-white px-5 py-4">
-            <button className="flex items-center gap-2 font-medium text-blue-600 transition-colors hover:text-blue-700">
+            <button
+              onClick={() =>
+                setSuccessMessage('Muốn thêm dịch vụ khác, bạn hãy tạo sản phẩm dịch vụ trong danh mục sản phẩm rồi chọn lại tại đây.')
+              }
+              className="flex items-center gap-2 font-medium text-blue-600 transition-colors hover:text-blue-700"
+            >
               <PlusCircle size={16} /> Thêm dịch vụ khác (F9)
             </button>
-            <button className="flex items-center gap-2 font-medium text-blue-600 transition-colors hover:text-blue-700">
+            <button
+              onClick={handleApplyDiscount}
+              className="flex items-center gap-2 font-medium text-blue-600 transition-colors hover:text-blue-700"
+            >
               <Gift size={16} /> Áp dụng chương trình khuyến mại
             </button>
           </div>
@@ -838,19 +985,27 @@ export function POS() {
             <div className="space-y-4 text-[13px]">
               <div className="flex items-center justify-between text-slate-700">
                 <span>Tổng tiền ({cartProducts.length} sản phẩm)</span>
-                <span className="font-semibold">{formatNumber(totalAmount)}</span>
+                <span className="font-semibold">{formatNumber(subtotal)}</span>
               </div>
               <div className="flex items-center justify-between text-slate-700">
-                <span>Chiết khấu (F6)</span>
+                <button onClick={handleApplyDiscount} className="text-left">
+                  Chiết khấu (F6)
+                </button>
                 <span className="font-semibold">
-                  {formatNumber(cartProducts.reduce((sum, item) => sum + item.discount, 0))}
+                  {formatNumber(orderDiscount + cartProducts.reduce((sum, item) => sum + item.discount, 0))}
                 </span>
               </div>
-              <div className="flex cursor-pointer items-center justify-between text-blue-600">
+              <div
+                onClick={handleApplyShippingFee}
+                className="flex cursor-pointer items-center justify-between text-blue-600"
+              >
                 <span>Phí giao hàng (F7)</span>
-                <span className="font-semibold text-slate-700">0</span>
+                <span className="font-semibold text-slate-700">{formatNumber(shippingFee)}</span>
               </div>
-              <div className="flex cursor-pointer items-center justify-between text-blue-600">
+              <div
+                onClick={handleApplyDiscount}
+                className="flex cursor-pointer items-center justify-between text-blue-600"
+              >
                 <span className="flex items-center gap-1">
                   Mã giảm giá
                   <svg
@@ -866,7 +1021,7 @@ export function POS() {
                     <path d="m6 9 6 6 6-6" />
                   </svg>
                 </span>
-                <span className="font-semibold text-slate-700">0</span>
+                <span className="font-semibold text-slate-700">{formatNumber(orderDiscount)}</span>
               </div>
 
               <div className="flex items-center justify-between pt-2 text-base font-bold text-slate-800">
@@ -876,16 +1031,25 @@ export function POS() {
 
               <div className="flex items-center justify-between border-t border-slate-100 pt-2 text-slate-700">
                 <span>Khách đã trả</span>
-                <span className="border-b border-dashed border-slate-300 font-semibold">0</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={paidAmount}
+                  onChange={(event) => setPaidAmount(Math.max(0, parseNumber(event.target.value)))}
+                  className="w-28 border-b border-dashed border-slate-300 bg-transparent text-right font-semibold focus:outline-none"
+                />
               </div>
 
-              <button className="flex items-center gap-1 py-1 font-medium text-blue-600 hover:text-blue-700">
+              <button
+                onClick={() => setPaidAmount(totalAmount)}
+                className="flex items-center gap-1 py-1 font-medium text-blue-600 hover:text-blue-700"
+              >
                 <PlusCircle size={14} /> Thêm phương thức
               </button>
 
               <div className="flex items-center justify-between border-t border-slate-100 pt-2 font-bold text-slate-800">
                 <span>Còn phải trả</span>
-                <span>{formatNumber(totalAmount)}</span>
+                <span>{formatNumber(remainingAmount)}</span>
               </div>
             </div>
           </div>
@@ -950,14 +1114,22 @@ export function POS() {
             ) : (
               <>
                 Bạn hãy thêm thông tin khách hàng để sử dụng dịch vụ giao hàng.{' '}
-                <button className="text-blue-600 hover:underline">Cập nhật tại đây</button>
+                <button
+                  onClick={() => document.getElementById('pos-customer-search')?.focus()}
+                  className="text-blue-600 hover:underline"
+                >
+                  Cập nhật tại đây
+                </button>
               </>
             )}
           </div>
         </div>
 
         <div className="flex justify-end gap-3">
-          <button className="rounded border border-slate-300 bg-white px-4 py-2 text-[13px] font-medium text-slate-600 transition-colors hover:bg-slate-50">
+          <button
+            onClick={() => navigate('/orders')}
+            className="rounded border border-slate-300 bg-white px-4 py-2 text-[13px] font-medium text-slate-600 transition-colors hover:bg-slate-50"
+          >
             Thoát
           </button>
           <div className="flex">
@@ -969,13 +1141,18 @@ export function POS() {
               {submitting ? (
                 <span className="inline-flex items-center gap-2">
                   <Loader2 size={14} className="animate-spin" />
-                  Đang tạo...
+                  {editingOrderId ? 'Đang cập nhật...' : 'Đang tạo...'}
                 </span>
+              ) : editingOrderId ? (
+                'Cập nhật đơn hàng (F1)'
               ) : (
                 'Tạo đơn hàng (F1)'
               )}
             </button>
-            <button className="flex items-center justify-center rounded-r border-l border-blue-700 bg-blue-600 px-2 py-2 text-white transition-colors hover:bg-blue-700">
+            <button
+              onClick={handleSubmit}
+              className="flex items-center justify-center rounded-r border-l border-blue-700 bg-blue-600 px-2 py-2 text-white transition-colors hover:bg-blue-700"
+            >
               <svg
                 width="12"
                 height="12"
