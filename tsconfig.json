@@ -1,0 +1,8 @@
+{
+  "extends": "./backend/tsconfig.json",
+  "compilerOptions": {
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  },
+  "include": ["backend/src/**/*.ts"]
+}

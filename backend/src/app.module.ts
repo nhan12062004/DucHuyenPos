@@ -16,6 +16,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module.js';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: ['backend/.env', '.env'],
       load: [configuration],
     }),
     CommonModule,
