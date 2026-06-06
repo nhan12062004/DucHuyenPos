@@ -1,0 +1,8 @@
+{
+  "name": "Đức Huyền POS",
+  "description": "Modern POS and dashboard system for electrical & plumbing supplies.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
