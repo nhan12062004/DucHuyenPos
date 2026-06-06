@@ -1,0 +1,105 @@
+import { api } from './apiClient';
+import type { PaginatedResult } from './types';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface SalesOrderItem {
+  id: string;
+  sales_order_id: string;
+  product_id: string;
+  product_name: string;
+  sku?: string;
+  unit_name: string;
+  quantity: number;
+  unit_price: number;
+  discount_amount: number;
+  line_total: number;
+  products?: { name: string; sku: string; image_url?: string } | null;
+}
+
+export interface SalesOrder {
+  id: string;
+  branch_id: string;
+  order_no: string;
+  invoice_no?: string;
+  customer_id?: string;
+  cashier_id?: string;
+  sold_at: string;
+  source: 'pos' | 'web' | 'phone' | 'manual';
+  status: 'draft' | 'pending' | 'completed' | 'cancelled';
+  payment_status: 'unpaid' | 'partial' | 'paid' | 'refunded';
+  subtotal: number;
+  discount_amount: number;
+  shipping_fee: number;
+  tax_amount: number;
+  total_amount: number;
+  paid_amount: number;
+  note?: string;
+  created_at: string;
+  // Relations
+  customers?: { id: string; full_name: string; phone?: string; address?: string } | null;
+  branches?: { id: string; name: string } | null;
+  sales_order_items?: SalesOrderItem[];
+  sales_payments?: SalesPayment[];
+}
+
+export interface SalesPayment {
+  id: string;
+  sales_order_id: string;
+  payment_no: string;
+  payment_method: 'cash' | 'bank_transfer' | 'card' | 'ewallet' | 'other';
+  amount: number;
+  paid_at: string;
+  note?: string;
+}
+
+export interface SalesOrdersQuery {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: string;
+  payment_status?: string;
+  from_date?: string;
+  to_date?: string;
+}
+
+export interface CreateSalesOrderPayload {
+  branch_id: string;
+  customer_id?: string;
+  source?: string;
+  status?: string;
+  payment_status?: string;
+  discount_amount?: number;
+  shipping_fee?: number;
+  tax_amount?: number;
+  paid_amount?: number;
+  note?: string;
+  items: {
+    product_id: string;
+    product_name: string;
+    sku?: string;
+    unit_name?: string;
+    quantity: number;
+    unit_price: number;
+    discount_amount?: number;
+  }[];
+}
+
+// ─── Service ─────────────────────────────────────────────────────────────────
+
+export const salesOrdersService = {
+  getAll: (params?: SalesOrdersQuery) =>
+    api.get<PaginatedResult<SalesOrder>>('/sales-orders', params as any),
+
+  getOne: (id: string) =>
+    api.get<SalesOrder>(`/sales-orders/${id}`),
+
+  create: (dto: CreateSalesOrderPayload) =>
+    api.post<SalesOrder>('/sales-orders', dto),
+
+  update: (id: string, dto: Partial<Pick<SalesOrder, 'status' | 'payment_status' | 'paid_amount' | 'note'>>) =>
+    api.put<SalesOrder>(`/sales-orders/${id}`, dto),
+
+  cancel: (id: string) =>
+    api.put<SalesOrder>(`/sales-orders/${id}/cancel`, {}),
+};

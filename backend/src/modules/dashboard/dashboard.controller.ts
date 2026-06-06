@@ -1,0 +1,20 @@
+import { Controller, Get, Query } from '@nestjs/common';
+import { DashboardService } from './dashboard.service.js';
+
+@Controller('dashboard')
+export class DashboardController {
+  constructor(private readonly dashboardService: DashboardService) {}
+
+  @Get('stats')
+  getStats(@Query('branch_id') branchId?: string) {
+    return this.dashboardService.getStats(branchId);
+  }
+
+  @Get('revenue-chart')
+  getRevenueChart(
+    @Query('days') days?: string,
+    @Query('branch_id') branchId?: string,
+  ) {
+    return this.dashboardService.getRevenueChart(days ? parseInt(days) : 30, branchId);
+  }
+}

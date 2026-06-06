@@ -1,5 +1,7 @@
-import { Global, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 
-@Global()
-@Module({})
+@Module({
+  providers: [],
+  exports: [],
+})
 export class CommonModule {}

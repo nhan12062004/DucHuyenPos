@@ -4,6 +4,13 @@ import { CommonModule } from './common/common.module.js';
 import configuration from './config/configuration.js';
 import { HealthModule } from './modules/health/health.module.js';
 import { SupabaseModule } from './modules/supabase/supabase.module.js';
+import { ProductsModule } from './modules/products/products.module.js';
+import { CustomersModule } from './modules/customers/customers.module.js';
+import { SuppliersModule } from './modules/suppliers/suppliers.module.js';
+import { SalesOrdersModule } from './modules/sales-orders/sales-orders.module.js';
+import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.module.js';
+import { InventoryModule } from './modules/inventory/inventory.module.js';
+import { DashboardModule } from './modules/dashboard/dashboard.module.js';
 
 @Module({
   imports: [
@@ -14,6 +21,13 @@ import { SupabaseModule } from './modules/supabase/supabase.module.js';
     CommonModule,
     SupabaseModule,
     HealthModule,
+    ProductsModule,
+    CustomersModule,
+    SuppliersModule,
+    SalesOrdersModule,
+    PurchaseOrdersModule,
+    InventoryModule,
+    DashboardModule,
   ],
 })
 export class AppModule {}
