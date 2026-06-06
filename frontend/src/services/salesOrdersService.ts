@@ -66,6 +66,7 @@ export interface SalesOrdersQuery {
 export interface CreateSalesOrderPayload {
   branch_id: string;
   customer_id?: string;
+  order_no?: string;
   source?: string;
   status?: string;
   payment_status?: string;
@@ -74,6 +75,7 @@ export interface CreateSalesOrderPayload {
   tax_amount?: number;
   paid_amount?: number;
   note?: string;
+  delivery_address?: string;
   items: {
     product_id: string;
     product_name: string;

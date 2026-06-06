@@ -9,6 +9,7 @@ import {
 } from 'class-validator';
 
 export class CreateProductDto {
+  @IsOptional()
   @IsString()
   @MaxLength(50)
   sku: string = '';

@@ -1,6 +1,7 @@
 import { IsString, IsOptional, IsEmail, IsIn, MaxLength } from 'class-validator';
 
 export class CreateCustomerDto {
+  @IsOptional()
   @IsString()
   code: string = '';
 

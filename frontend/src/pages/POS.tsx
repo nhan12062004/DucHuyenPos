@@ -1,49 +1,340 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  Search,
-  Info,
-  Settings,
-  ImageIcon,
-  X,
-  PlusCircle,
-  Gift,
-  TruckIcon,
-  Store,
+  AlertCircle,
   Box,
-  Clock
+  Clock,
+  Gift,
+  ImageIcon,
+  Info,
+  Loader2,
+  PlusCircle,
+  Search,
+  Settings,
+  Store,
+  TruckIcon,
+  X,
 } from 'lucide-react';
+import {
+  customersService,
+  type Customer,
+  type CustomerDebtSummary,
+} from '../services/customersService';
+import { inventoryService, type Branch } from '../services/inventoryService';
+import {
+  productsService,
+  type Product,
+  type ProductStockSummary,
+} from '../services/productsService';
+import { salesOrdersService } from '../services/salesOrdersService';
 import { cn } from '../utils/cn';
 
 type CartProduct = {
-  id: number;
+  id: string;
   name: string;
   subName: string;
   code: string;
   qty: number;
   price: number;
   discount: number;
+  unitName: string;
 };
 
-export function POS() {
-  const [activeDeliveryTab, setActiveDeliveryTab] = useState('hang_van_chuyen');
-  const [hasCustomer, setHasCustomer] = useState(true);
-  const [productQuery, setProductQuery] = useState('test');
-  const [isDropdownOpen, setIsDropdownOpen] = useState(true);
-  const [cartProducts, setCartProducts] = useState<CartProduct[]>([]);
+type DeliveryTab =
+  | 'hang_van_chuyen'
+  | 'van_chuyen_ngoai'
+  | 'nhan_tai_cua_hang'
+  | 'giao_hang_sau';
 
-  const handleProductSelect = () => {
-    setCartProducts([
-      { id: 1, name: 'test', subName: 'Mặc định', code: 'PVN2157', qty: 1, price: 0, discount: 0 }
-    ]);
-    setIsDropdownOpen(false);
-    setProductQuery('');
+function formatNumber(value: number) {
+  return value.toLocaleString('vi-VN');
+}
+
+function parseNumber(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function POS() {
+  const [activeDeliveryTab, setActiveDeliveryTab] = useState<DeliveryTab>('hang_van_chuyen');
+  const [issueInvoice, setIssueInvoice] = useState(false);
+  const [customerId, setCustomerId] = useState('');
+  const [customerQuery, setCustomerQuery] = useState('');
+  const [productQuery, setProductQuery] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [cartProducts, setCartProducts] = useState<CartProduct[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchId, setBranchId] = useState('');
+  const [source, setSource] = useState<'pos' | 'web' | 'phone' | 'manual'>('web');
+  const [deliveryDue, setDeliveryDue] = useState('');
+  const [orderNo, setOrderNo] = useState('');
+  const [orderNote, setOrderNote] = useState('');
+  const [tags, setTags] = useState('');
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [stockSummary, setStockSummary] = useState<Record<string, ProductStockSummary>>({});
+  const [debtSummary, setDebtSummary] = useState<Record<string, CustomerDebtSummary>>({});
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadData() {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const [branchList, customerList, debtList, productList, stockList] = await Promise.all([
+          inventoryService.getBranches(),
+          customersService.getAll({ page: 1, limit: 100, status: 'active' }),
+          customersService.getDebtSummary(),
+          productsService.getAll({ page: 1, limit: 100, status: 'active' }),
+          productsService.getStockSummary(),
+        ]);
+
+        if (!active) {
+          return;
+        }
+
+        const defaultBranch = branchList.find((branch) => branch.is_default) ?? branchList[0];
+        const stockMap = stockList.reduce<Record<string, ProductStockSummary>>((acc, item) => {
+          acc[item.product_id] = item;
+          return acc;
+        }, {});
+        const debtMap = debtList.reduce<Record<string, CustomerDebtSummary>>((acc, item) => {
+          acc[item.customer_id] = item;
+          return acc;
+        }, {});
+
+        setBranches(branchList);
+        setBranchId(defaultBranch?.id ?? '');
+        setCustomers(customerList.data);
+        setProducts(productList.data);
+        setStockSummary(stockMap);
+        setDebtSummary(debtMap);
+      } catch (loadError: any) {
+        if (!active) {
+          return;
+        }
+        setError(loadError?.message ?? 'Không tải được dữ liệu tạo đơn hàng.');
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadData();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const selectedCustomer = customers.find((customer) => customer.id === customerId) ?? null;
+  const selectedDebt = selectedCustomer ? debtSummary[selectedCustomer.id] : null;
+  const hasCustomer = !!selectedCustomer;
+
+  const filteredCustomers = customers.filter((customer) => {
+    const query = customerQuery.trim().toLowerCase();
+    if (!query) {
+      return true;
+    }
+
+    return (
+      customer.full_name.toLowerCase().includes(query) ||
+      customer.code.toLowerCase().includes(query) ||
+      customer.phone?.toLowerCase().includes(query)
+    );
+  });
+
+  const filteredProducts = products.filter((product) => {
+    const query = productQuery.trim().toLowerCase();
+    if (!query) {
+      return false;
+    }
+
+    return (
+      product.name.toLowerCase().includes(query) ||
+      product.sku.toLowerCase().includes(query) ||
+      product.barcode?.toLowerCase().includes(query)
+    );
+  });
+
+  const handleCustomerSelect = (customer: Customer) => {
+    setCustomerId(customer.id);
+    setCustomerQuery('');
   };
 
-  const totalAmount = cartProducts.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const handleProductSelect = (product: Product) => {
+    setCartProducts((current) => {
+      const existing = current.find((item) => item.id === product.id);
+      if (existing) {
+        return current.map((item) =>
+          item.id === product.id ? { ...item, qty: item.qty + 1 } : item,
+        );
+      }
+
+      return [
+        ...current,
+        {
+          id: product.id,
+          name: product.name,
+          subName: product.unit_name || 'Mặc định',
+          code: product.sku,
+          qty: 1,
+          price: Number(product.sale_price ?? 0),
+          discount: 0,
+          unitName: product.unit_name || 'cái',
+        },
+      ];
+    });
+    setIsDropdownOpen(false);
+    setProductQuery('');
+    setSuccessMessage(null);
+    setError(null);
+  };
+
+  const updateCartProduct = (
+    productId: string,
+    field: 'qty' | 'price' | 'discount',
+    value: number,
+  ) => {
+    setCartProducts((current) =>
+      current.map((item) => {
+        if (item.id !== productId) {
+          return item;
+        }
+
+        if (field === 'qty') {
+          return { ...item, qty: Math.max(1, value) };
+        }
+
+        return { ...item, [field]: Math.max(0, value) };
+      }),
+    );
+  };
+
+  const totalAmount = cartProducts.reduce(
+    (sum, item) => sum + item.price * item.qty - item.discount,
+    0,
+  );
+
+  const handleSubmit = async () => {
+    if (!branchId) {
+      setError('Vui lòng chọn chi nhánh bán.');
+      return;
+    }
+
+    if (cartProducts.length === 0) {
+      setError('Bạn cần thêm ít nhất 1 sản phẩm.');
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const deliveryLabel =
+        activeDeliveryTab === 'hang_van_chuyen'
+          ? 'Đẩy qua hãng vận chuyển'
+          : activeDeliveryTab === 'van_chuyen_ngoai'
+          ? 'Đẩy vận chuyển ngoài'
+          : activeDeliveryTab === 'nhan_tai_cua_hang'
+          ? 'Khách nhận tại cửa hàng'
+          : 'Giao hàng sau';
+
+      const noteParts = [
+        orderNote.trim(),
+        tags.trim() ? `Tags: ${tags.trim()}` : '',
+        `Hình thức giao hàng: ${deliveryLabel}`,
+        deliveryDue.trim() ? `Hẹn giao: ${deliveryDue.trim()}` : '',
+        issueInvoice ? 'Phát hành hóa đơn điện tử' : '',
+      ].filter(Boolean);
+
+      const createdOrder = await salesOrdersService.create({
+        branch_id: branchId,
+        customer_id: customerId || undefined,
+        order_no: orderNo.trim() || undefined,
+        source,
+        status: activeDeliveryTab === 'nhan_tai_cua_hang' ? 'completed' : 'pending',
+        payment_status: 'unpaid',
+        paid_amount: 0,
+        shipping_fee: 0,
+        discount_amount: 0,
+        note: noteParts.join('\n'),
+        delivery_address: selectedCustomer?.address || undefined,
+        items: cartProducts.map((item) => ({
+          product_id: item.id,
+          product_name: item.name,
+          sku: item.code,
+          unit_name: item.unitName,
+          quantity: item.qty,
+          unit_price: item.price,
+          discount_amount: item.discount,
+        })),
+      });
+
+      setSuccessMessage(`Đã tạo đơn hàng ${createdOrder.order_no}.`);
+      setCartProducts([]);
+      setOrderNo('');
+      setOrderNote('');
+      setTags('');
+      setProductQuery('');
+    } catch (submitError: any) {
+      setError(submitError?.message ?? 'Tạo đơn hàng thất bại.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="page-shell flex min-h-[60vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-slate-400">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+          <p className="text-sm font-medium">Đang tải dữ liệu...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !branches.length && !customers.length && !products.length) {
+    return (
+      <div className="page-shell flex min-h-[60vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-red-500">
+          <AlertCircle className="h-8 w-8" />
+          <p className="text-sm font-medium">{error}</p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="text-xs text-blue-600 underline"
+          >
+            Thử lại
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-full bg-[#F4F6F8] pb-20 font-sans text-sm">
       <div className="mx-auto max-w-[1400px] space-y-6 p-4 md:p-6">
+        {error ? (
+          <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+            {error}
+          </div>
+        ) : null}
+
+        {successMessage ? (
+          <div className="rounded border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            {successMessage}
+          </div>
+        ) : null}
+
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
           <div className="xl:col-span-2">
             <div className="ui-card flex h-full flex-col">
@@ -52,9 +343,9 @@ export function POS() {
                   <h2 className="font-semibold text-slate-800">Thông tin khách hàng</h2>
                   {hasCustomer && (
                     <div className="mt-1 flex items-center gap-2">
-                      <span className="font-medium text-blue-600">Test</span>
+                      <span className="font-medium text-blue-600">{selectedCustomer.full_name}</span>
                       <button
-                        onClick={() => setHasCustomer(false)}
+                        onClick={() => setCustomerId('')}
                         className="text-slate-400 hover:text-slate-600"
                       >
                         <X size={14} />
@@ -63,7 +354,12 @@ export function POS() {
                   )}
                 </div>
                 <label className="flex cursor-pointer items-center gap-2 text-[13px] font-medium uppercase text-slate-600">
-                  <input type="checkbox" className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                  <input
+                    type="checkbox"
+                    checked={issueInvoice}
+                    onChange={(event) => setIssueInvoice(event.target.checked)}
+                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
                   Phát hành hóa đơn điện tử
                   <Info size={14} className="text-slate-400" />
                 </label>
@@ -75,10 +371,42 @@ export function POS() {
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                     <input
                       type="text"
+                      value={customerQuery}
+                      onChange={(event) => setCustomerQuery(event.target.value)}
                       placeholder="Tìm theo tên, SĐT, mã khách hàng ... (F4)"
                       className="w-full rounded border border-slate-300 py-2 pl-9 pr-4 transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                   </div>
+
+                  {customerQuery.trim() ? (
+                    <div className="mb-4 max-h-56 overflow-auto rounded border border-slate-200 bg-white">
+                      {filteredCustomers.length === 0 ? (
+                        <div className="px-4 py-6 text-center text-slate-400">
+                          Không tìm thấy khách hàng phù hợp
+                        </div>
+                      ) : (
+                        filteredCustomers.slice(0, 8).map((customer) => (
+                          <button
+                            key={customer.id}
+                            type="button"
+                            onClick={() => handleCustomerSelect(customer)}
+                            className="flex w-full items-start justify-between border-b border-slate-100 px-4 py-3 text-left last:border-b-0 hover:bg-slate-50"
+                          >
+                            <div>
+                              <p className="font-medium text-slate-800">{customer.full_name}</p>
+                              <p className="mt-0.5 text-[12px] text-slate-500">
+                                {customer.code} {customer.phone ? `· ${customer.phone}` : ''}
+                              </p>
+                              <p className="mt-0.5 text-[12px] text-slate-400">
+                                {customer.address || 'Chưa có địa chỉ'}
+                              </p>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  ) : null}
+
                   <div className="flex flex-1 flex-col items-center justify-center rounded border border-dashed border-slate-200 bg-slate-50/50 py-8 text-slate-400">
                     <div className="mb-3 flex h-16 w-16 items-center justify-center rounded bg-slate-100">
                       <svg
@@ -105,27 +433,39 @@ export function POS() {
                     <div className="flex-1 space-y-1.5">
                       <div className="flex items-center gap-2">
                         <span className="text-[13px] font-semibold uppercase text-slate-800">Địa chỉ giao hàng</span>
-                        <button className="font-medium text-blue-600 hover:text-blue-700">Thay đổi</button>
+                        <button
+                          type="button"
+                          onClick={() => setCustomerId('')}
+                          className="font-medium text-blue-600 hover:text-blue-700"
+                        >
+                          Thay đổi
+                        </button>
                       </div>
-                      <p className="text-slate-800">234234324</p>
-                      <p className="text-slate-800">áda, Phường Lê Lợi, Thị xã Sơn Tây, Hà Nội</p>
+                      <p className="text-slate-800">{selectedCustomer.phone || 'Chưa có số điện thoại'}</p>
+                      <p className="text-slate-800">{selectedCustomer.address || 'Chưa có địa chỉ giao hàng'}</p>
                     </div>
                     <div className="w-[300px] space-y-3 rounded border border-dashed border-slate-300 bg-white p-4 text-[13px]">
                       <div className="flex justify-between">
                         <span className="text-slate-600">Nợ phải thu</span>
-                        <span className="font-medium text-red-500">0</span>
+                        <span className="font-medium text-red-500">
+                          {formatNumber(Number(selectedDebt?.current_debt ?? 0))}
+                        </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-600">Tổng chi tiêu (0 đơn)</span>
-                        <span className="font-medium text-blue-600">0</span>
+                        <span className="text-slate-600">Tổng chi tiêu</span>
+                        <span className="font-medium text-blue-600">
+                          {formatNumber(Number(selectedDebt?.total_sales ?? 0))}
+                        </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-600">Trả hàng (0 sản phẩm)</span>
-                        <span className="font-medium text-red-500">0</span>
+                        <span className="text-slate-600">Đã thanh toán</span>
+                        <span className="font-medium text-blue-600">
+                          {formatNumber(Number(selectedDebt?.total_paid ?? 0))}
+                        </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-600">Giao hàng thất bại (0 đơn)</span>
-                        <span className="font-medium text-red-500">0</span>
+                        <span className="text-slate-600">Mã khách hàng</span>
+                        <span className="font-medium text-slate-700">{selectedCustomer.code}</span>
                       </div>
                     </div>
                   </div>
@@ -163,20 +503,35 @@ export function POS() {
               <div className="space-y-4">
                 <div className="flex items-center gap-4">
                   <label className="w-20 text-[13px] text-slate-600">Bán tại</label>
-                  <select className="flex-1 rounded border border-slate-300 bg-white px-3 py-1.5 text-[13px] focus:border-blue-500 focus:outline-none">
-                    <option>Chi nhánh mặc định</option>
+                  <select
+                    value={branchId}
+                    onChange={(event) => setBranchId(event.target.value)}
+                    className="flex-1 rounded border border-slate-300 bg-white px-3 py-1.5 text-[13px] focus:border-blue-500 focus:outline-none"
+                  >
+                    {branches.map((branch) => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="flex items-center gap-4">
                   <label className="w-20 text-[13px] text-slate-600">Bán bởi</label>
                   <select className="flex-1 rounded border border-slate-300 bg-white px-3 py-1.5 text-[13px] focus:border-blue-500 focus:outline-none">
-                    <option>Lương Thị Hồng</option>
+                    <option>Nhân viên tại quầy</option>
                   </select>
                 </div>
                 <div className="flex items-center gap-4">
                   <label className="w-20 text-[13px] text-slate-600">Nguồn</label>
-                  <select className="flex-1 rounded border border-slate-300 bg-white px-3 py-1.5 text-[13px] focus:border-blue-500 focus:outline-none">
-                    <option>Web</option>
+                  <select
+                    value={source}
+                    onChange={(event) => setSource(event.target.value as 'pos' | 'web' | 'phone' | 'manual')}
+                    className="flex-1 rounded border border-slate-300 bg-white px-3 py-1.5 text-[13px] focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="web">Web</option>
+                    <option value="pos">POS</option>
+                    <option value="phone">Điện thoại</option>
+                    <option value="manual">Thủ công</option>
                   </select>
                 </div>
                 <div className="flex items-center gap-4">
@@ -184,6 +539,8 @@ export function POS() {
                   <div className="relative flex-1">
                     <input
                       type="text"
+                      value={deliveryDue}
+                      onChange={(event) => setDeliveryDue(event.target.value)}
                       className="w-full rounded border border-slate-300 px-3 py-1.5 text-[13px] focus:border-blue-500 focus:outline-none"
                     />
                     <Clock size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -193,6 +550,8 @@ export function POS() {
                   <label className="w-20 text-[13px] text-slate-600">Mã đơn</label>
                   <input
                     type="text"
+                    value={orderNo}
+                    onChange={(event) => setOrderNo(event.target.value)}
                     className="flex-1 rounded border border-slate-300 px-3 py-1.5 text-[13px] focus:border-blue-500 focus:outline-none"
                   />
                 </div>
@@ -224,12 +583,12 @@ export function POS() {
                 placeholder="Tìm theo tên, mã SKU, hoặc quét mã Barcode...(F3)"
                 className={cn(
                   'w-full rounded border py-2 pl-9 pr-8 text-[13px] transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500',
-                  isDropdownOpen && productQuery ? 'border-blue-500 ring-1 ring-blue-500' : 'border-slate-300'
+                  isDropdownOpen && productQuery ? 'border-blue-500 ring-1 ring-blue-500' : 'border-slate-300',
                 )}
                 value={productQuery}
-                onChange={(e) => {
-                  setProductQuery(e.target.value);
-                  setIsDropdownOpen(!!e.target.value);
+                onChange={(event) => {
+                  setProductQuery(event.target.value);
+                  setIsDropdownOpen(!!event.target.value);
                 }}
               />
               {productQuery && (
@@ -246,32 +605,49 @@ export function POS() {
 
               {isDropdownOpen && productQuery && (
                 <div className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded border border-slate-200 bg-white shadow-lg">
-                  <button className="flex w-full items-center gap-2 border-b border-slate-100 px-4 py-3 text-left font-medium text-blue-600 hover:bg-blue-50">
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 border-b border-slate-100 px-4 py-3 text-left font-medium text-blue-600 hover:bg-blue-50"
+                  >
                     <PlusCircle size={16} /> Thêm mới sản phẩm
                   </button>
-                  <button
-                    className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-slate-50"
-                    onClick={handleProductSelect}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-300">
-                        <ImageIcon size={20} />
-                      </div>
-                      <div>
-                        <p className="text-[13px] font-semibold text-slate-800">test</p>
-                        <p className="mt-0.5 text-[12px] text-blue-600">
-                          PVN2157 <span className="ml-1 text-slate-500">Mặc định</span>
-                        </p>
-                      </div>
+
+                  {filteredProducts.length === 0 ? (
+                    <div className="px-4 py-6 text-center text-[13px] text-slate-400">
+                      Không tìm thấy sản phẩm phù hợp
                     </div>
-                    <div className="text-right">
-                      <p className="font-bold text-slate-800">0</p>
-                      <p className="mt-0.5 text-[12px] text-slate-500">
-                        Tồn: <span className="text-red-500">0</span> | Có thể bán:{' '}
-                        <span className="text-red-500">-1</span>
-                      </p>
-                    </div>
-                  </button>
+                  ) : (
+                    filteredProducts.slice(0, 8).map((product) => {
+                      const stock = stockSummary[product.id];
+
+                      return (
+                        <button
+                          key={product.id}
+                          className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-slate-50"
+                          onClick={() => handleProductSelect(product)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-300">
+                              <ImageIcon size={20} />
+                            </div>
+                            <div>
+                              <p className="text-[13px] font-semibold text-slate-800">{product.name}</p>
+                              <p className="mt-0.5 text-[12px] text-blue-600">
+                                {product.sku} <span className="ml-1 text-slate-500">{product.unit_name || 'Mặc định'}</span>
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-slate-800">{formatNumber(Number(product.sale_price ?? 0))}</p>
+                            <p className="mt-0.5 text-[12px] text-slate-500">
+                              Tồn: <span className="text-red-500">{formatNumber(Number(stock?.total_on_hand_qty ?? 0))}</span> | Có thể bán:{' '}
+                              <span className="text-red-500">{formatNumber(Number(stock?.total_available_qty ?? 0))}</span>
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
                 </div>
               )}
             </div>
@@ -333,7 +709,7 @@ export function POS() {
               </div>
               <p className="mb-4 text-[13px] font-medium">Chưa có thông tin sản phẩm</p>
               <button
-                onClick={() => setProductQuery('test')}
+                onClick={() => setIsDropdownOpen(true)}
                 className="rounded border border-blue-400 bg-white px-6 py-2 text-[13px] font-medium text-blue-600 transition-colors hover:bg-blue-50"
               >
                 Thêm sản phẩm
@@ -343,7 +719,7 @@ export function POS() {
             <div className="relative z-10 min-h-[150px] overflow-x-auto bg-white">
               <table className="w-full text-left">
                 <thead>
-                  <tr className="bg-white text-[13px] font-semibold text-slate-700 border-b border-slate-100">
+                  <tr className="border-b border-slate-100 bg-white text-[13px] font-semibold text-slate-700">
                     <th className="w-12 px-5 py-3 text-center">STT</th>
                     <th className="w-16 px-2 py-3">Ảnh</th>
                     <th className="min-w-[200px] px-2 py-3">Tên sản phẩm</th>
@@ -373,34 +749,45 @@ export function POS() {
                         <div className="mt-0.5 text-[12px] text-slate-500">{product.subName}</div>
                         <div className="text-[12px] text-blue-500">{product.code}</div>
                       </td>
-                      <td className="flex justify-center px-2 py-4">
+                      <td className="px-2 py-4 text-center">
                         <input
-                          type="text"
+                          type="number"
+                          min={1}
                           value={product.qty}
-                          readOnly
-                          className="w-10 border-b-[1.5px] border-blue-500 bg-transparent py-1 text-center font-semibold text-blue-600 focus:outline-none"
+                          onChange={(event) =>
+                            updateCartProduct(product.id, 'qty', parseNumber(event.target.value))
+                          }
+                          className="w-14 border-b-[1.5px] border-blue-500 bg-transparent py-1 text-center font-semibold text-blue-600 focus:outline-none"
                         />
                       </td>
                       <td className="px-2 py-4 text-right">
                         <input
-                          type="text"
+                          type="number"
+                          min={0}
                           value={product.price}
-                          readOnly
+                          onChange={(event) =>
+                            updateCartProduct(product.id, 'price', parseNumber(event.target.value))
+                          }
                           className="w-full border-b border-transparent bg-transparent py-1 text-right text-slate-800 hover:border-slate-300 focus:outline-none"
                         />
                       </td>
                       <td className="px-2 py-4 text-right">
                         <input
-                          type="text"
+                          type="number"
+                          min={0}
                           value={product.discount}
-                          readOnly
+                          onChange={(event) =>
+                            updateCartProduct(product.id, 'discount', parseNumber(event.target.value))
+                          }
                           className="w-full border-b border-transparent bg-transparent py-1 text-right text-slate-800 hover:border-slate-300 focus:outline-none"
                         />
                       </td>
                       <td className="flex h-full items-center justify-end gap-3 px-5 py-4 text-right font-medium text-slate-800">
-                        {product.price * product.qty}
+                        {formatNumber(product.price * product.qty - product.discount)}
                         <button
-                          onClick={() => setCartProducts([])}
+                          onClick={() =>
+                            setCartProducts((current) => current.filter((item) => item.id !== product.id))
+                          }
                           className="ml-2 text-slate-400 transition-colors hover:text-red-500"
                         >
                           <X size={16} />
@@ -430,6 +817,8 @@ export function POS() {
                 </label>
                 <textarea
                   rows={3}
+                  value={tags}
+                  onChange={(event) => setTags(event.target.value)}
                   placeholder="Nhập ký tự và ấn enter"
                   className="w-full rounded border border-slate-300 p-3 text-[13px] transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
@@ -438,6 +827,8 @@ export function POS() {
                 <label className="mb-1 block text-[13px] font-medium text-slate-700">Ghi chú đơn hàng</label>
                 <textarea
                   rows={3}
+                  value={orderNote}
+                  onChange={(event) => setOrderNote(event.target.value)}
                   placeholder="VD: Hàng tặng gói riêng"
                   className="w-full rounded border border-slate-300 p-3 text-[13px] transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
@@ -447,11 +838,13 @@ export function POS() {
             <div className="space-y-4 text-[13px]">
               <div className="flex items-center justify-between text-slate-700">
                 <span>Tổng tiền ({cartProducts.length} sản phẩm)</span>
-                <span className="font-semibold">{totalAmount.toLocaleString()}</span>
+                <span className="font-semibold">{formatNumber(totalAmount)}</span>
               </div>
               <div className="flex items-center justify-between text-slate-700">
                 <span>Chiết khấu (F6)</span>
-                <span className="font-semibold">0</span>
+                <span className="font-semibold">
+                  {formatNumber(cartProducts.reduce((sum, item) => sum + item.discount, 0))}
+                </span>
               </div>
               <div className="flex cursor-pointer items-center justify-between text-blue-600">
                 <span>Phí giao hàng (F7)</span>
@@ -478,7 +871,7 @@ export function POS() {
 
               <div className="flex items-center justify-between pt-2 text-base font-bold text-slate-800">
                 <span>Khách phải trả</span>
-                <span>{totalAmount.toLocaleString()}</span>
+                <span>{formatNumber(totalAmount)}</span>
               </div>
 
               <div className="flex items-center justify-between border-t border-slate-100 pt-2 text-slate-700">
@@ -492,7 +885,7 @@ export function POS() {
 
               <div className="flex items-center justify-between border-t border-slate-100 pt-2 font-bold text-slate-800">
                 <span>Còn phải trả</span>
-                <span>{totalAmount.toLocaleString()}</span>
+                <span>{formatNumber(totalAmount)}</span>
               </div>
             </div>
           </div>
@@ -508,7 +901,7 @@ export function POS() {
                 'flex items-center gap-2 rounded border px-4 py-2 font-medium transition-colors',
                 activeDeliveryTab === 'hang_van_chuyen'
                   ? 'border-blue-600 text-blue-600 shadow-[0_4px_0_-1px_#2563EB]'
-                  : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+                  : 'border-slate-300 text-slate-600 hover:bg-slate-50',
               )}
             >
               <TruckIcon size={18} /> Đẩy qua hãng vận chuyển
@@ -519,7 +912,7 @@ export function POS() {
                 'flex items-center gap-2 rounded border px-4 py-2 font-medium transition-colors',
                 activeDeliveryTab === 'van_chuyen_ngoai'
                   ? 'border-blue-600 text-blue-600 shadow-[0_4px_0_-1px_#2563EB]'
-                  : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+                  : 'border-slate-300 text-slate-600 hover:bg-slate-50',
               )}
             >
               <TruckIcon size={18} /> Đẩy vận chuyển ngoài
@@ -530,7 +923,7 @@ export function POS() {
                 'flex items-center gap-2 rounded border px-4 py-2 font-medium transition-colors',
                 activeDeliveryTab === 'nhan_tai_cua_hang'
                   ? 'border-blue-600 text-blue-600 shadow-[0_4px_0_-1px_#2563EB]'
-                  : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+                  : 'border-slate-300 text-slate-600 hover:bg-slate-50',
               )}
             >
               <Store size={18} /> Khách nhận tại cửa hàng
@@ -541,7 +934,7 @@ export function POS() {
                 'flex items-center gap-2 rounded border px-4 py-2 font-medium transition-colors',
                 activeDeliveryTab === 'giao_hang_sau'
                   ? 'border-blue-600 text-blue-600 shadow-[0_4px_0_-1px_#2563EB]'
-                  : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+                  : 'border-slate-300 text-slate-600 hover:bg-slate-50',
               )}
             >
               <Box size={18} /> Giao hàng sau
@@ -549,8 +942,17 @@ export function POS() {
           </div>
 
           <div className="ui-subtle-panel p-4 text-slate-600">
-            Bạn hãy thêm thông tin khách hàng để sử dụng dịch vụ giao hàng.{' '}
-            <button className="text-blue-600 hover:underline">Cập nhật tại đây</button>
+            {selectedCustomer ? (
+              <>
+                Giao theo khách hàng: <span className="font-medium text-slate-800">{selectedCustomer.full_name}</span>
+                {selectedCustomer.address ? ` - ${selectedCustomer.address}` : ' - Chưa có địa chỉ giao hàng'}
+              </>
+            ) : (
+              <>
+                Bạn hãy thêm thông tin khách hàng để sử dụng dịch vụ giao hàng.{' '}
+                <button className="text-blue-600 hover:underline">Cập nhật tại đây</button>
+              </>
+            )}
           </div>
         </div>
 
@@ -559,8 +961,19 @@ export function POS() {
             Thoát
           </button>
           <div className="flex">
-            <button className="rounded-l border border-blue-600 bg-blue-600 px-5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-blue-700">
-              Tạo đơn hàng (F1)
+            <button
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="rounded-l border border-blue-600 bg-blue-600 px-5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300"
+            >
+              {submitting ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 size={14} className="animate-spin" />
+                  Đang tạo...
+                </span>
+              ) : (
+                'Tạo đơn hàng (F1)'
+              )}
             </button>
             <button className="flex items-center justify-center rounded-r border-l border-blue-700 bg-blue-600 px-2 py-2 text-white transition-colors hover:bg-blue-700">
               <svg

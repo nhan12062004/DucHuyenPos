@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Search, ChevronDown, Filter, Settings, Download, Upload, Plus, ChevronLeft, Printer, Copy, Check, Receipt, CheckCircle, Package, Info, ImageIcon } from 'lucide-react';
 
 const ordersData = [
@@ -22,6 +23,7 @@ const orderDetailProducts = [
 export function Orders() {
   const [activeTab, setActiveTab] = useState('all');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const selectedOrder = ordersData.find(o => o.id === selectedOrderId);
 
@@ -296,7 +298,10 @@ export function Orders() {
               <Upload size={16} /> Nhập file
            </button>
         </div>
-        <button className="flex items-center gap-2 bg-[#0088FF] hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors">
+        <button
+          onClick={() => navigate('/pos')}
+          className="flex items-center gap-2 bg-[#0088FF] hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors"
+        >
           <Plus size={16} /> Tạo đơn hàng
         </button>
       </div>

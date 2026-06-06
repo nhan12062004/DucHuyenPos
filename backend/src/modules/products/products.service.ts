@@ -3,6 +3,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../supabase/supabase.constants.js';
 import { CreateProductDto, UpdateProductDto } from './dto/product.dto.js';
 import { PaginationDto, PaginatedResult } from '../../common/dto/pagination.dto.js';
+import { generateNextCode, normalizeManualCode } from '../../common/code-generator.js';
 
 @Injectable()
 export class ProductsService {
@@ -64,9 +65,20 @@ export class ProductsService {
   }
 
   async create(dto: CreateProductDto) {
+    const sku =
+      normalizeManualCode(dto.sku) ??
+      await generateNextCode(this.supabase, {
+        table: 'products',
+        column: 'sku',
+        prefix: 'SP',
+      });
+
     const { data, error } = await this.supabase
       .from('products')
-      .insert(dto)
+      .insert({
+        ...dto,
+        sku,
+      })
       .select()
       .single();
 

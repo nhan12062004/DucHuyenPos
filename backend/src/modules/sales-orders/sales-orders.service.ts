@@ -3,6 +3,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../supabase/supabase.constants.js';
 import { CreateSalesOrderDto, UpdateSalesOrderDto } from './dto/sales-order.dto.js';
 import { PaginationDto, PaginatedResult } from '../../common/dto/pagination.dto.js';
+import { generateNextCode, normalizeManualCode } from '../../common/code-generator.js';
 
 @Injectable()
 export class SalesOrdersService {
@@ -68,10 +69,13 @@ export class SalesOrdersService {
     const { items, ...orderData } = dto;
 
     // Generate order_no nếu chưa có
-    if (!orderData.order_no) {
-      const timestamp = Date.now();
-      orderData.order_no = `HD${timestamp}`;
-    }
+    orderData.order_no =
+      normalizeManualCode(orderData.order_no) ??
+      await generateNextCode(this.supabase, {
+        table: 'sales_orders',
+        column: 'order_no',
+        prefix: 'HD',
+      });
 
     // Tính subtotal
     const subtotal = items.reduce((sum, item) => {
