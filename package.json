@@ -14,7 +14,7 @@
     "build:frontend": "vite build --config frontend/vite.config.ts",
     "build:backend": "tsc -p backend/tsconfig.json",
     "preview": "vite preview --config frontend/vite.config.ts",
-    "start:backend": "tsx backend/src/main.ts",
+    "start:backend": "node backend/dist/main.js",
     "lint": "npm run lint:frontend && npm run lint:backend",
     "lint:frontend": "tsc --noEmit -p frontend/tsconfig.json",
     "lint:backend": "tsc --noEmit -p backend/tsconfig.json",
