@@ -3,7 +3,8 @@
  * Base URL: VITE_API_URL (mặc định http://localhost:4000/api)
  */
 
-const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api';
+const _apiUrl = import.meta.env.VITE_API_URL as string | undefined;
+const BASE_URL = (_apiUrl && _apiUrl.trim()) ? _apiUrl.trim() : '/api';
 
 export class ApiError extends Error {
   constructor(

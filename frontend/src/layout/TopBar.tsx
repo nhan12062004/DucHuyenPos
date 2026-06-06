@@ -25,7 +25,9 @@ export function TopBar() {
   const location = useLocation();
   const title = routeNames[location.pathname] || 'Điện máy Đức Huyền';
 
-  const { username, logout } = useAuth();
+  const { user, signOut } = useAuth();
+  const displayName: string = user?.user_metadata?.full_name || user?.email || 'Người dùng';
+  const initials = displayName.split(' ').map((w: string) => w[0]).slice(-2).join('').toUpperCase() || 'ND';
   const [showDropdown, setShowDropdown] = useState(false);
 
   return (
@@ -39,11 +41,11 @@ export function TopBar() {
             onClick={() => setShowDropdown(!showDropdown)}
           >
             <div className="hidden text-right sm:block">
-              <p className="text-sm font-semibold">{username || 'Huyền Trần'}</p>
+              <p className="text-sm font-semibold">{displayName}</p>
               <p className="text-[10px] uppercase tracking-wider text-slate-500">Quản lý cửa hàng</p>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white bg-blue-100 font-bold uppercase text-blue-600 shadow-sm">
-              {(username || 'HT').substring(0, 2)}
+              {initials}
             </div>
             <ChevronDown size={16} className="text-slate-400" />
           </div>
@@ -62,7 +64,7 @@ export function TopBar() {
               <button
                 onClick={() => {
                   setShowDropdown(false);
-                  logout();
+                  signOut();
                 }}
                 className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
               >
