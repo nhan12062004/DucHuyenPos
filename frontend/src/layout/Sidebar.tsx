@@ -317,7 +317,7 @@ export function Sidebar({ expanded, setExpanded }: SidebarProps) {
                               <NavLink
                                 to={child.path}
                                 className={cn(
-                                  'block px-4 py-2.5 pl-12 text-[14.5px] font-medium transition-colors',
+                                  'block truncate px-4 py-2.5 pl-12 text-[14.5px] font-medium transition-colors',
                                   isActive ? ACTIVE_SUBITEM_CLASSES : DEFAULT_SUBITEM_CLASSES
                                 )}
                               >
