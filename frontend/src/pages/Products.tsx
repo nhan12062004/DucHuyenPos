@@ -19,6 +19,7 @@ import {
   type ProductCategory,
   type ProductStockSummary,
 } from '../services/productsService';
+import { PageLoader } from '../components/PageLoader';
 
 type ProductDetailTab = 'stock' | 'history';
 type ProductsRouteState = {
@@ -719,14 +720,14 @@ export function Products() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-[#f3f4f6]">
-      <div className="z-10 flex shrink-0 items-center justify-between border-b bg-white p-3">
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4 text-sm font-medium">
           <button
             onClick={handleExportProducts}
             className="flex items-center gap-1.5 text-slate-600 transition-colors hover:text-[#0088FF]"
           >
-            <Download size={16} /> Xuất file <ChevronDown size={14} />
+            <Download size={16} /> Xuất file
           </button>
           <button
             onClick={() => setInfoMessage('Nhập file sản phẩm chưa có luồng backend riêng. Bạn có thể thêm trực tiếp bằng nút Thêm sản phẩm.')}
@@ -770,21 +771,21 @@ export function Products() {
         </div>
       </div>
 
-      <div className="custom-scrollbar flex-1 overflow-auto p-0">
-        <div className="mb-4 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1)]">
-          {infoMessage ? (
-            <div className="border-b border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-              {infoMessage}
-            </div>
-          ) : null}
+      <div className="flex flex-col gap-6">
+        {infoMessage ? (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 px-5 py-4 text-sm text-blue-700">
+            {infoMessage}
+          </div>
+        ) : null}
 
-          {listError ? (
-            <div className="border-b border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
-              {listError}
-            </div>
-          ) : null}
+        {listError ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-600">
+            {listError}
+          </div>
+        ) : null}
 
-          <div className="flex border-b border-slate-200 px-4 pt-1">
+        <div className="ui-card overflow-hidden">
+          <div className="flex border-b border-slate-200 px-5 pt-2">
             <button
               className={`mr-4 border-b-2 px-4 py-3 text-[14px] font-medium transition-colors ${
                 activeTab === 'all'
@@ -797,7 +798,7 @@ export function Products() {
             </button>
           </div>
 
-          <div className="flex items-center gap-3 border-b border-slate-100 p-4">
+          <div className="flex items-center gap-3 border-b border-slate-100 p-5">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
               <input
@@ -812,31 +813,31 @@ export function Products() {
             <div className="flex shrink-0 items-center gap-2">
               <button
                 onClick={handleCycleCategoryFilter}
-                className="flex w-32 items-center justify-between rounded border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
+                className="flex min-w-[130px] items-center justify-between gap-2 whitespace-nowrap rounded border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
               >
                 <span>Loại sản phẩm</span>
-                <ChevronDown size={14} className="text-slate-400" />
+                <ChevronDown size={14} className="text-slate-400 shrink-0" />
               </button>
               <button
                 onClick={handleToggleSortOrder}
-                className="flex w-32 items-center justify-between rounded border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
+                className="flex min-w-[130px] items-center justify-between gap-2 whitespace-nowrap rounded border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
               >
                 <span>Ngày tạo</span>
-                <ChevronDown size={14} className="text-slate-400" />
+                <ChevronDown size={14} className="text-slate-400 shrink-0" />
               </button>
               <button
                 onClick={handleCycleBrandFilter}
-                className="flex w-32 items-center justify-between rounded border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
+                className="flex min-w-[130px] items-center justify-between gap-2 whitespace-nowrap rounded border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
               >
                 <span>Nhãn hiệu</span>
-                <ChevronDown size={14} className="text-slate-400" />
+                <ChevronDown size={14} className="text-slate-400 shrink-0" />
               </button>
               <button
                 onClick={handleToggleStatusFilter}
-                className="flex w-32 items-center justify-between rounded border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
+                className="flex min-w-[130px] items-center justify-between gap-2 whitespace-nowrap rounded border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
               >
                 <span>Bộ lọc khác</span>
-                <Filter size={14} className="text-slate-400" />
+                <Filter size={14} className="text-slate-400 shrink-0" />
               </button>
               <button
                 onClick={handleSaveFilters}
@@ -848,12 +849,7 @@ export function Products() {
           </div>
 
           {isListLoading ? (
-            <div className="flex min-h-[500px] items-center justify-center text-slate-500">
-              <div className="flex flex-col items-center gap-3">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#0088FF] border-t-transparent" />
-                <p className="text-sm font-medium">Đang tải danh sách sản phẩm...</p>
-              </div>
-            </div>
+            <PageLoader text="Đang tải danh sách sản phẩm..." minHeight="500px" />
           ) : (
             <div className="min-h-[500px] w-full overflow-x-auto">
               <table className="w-full text-left">

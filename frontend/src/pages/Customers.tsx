@@ -13,6 +13,7 @@ import {
   type CustomerDebtSummary,
   type CustomerGroup,
 } from '../services/customersService';
+import { PageLoader } from '../components/PageLoader';
 import {
   salesOrdersService,
   type SalesOrder,
@@ -440,8 +441,8 @@ export function Customers() {
     const historyRows = selectedCustomerOrders;
 
     return (
-      <div className="flex h-full flex-col bg-[#f3f4f6]">
-        <div className="z-10 flex shrink-0 items-center justify-between border-b bg-white p-3 px-6">
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <button
             onClick={() => setSelectedCustomerId(null)}
             className="flex items-center gap-2 text-[14px] font-medium text-slate-600 transition-colors hover:text-[#0088FF]"
@@ -455,7 +456,7 @@ export function Customers() {
             >
               Xóa khách hàng
             </button>
-            <div className="flex rounded border border-blue-600">
+            <div className="flex rounded border border-[#0088FF]">
               <button
                 onClick={() => navigate('/debts')}
                 className="flex items-center gap-2 border-r border-blue-700 bg-[#0088FF] px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-blue-700"
@@ -464,7 +465,7 @@ export function Customers() {
               </button>
               <button
                 onClick={() => navigate('/debts')}
-                className="flex items-center bg-[#0088FF] px-2 text-white transition-colors hover:bg-blue-700"
+                className="flex items-center bg-[#0088FF] px-2 text-white transition-colors hover:bg-blue-700 rounded-r"
               >
                 <ChevronDown size={14} />
               </button>
@@ -472,7 +473,7 @@ export function Customers() {
           </div>
         </div>
 
-        <div className="custom-scrollbar flex-1 overflow-auto p-4 pb-20 md:p-6">
+        <div className="flex flex-col gap-6">
           {infoMessage ? (
             <div className="mb-4 rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
               {infoMessage}
@@ -793,21 +794,20 @@ export function Customers() {
   });
 
   return (
-    <div className="flex h-full flex-col bg-[#f3f4f6]">
-      <div className="custom-scrollbar flex-1 overflow-auto px-5 pb-5">
-        <div className="mb-4 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1)]">
-          {infoMessage ? (
-            <div className="border-b border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-              {infoMessage}
-            </div>
-          ) : null}
+    <div className="flex flex-col gap-6">
+      {infoMessage ? (
+        <div className="rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+          {infoMessage}
+        </div>
+      ) : null}
 
-          {listError ? (
-            <div className="border-b border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
-              {listError}
-            </div>
-          ) : null}
+      {listError ? (
+        <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          {listError}
+        </div>
+      ) : null}
 
+      <div className="ui-card overflow-hidden">
           <div className="flex border-b border-slate-200 px-4 pt-1">
             <button
               className={`mr-4 border-b-2 px-4 py-3 text-[14px] font-medium transition-colors ${activeTab === 'all' ? 'border-[#0088FF] text-[#0088FF]' : 'border-transparent text-slate-600 hover:text-[#0088FF]'}`}
@@ -862,12 +862,7 @@ export function Customers() {
           </div>
 
           {isListLoading ? (
-            <div className="flex min-h-[500px] items-center justify-center text-slate-500">
-              <div className="flex flex-col items-center gap-3">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#0088FF] border-t-transparent" />
-                <p className="text-sm font-medium">Đang tải danh sách khách hàng...</p>
-              </div>
-            </div>
+            <PageLoader text="Đang tải danh sách khách hàng..." minHeight="500px" />
           ) : (
             <div className="min-h-[500px] w-full overflow-x-auto">
               <table className="w-full text-left">
@@ -967,8 +962,8 @@ export function Customers() {
               </button>
             </div>
           </div>
-        </div>
       </div>
     </div>
   );
 }
+

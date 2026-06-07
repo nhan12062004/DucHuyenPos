@@ -5,8 +5,8 @@ import { Dashboard } from './pages/Dashboard';
 import { POS } from './pages/POS';
 import { Orders } from './pages/Orders';
 import { Products } from './pages/Products';
-// "Danh sách sản phẩm quản lý kho" maps to Inventory in code context perhaps, but wait. Previous menu had "Danh sách sản phẩm" (/products) and "Kho hàng" (/inventory).
 import { Inventory } from './pages/Inventory';
+import { InventoryManagement } from './pages/InventoryManagement';
 import { PurchaseImport as Purchase } from './pages/PurchaseImport';
 import { Customers } from './pages/Customers';
 import { Debts } from './pages/Debts';
@@ -54,6 +54,7 @@ function AppRoutes() {
           <Route path="purchase-orders" element={<PurchaseOrders />} />
           <Route path="purchase" element={<Purchase />} />
           <Route path="inventory" element={<Inventory />} />
+          <Route path="inventory-management" element={<InventoryManagement />} />
           <Route path="suppliers" element={<Suppliers />} />
           <Route path="cost-price" element={<CostPrice />} />
           <Route path="customers" element={<Customers />} />

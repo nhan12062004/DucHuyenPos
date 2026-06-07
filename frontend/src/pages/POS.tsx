@@ -24,6 +24,7 @@ import {
   type CustomerDebtSummary,
   type CustomerGroup,
 } from '../services/customersService';
+import { PageLoader } from '../components/PageLoader';
 import { inventoryService, type Branch } from '../services/inventoryService';
 import {
   productsService,
@@ -35,6 +36,7 @@ import { staffService, type StaffProfile } from '../services/staffService';
 import { useAuth } from '../context/AuthContext';
 import { cn } from '../utils/cn';
 import { getDeliveryStatusFromTab, parseLegacyDeliveryTab } from '../utils/delivery';
+import { AddProductModal } from '../components/AddProductModal';
 
 type CartProduct = {
   id: string;
@@ -797,6 +799,9 @@ export function POS() {
   const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
   const [isCustomerDetailsExpanded, setIsCustomerDetailsExpanded] = useState(false);
   const customerSearchRef = useRef<HTMLDivElement>(null);
+  
+  // Modals
+  const [isAddProductOpen, setIsAddProductOpen] = useState(false);
   const [cartProducts, setCartProducts] = useState<CartProduct[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState('');
@@ -1140,14 +1145,10 @@ export function POS() {
 
   if (loading || hydratingOrder) {
     return (
-      <div className="page-shell flex min-h-[60vh] items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-slate-400">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-          <p className="text-sm font-medium">
-            {hydratingOrder ? 'Đang tải đơn hàng để chỉnh sửa...' : 'Đang tải dữ liệu...'}
-          </p>
-        </div>
-      </div>
+      <PageLoader 
+        text={hydratingOrder ? 'Đang tải đơn hàng để chỉnh sửa...' : 'Đang tải dữ liệu...'} 
+        minHeight="60vh" 
+      />
     );
   }
 
@@ -1535,7 +1536,10 @@ export function POS() {
                 <div className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded border border-slate-200 bg-white shadow-lg">
                   <button
                     type="button"
-                    onClick={() => navigate('/products')}
+                    onClick={() => {
+                      setIsDropdownOpen(false);
+                      setIsAddProductOpen(true);
+                    }}
                     className="flex w-full items-center gap-2 border-b border-slate-100 px-4 py-3 text-left font-medium text-blue-600 hover:bg-blue-50"
                   >
                     <PlusCircle size={16} /> Thêm mới sản phẩm
@@ -1561,8 +1565,9 @@ export function POS() {
                             </div>
                             <div>
                               <p className="text-[13px] font-semibold text-slate-800">{product.name}</p>
-                              <p className="mt-0.5 text-[12px] text-blue-600">
-                                {product.sku} <span className="ml-1 text-slate-500">{product.unit_name || 'Mặc định'}</span>
+                              <p className="mt-0.5 text-[12px]">
+                                <span className="text-slate-400">{product.sku}</span>{' '}
+                                <span className="text-blue-500">{product.unit_name || 'Mặc định'}</span>
                               </p>
                             </div>
                           </div>
@@ -1703,7 +1708,7 @@ export function POS() {
                           onChange={(event) =>
                             updateCartProduct(product.id, 'price', parseNumber(event.target.value))
                           }
-                          className="w-full border-b border-transparent bg-transparent py-1 text-right text-slate-800 hover:border-slate-300 focus:outline-none"
+                          className="w-full border-b border-slate-200 bg-transparent py-1 text-right text-slate-800 transition-colors focus:border-blue-500 focus:outline-none hover:border-slate-300"
                         />
                       </td>
                       <td className="px-2 py-4 text-right">
@@ -1714,7 +1719,7 @@ export function POS() {
                           onChange={(event) =>
                             updateCartProduct(product.id, 'discount', parseNumber(event.target.value))
                           }
-                          className="w-full border-b border-transparent bg-transparent py-1 text-right text-slate-800 hover:border-slate-300 focus:outline-none"
+                          className="w-full border-b border-slate-200 bg-transparent py-1 text-right text-slate-800 transition-colors focus:border-blue-500 focus:outline-none hover:border-slate-300"
                         />
                       </td>
                       <td className="flex h-full items-center justify-end gap-3 px-5 py-4 text-right font-medium text-slate-800">
@@ -1975,6 +1980,17 @@ export function POS() {
         setCustomerId(newCustomer.id);
         setCustomerQuery('');
         setIsAddCustomerOpen(false);
+      }}
+    />
+
+    <AddProductModal
+      open={isAddProductOpen}
+      onClose={() => setIsAddProductOpen(false)}
+      onCreated={(newProduct) => {
+        setProducts((prev) => [newProduct, ...prev]);
+        handleProductSelect(newProduct);
+        setIsAddProductOpen(false);
+        setSuccessMessage('Thêm mới sản phẩm thành công!');
       }}
     />
   </>  

@@ -97,6 +97,7 @@ const MENU_ITEMS = [
     icon: Package,
     children: [
       { name: 'Danh sách sản phẩm', path: '/products' },
+      { name: 'Quản lý kho', path: '/inventory-management' },
       { name: 'Nhập hàng', path: '/purchase' },
       { name: 'Kiểm hàng', path: '/inventory' }
     ]

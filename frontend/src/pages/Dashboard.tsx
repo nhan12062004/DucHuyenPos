@@ -32,6 +32,7 @@ import {
   type RecentActivity,
   type RevenueChartPoint,
 } from '../services/dashboardService';
+import { PageLoader } from '../components/PageLoader';
 import { inventoryService, type Branch } from '../services/inventoryService';
 
 function fmt(value: number) {
@@ -233,12 +234,7 @@ export function Dashboard() {
 
   if (loading) {
     return (
-      <div className="page-shell flex items-center justify-center min-h-[60vh]">
-        <div className="flex flex-col items-center gap-3 text-slate-400">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-          <p className="text-sm font-medium">Đang tải dữ liệu...</p>
-        </div>
-      </div>
+      <PageLoader text="Đang tải dữ liệu báo cáo..." minHeight="60vh" />
     );
   }
 

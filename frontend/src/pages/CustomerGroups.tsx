@@ -5,6 +5,7 @@ import {
   type Customer,
   type CustomerGroup,
 } from '../services/customersService';
+import { PageLoader } from '../components/PageLoader';
 
 type GroupRow = CustomerGroup & {
   count: number;
@@ -182,17 +183,18 @@ export function CustomerGroups() {
   };
 
   return (
-    <div className="custom-scrollbar h-full overflow-auto bg-[#f3f4f6] p-5">
-        <div className="mb-4 flex justify-end">
-          <button
-            onClick={handleCreateGroup}
-            className="flex items-center gap-2 rounded bg-[#0088FF] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-blue-700"
-          >
-            <Plus size={16} /> Thêm nhóm khách hàng
-          </button>
-        </div>
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold text-slate-800">Nhóm khách hàng</h1>
+        <button
+          onClick={handleCreateGroup}
+          className="flex items-center gap-2 rounded bg-[#0088FF] px-4 py-2 text-[14px] font-medium text-white transition-colors hover:bg-blue-700"
+        >
+          <Plus size={16} /> Thêm nhóm khách hàng
+        </button>
+      </div>
 
-        <div className="bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1)]">
+      <div className="ui-card overflow-hidden">
           {error ? (
             <div className="border-b border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
               {error}
@@ -200,12 +202,7 @@ export function CustomerGroups() {
           ) : null}
 
           {isLoading ? (
-            <div className="flex items-center justify-center py-20 text-slate-500">
-              <div className="flex flex-col items-center gap-3">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#0088FF] border-t-transparent" />
-                <p className="text-sm font-medium">Đang tải nhóm khách hàng...</p>
-              </div>
-            </div>
+            <PageLoader text="Đang tải nhóm khách hàng..." minHeight="300px" />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left">

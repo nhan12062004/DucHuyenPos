@@ -13,6 +13,7 @@ import {
   type Branch,
   type BranchStock,
 } from '../services/inventoryService';
+import { PageLoader } from '../components/PageLoader';
 
 type InventoryRouteState = {
   branchId?: string;
@@ -120,7 +121,7 @@ export function Inventory() {
   const selectedBranch = branches.find((branch) => branch.id === selectedBranchId);
 
   return (
-    <div className="space-y-6 flex flex-col h-full bg-[#f3f4f6]">
+    <div className="flex flex-col gap-6">
       {infoMessage ? (
         <div className="rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
           {infoMessage}
@@ -133,8 +134,8 @@ export function Inventory() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 shrink-0">
-        <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="ui-card p-5 flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-slate-500 mb-1">Tổng sản phẩm trong kho</p>
             <h4 className="text-2xl font-bold text-slate-800">
@@ -148,7 +149,7 @@ export function Inventory() {
         <button
           type="button"
           onClick={() => setLowStockOnly((current) => !current)}
-          className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between text-left transition-colors hover:border-red-200 hover:bg-red-50/40"
+          className="ui-card p-5 flex items-center justify-between text-left transition-colors hover:border-red-200 hover:bg-red-50/40"
         >
           <div>
             <p className="text-sm font-medium text-slate-500 mb-1">Sắp hết hàng</p>
@@ -160,7 +161,7 @@ export function Inventory() {
             <AlertTriangle size={24} />
           </div>
         </button>
-        <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between">
+        <div className="ui-card p-5 flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-slate-500 mb-1">Tổng giá trị tồn kho</p>
             <h4 className="text-2xl font-bold text-slate-800">
@@ -173,16 +174,16 @@ export function Inventory() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-100 flex flex-col flex-1 overflow-hidden">
-        <div className="p-4 border-b border-slate-100 shrink-0 flex flex-wrap items-center justify-between gap-3 bg-slate-50/50">
+      <div className="ui-card overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-5 bg-white">
           <div className="relative w-full max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
               type="text"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Tìm mặt hàng kiểm kho..."
-              className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 transition-shadow shadow-sm"
+              className="w-full rounded border border-slate-300 bg-white py-2 pl-9 pr-4 text-[13px] transition-colors focus:border-[#0088FF] focus:outline-none focus:ring-1 focus:ring-[#0088FF]"
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -190,7 +191,7 @@ export function Inventory() {
               <select
                 value={selectedBranchId}
                 onChange={(event) => setSelectedBranchId(event.target.value)}
-                className="appearance-none rounded-lg border border-slate-200 bg-white py-2 pl-3 pr-9 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="appearance-none rounded border border-slate-300 bg-white py-2 pl-3 pr-9 text-[13px] text-slate-700 shadow-sm focus:border-[#0088FF] focus:outline-none focus:ring-1 focus:ring-[#0088FF]"
               >
                 <option value="">Tất cả chi nhánh</option>
                 {branches.map((branch) => (
@@ -199,12 +200,12 @@ export function Inventory() {
                   </option>
                 ))}
               </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
             </div>
             <button
               type="button"
               onClick={() => setLowStockOnly((current) => !current)}
-              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              className={`rounded px-4 py-2 text-[13px] font-medium transition-colors ${
                 lowStockOnly
                   ? 'bg-red-100 text-red-700 hover:bg-red-200'
                   : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -215,7 +216,7 @@ export function Inventory() {
             <button
               type="button"
               onClick={() => setInfoMessage(`Đang xem tồn kho ${selectedBranch?.name ?? 'toàn hệ thống'}.`)}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+              className="rounded bg-[#0088FF] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-blue-700"
             >
               Kiểm kho
             </button>
@@ -223,30 +224,25 @@ export function Inventory() {
         </div>
 
         {isLoading ? (
-          <div className="flex flex-1 items-center justify-center text-slate-500">
-            <div className="flex flex-col items-center gap-3">
-              <Loader2 className="h-8 w-8 animate-spin text-[#0088FF]" />
-              <p className="text-sm font-medium">Đang tải dữ liệu tồn kho...</p>
-            </div>
-          </div>
+          <PageLoader text="Đang tải dữ liệu tồn kho..." minHeight="300px" />
         ) : (
-          <div className="flex-1 overflow-auto custom-scrollbar">
-            <table className="w-full text-left border-collapse">
-              <thead className="bg-white sticky top-0 z-10 backdrop-blur-sm">
-                <tr className="text-[11px] text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                  <th className="py-3 px-4 font-semibold">Tên sản phẩm</th>
-                  <th className="py-3 px-4 font-semibold">Mã SKU</th>
-                  <th className="py-3 px-4 font-semibold">Danh mục</th>
-                  <th className="py-3 px-4 font-semibold">Nhãn hiệu</th>
-                  <th className="py-3 px-4 font-semibold">Chi nhánh</th>
-                  <th className="py-3 px-4 text-right font-semibold">Tồn kho hiện tại</th>
-                  <th className="py-3 px-4 text-center font-semibold">Trạng thái</th>
+          <div className="w-full overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50/50 text-[13px] font-semibold text-[#182537]">
+                  <th className="py-3 px-5 font-semibold">Tên sản phẩm</th>
+                  <th className="py-3 px-2 font-semibold">Mã SKU</th>
+                  <th className="py-3 px-2 font-semibold">Danh mục</th>
+                  <th className="py-3 px-2 font-semibold">Nhãn hiệu</th>
+                  <th className="py-3 px-2 font-semibold">Chi nhánh</th>
+                  <th className="py-3 px-2 text-right font-semibold">Tồn kho hiện tại</th>
+                  <th className="py-3 px-5 text-center font-semibold">Trạng thái</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
+              <tbody className="divide-y divide-slate-100 text-[13px] text-[#182537]">
                 {visibleRows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
+                    <td colSpan={7} className="px-5 py-8 text-center text-slate-500">
                       Chưa có dữ liệu tồn kho phù hợp.
                     </td>
                   </tr>
@@ -257,7 +253,7 @@ export function Inventory() {
                     return (
                       <tr
                         key={row.id}
-                        className={`cursor-pointer hover:bg-slate-50/80 transition-colors ${
+                        className={`cursor-pointer hover:bg-slate-50 transition-colors ${
                           lowStock ? 'bg-red-50/30 border-red-100' : ''
                         }`}
                         onClick={() =>
@@ -270,21 +266,21 @@ export function Inventory() {
                           })
                         }
                       >
-                        <td className="py-3 px-4 font-medium text-slate-900">{row.products?.name ?? '---'}</td>
-                        <td className="py-3 px-4 text-sm text-slate-500 font-mono">{row.products?.sku ?? '---'}</td>
-                        <td className="py-3 px-4 text-sm text-slate-600">{row.products?.product_categories?.name ?? '---'}</td>
-                        <td className="py-3 px-4 text-sm text-slate-600">{row.products?.brands?.name ?? '---'}</td>
-                        <td className="py-3 px-4 text-sm text-slate-600">{row.branches?.name ?? '---'}</td>
-                        <td className={`py-3 px-4 text-right font-semibold ${lowStock ? 'text-red-600' : 'text-slate-800'}`}>
+                        <td className="py-4 px-5 font-medium text-[#182537] hover:text-[#0088FF]">{row.products?.name ?? '---'}</td>
+                        <td className="py-4 px-2 text-slate-500 font-mono">{row.products?.sku ?? '---'}</td>
+                        <td className="py-4 px-2 text-slate-600">{row.products?.product_categories?.name ?? '---'}</td>
+                        <td className="py-4 px-2 text-slate-600">{row.products?.brands?.name ?? '---'}</td>
+                        <td className="py-4 px-2 text-slate-600">{row.branches?.name ?? '---'}</td>
+                        <td className={`py-4 px-2 text-right font-semibold ${lowStock ? 'text-red-600' : 'text-[#182537]'}`}>
                           {formatNumber(Number(row.on_hand_qty ?? 0))}
                         </td>
-                        <td className="py-3 px-4 text-center">
+                        <td className="py-4 px-5 text-center">
                           {lowStock ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-red-100 text-red-700 w-fit">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-red-300 bg-red-50 text-[12px] font-medium text-red-600 w-fit">
                               <AlertTriangle size={12} /> Cần nhập
                             </span>
                           ) : (
-                            <span className="inline-flex px-2.5 py-1 rounded text-xs font-medium bg-green-100 text-green-700 w-fit">
+                            <span className="inline-flex px-2.5 py-0.5 rounded-full border border-emerald-300 bg-emerald-50 text-[12px] font-medium text-emerald-600 w-fit">
                               Đủ hàng
                             </span>
                           )}

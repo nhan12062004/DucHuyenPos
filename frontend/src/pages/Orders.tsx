@@ -24,6 +24,7 @@ import {
   salesOrdersService,
   type SalesOrder,
 } from '../services/salesOrdersService';
+import { PageLoader } from '../components/PageLoader';
 import { getDeliveryLabel, getDeliveryStatusFromTab, parseLegacyDeliveryTab } from '../utils/delivery';
 
 type OrderTab = 'all' | 'trading';
@@ -574,12 +575,7 @@ export function Orders() {
 
   if (selectedOrderId && !selectedOrder && isDetailLoading) {
     return (
-      <div className="flex h-full items-center justify-center bg-[#f3f4f6]">
-        <div className="flex flex-col items-center gap-3 text-slate-500">
-          <Loader2 className="h-8 w-8 animate-spin text-[#0088FF]" />
-          <p className="text-sm font-medium">Đang tải chi tiết đơn hàng...</p>
-        </div>
-      </div>
+      <PageLoader text="Đang tải chi tiết đơn hàng..." minHeight="80vh" />
     );
   }
 
@@ -588,8 +584,8 @@ export function Orders() {
     const progress = getTimelineProgress(selectedOrder.status);
 
     return (
-      <div className="flex h-full flex-col bg-[#f3f4f6]">
-        <div className="z-10 flex shrink-0 items-center justify-between border-b bg-white p-3 px-6">
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <button
             onClick={() => setSelectedOrderId(null)}
             className="flex items-center gap-2 text-[14px] font-medium text-slate-600 transition-colors hover:text-[#0088FF]"
@@ -619,7 +615,7 @@ export function Orders() {
           </div>
         </div>
 
-        <div className="custom-scrollbar flex-1 overflow-auto p-4 pb-20 md:p-6">
+        <div className="flex flex-col gap-6">
           {infoMessage ? (
             <div className="mb-4 rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
               {infoMessage}
@@ -1056,14 +1052,14 @@ export function Orders() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-[#f3f4f6]">
-      <div className="z-10 flex shrink-0 items-center justify-between border-b bg-white p-3">
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4 text-sm font-medium">
           <button
             onClick={handleExportOrders}
             className="flex items-center gap-1.5 text-slate-600 transition-colors hover:text-[#0088FF]"
           >
-            <Download size={16} /> Xuất file <ChevronDown size={14} />
+            <Download size={16} /> Xuất file
           </button>
           <button
             onClick={() => setInfoMessage('Luồng nhập file đơn hàng chưa được cấu hình riêng, vui lòng tạo trực tiếp từ POS.')}
@@ -1080,22 +1076,22 @@ export function Orders() {
         </button>
       </div>
 
-      <div className="custom-scrollbar flex-1 overflow-auto p-0">
-        <div className="mb-4 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1)]">
-          {infoMessage ? (
-            <div className="border-b border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-              {infoMessage}
-            </div>
-          ) : null}
+      <div className="flex flex-col gap-6">
+        {infoMessage ? (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 px-5 py-4 text-sm text-blue-700">
+            {infoMessage}
+          </div>
+        ) : null}
 
-          {listError ? (
-            <div className="border-b border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
-              {listError}
-            </div>
-          ) : null}
+        {listError ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-600">
+            {listError}
+          </div>
+        ) : null}
 
+        <div className="ui-card">
           {!isProcessingHidden ? (
-            <div className="border-b border-slate-100 p-4">
+            <div className="p-5">
               <div className="mb-3 flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2 text-[15px] font-semibold uppercase tracking-tight text-[#182537]">
                   ĐƠN HÀNG CẦN XỬ LÝ{' '}
@@ -1179,7 +1175,7 @@ export function Orders() {
               </div>
             </div>
           ) : (
-            <div className="border-b border-slate-100 px-4 py-3 text-right">
+            <div className="px-5 py-4 text-right">
               <button
                 onClick={() => setIsProcessingHidden(false)}
                 className="text-sm font-medium text-[#0088FF] hover:text-blue-800"
@@ -1188,8 +1184,10 @@ export function Orders() {
               </button>
             </div>
           )}
+        </div>
 
-          <div className="flex border-b border-slate-200 px-4 pt-1">
+        <div className="ui-card overflow-hidden">
+          <div className="flex border-b border-slate-200 px-5 pt-2">
             <button
               className={`mr-4 border-b-2 px-4 py-3 text-[14px] font-medium transition-colors ${
                 activeTab === 'all'
@@ -1212,7 +1210,7 @@ export function Orders() {
             </button>
           </div>
 
-          <div className="flex items-center gap-3 bg-white p-4">
+          <div className="flex items-center gap-3 bg-white p-5">
             <div className="relative max-w-lg flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
               <input
@@ -1263,12 +1261,7 @@ export function Orders() {
           </div>
 
           {isListLoading ? (
-            <div className="flex items-center justify-center py-16 text-slate-500">
-              <div className="flex flex-col items-center gap-3">
-                <Loader2 className="h-8 w-8 animate-spin text-[#0088FF]" />
-                <p className="text-sm font-medium">Đang tải danh sách đơn hàng...</p>
-              </div>
-            </div>
+            <PageLoader text="Đang tải danh sách đơn hàng..." minHeight="400px" />
           ) : visibleOrders.length === 0 ? (
             <div className="flex items-center justify-center py-16 text-slate-500">
               <div className="flex flex-col items-center gap-3">

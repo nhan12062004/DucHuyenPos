@@ -25,8 +25,8 @@ export function Invoice() {
           <div className="flex gap-4 items-center">
             <div className="w-16 h-16 bg-blue-600 text-white flex items-center justify-center font-bold text-2xl rounded">ĐH</div>
             <div>
-              <h1 className="text-2xl font-bold uppercase tracking-tight text-blue-900">Đức Huyền</h1>
-              <p className="text-sm text-slate-600 font-medium">Vật rự điện nước & Gia dụng</p>
+              <h1 className="text-2xl font-bold uppercase tracking-tight text-blue-900">Quản lý kho</h1>
+              <p className="text-sm text-slate-600 font-medium">Hệ thống quản lý</p>
             </div>
           </div>
           <div className="text-right text-sm text-slate-600 space-y-1">

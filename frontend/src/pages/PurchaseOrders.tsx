@@ -8,60 +8,64 @@ const mockPOs = [
 
 export function PurchaseOrders() {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-100 flex flex-col h-full overflow-hidden">
-      <div className="p-4 border-b border-slate-100 space-y-4 shrink-0 bg-slate-50/50">
-        <div className="flex items-center justify-between">
-          <div className="relative w-96">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold text-slate-800">Đơn nhập hàng</h1>
+        <button className="flex items-center gap-2 rounded bg-[#0088FF] px-4 py-2 text-[14px] font-medium text-white transition-colors hover:bg-blue-700">
+          <ArrowDownToLine size={16} /> Tạo đơn nhập
+        </button>
+      </div>
+
+      <div className="ui-card overflow-hidden">
+        <div className="flex items-center gap-3 border-b border-slate-100 p-5 bg-white">
+          <div className="relative w-96 max-w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input 
               type="text" 
               placeholder="Tìm theo mã đơn nhập, nhà cung cấp..." 
-              className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-sm"
+              className="w-full rounded border border-slate-300 bg-white py-2 pl-9 pr-4 text-[13px] transition-colors focus:border-[#0088FF] focus:outline-none focus:ring-1 focus:ring-[#0088FF]"
             />
           </div>
-          <button className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2">
-            <ArrowDownToLine size={16} /> Tạo đơn nhập
-          </button>
         </div>
-      </div>
 
-      <div className="flex-1 overflow-auto custom-scrollbar">
-        <table className="w-full text-left border-collapse">
-          <thead className="bg-white sticky top-0 z-10">
-            <tr className="text-[11px] text-slate-400 uppercase tracking-widest border-b border-slate-100">
-              <th className="py-3 px-4 font-semibold">Mã đơn</th>
-              <th className="py-3 px-4 font-semibold">Nhà cung cấp</th>
-              <th className="py-3 px-4 font-semibold">Ngày tạo</th>
-              <th className="py-3 px-4 text-right font-semibold">Tổng tiền</th>
-              <th className="py-3 px-4 font-semibold">Trạng thái kho</th>
-              <th className="py-3 px-4 font-semibold">Thanh toán</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
-            {mockPOs.map(po => (
-              <tr key={po.id} className="hover:bg-slate-50/50 transition-colors cursor-pointer">
-                <td className="py-3 px-4 font-mono font-bold text-blue-600">{po.id}</td>
-                <td className="py-3 px-4 font-medium">{po.supplier}</td>
-                <td className="py-3 px-4 text-slate-500">{po.date}</td>
-                <td className="py-3 px-4 text-right font-semibold text-slate-800">{po.total.toLocaleString()} đ</td>
-                <td className="py-3 px-4">
-                   <span className={`inline-flex px-2 py-1 rounded-full text-[10px] font-bold ${
-                    po.status === 'Đã nhập kho' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
-                  }`}>
-                    {po.status}
-                  </span>
-                </td>
-                <td className="py-3 px-4">
-                  <span className={`inline-flex px-2 py-1 rounded-full text-[10px] font-bold ${
-                    po.paymentStatus === 'Đã thanh toán' ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'
-                  }`}>
-                    {po.paymentStatus}
-                  </span>
-                </td>
+        <div className="w-full overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50/50 text-[13px] font-semibold text-[#182537]">
+                <th className="py-3 px-5 font-semibold">Mã đơn</th>
+                <th className="py-3 px-2 font-semibold">Nhà cung cấp</th>
+                <th className="py-3 px-2 font-semibold">Ngày tạo</th>
+                <th className="py-3 px-2 text-right font-semibold">Tổng tiền</th>
+                <th className="py-3 px-2 font-semibold text-center">Trạng thái kho</th>
+                <th className="py-3 px-5 font-semibold text-center">Thanh toán</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-[13px] text-[#182537]">
+              {mockPOs.map(po => (
+                <tr key={po.id} className="hover:bg-slate-50 transition-colors cursor-pointer">
+                  <td className="py-4 px-5 font-mono font-medium text-[#0088FF] hover:underline">{po.id}</td>
+                  <td className="py-4 px-2 font-medium">{po.supplier}</td>
+                  <td className="py-4 px-2 text-slate-500">{po.date}</td>
+                  <td className="py-4 px-2 text-right font-semibold text-slate-800">{po.total.toLocaleString()} đ</td>
+                  <td className="py-4 px-2 text-center">
+                     <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[12px] font-medium border ${
+                      po.status === 'Đã nhập kho' ? 'border-emerald-300 bg-emerald-50 text-emerald-600' : 'border-blue-300 bg-blue-50 text-[#0088FF]'
+                    }`}>
+                      {po.status}
+                    </span>
+                  </td>
+                  <td className="py-4 px-5 text-center">
+                    <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[12px] font-medium border ${
+                      po.paymentStatus === 'Đã thanh toán' ? 'border-emerald-300 bg-emerald-50 text-emerald-600' : 'border-orange-300 bg-orange-50 text-orange-600'
+                    }`}>
+                      {po.paymentStatus}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
