@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Search,
   ChevronDown,
@@ -21,6 +21,12 @@ import {
 } from '../services/productsService';
 
 type ProductDetailTab = 'stock' | 'history';
+type ProductsRouteState = {
+  selectedProductId?: string;
+  detailTab?: ProductDetailTab;
+  searchTerm?: string;
+  message?: string;
+} | null;
 
 type ProductListItem = Product & {
   typeName: string;
@@ -95,6 +101,7 @@ export function Products() {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     try {
@@ -130,6 +137,28 @@ export function Products() {
       window.localStorage.removeItem(PRODUCT_FILTERS_KEY);
     }
   }, []);
+
+  useEffect(() => {
+    const routeState = location.state as ProductsRouteState;
+    if (!routeState) {
+      return;
+    }
+
+    if (routeState.selectedProductId) {
+      setSelectedProductId(routeState.selectedProductId);
+    }
+    if (routeState.detailTab) {
+      setDetailTab(routeState.detailTab);
+    }
+    if (typeof routeState.searchTerm === 'string') {
+      setSearchTerm(routeState.searchTerm);
+    }
+    if (routeState.message) {
+      setInfoMessage(routeState.message);
+    }
+
+    navigate('/products', { replace: true, state: null });
+  }, [location.state, navigate]);
 
   useEffect(() => {
     let active = true;

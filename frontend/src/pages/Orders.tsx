@@ -27,6 +27,24 @@ import {
 import { getDeliveryLabel, getDeliveryStatusFromTab, parseLegacyDeliveryTab } from '../utils/delivery';
 
 type OrderTab = 'all' | 'trading';
+type DatePreset = 'today' | 'this_month';
+
+type DashboardOrderFilter = {
+  branchId?: string;
+  status?: SalesOrder['status'];
+  paymentStatus?: SalesOrder['payment_status'] | 'open';
+  deliveryStatus?: SalesOrder['delivery_status'] | 'cancelled_delivery';
+  datePreset?: DatePreset;
+  onlyProcessing?: boolean;
+};
+
+type OrdersRouteState = {
+  selectedOrderId?: string;
+  message?: string;
+  activeTab?: OrderTab;
+  searchTerm?: string;
+  filters?: DashboardOrderFilter;
+} | null;
 
 const ORDER_FILTERS_KEY = 'duc-huyen-pos.orders.filters';
 
@@ -155,6 +173,41 @@ function getCustomerStats(orders: SalesOrder[], customerId?: string) {
   };
 }
 
+function isSameDay(value?: string) {
+  if (!value) {
+    return false;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return false;
+  }
+
+  const today = new Date();
+  return (
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate()
+  );
+}
+
+function isThisMonth(value?: string) {
+  if (!value) {
+    return false;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return false;
+  }
+
+  const today = new Date();
+  return (
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth()
+  );
+}
+
 export function Orders() {
   const [activeTab, setActiveTab] = useState<OrderTab>('all');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -170,6 +223,7 @@ export function Orders() {
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [isProcessingHidden, setIsProcessingHidden] = useState(false);
   const [showCustomerExtra, setShowCustomerExtra] = useState(false);
+  const [dashboardFilter, setDashboardFilter] = useState<DashboardOrderFilter | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -201,7 +255,7 @@ export function Orders() {
   }, []);
 
   useEffect(() => {
-    const routeState = location.state as { selectedOrderId?: string; message?: string } | null;
+    const routeState = location.state as OrdersRouteState;
     if (!routeState) {
       return;
     }
@@ -212,8 +266,22 @@ export function Orders() {
     if (routeState.message) {
       setInfoMessage(routeState.message);
     }
+    if (routeState.activeTab === 'all' || routeState.activeTab === 'trading') {
+      setActiveTab(routeState.activeTab);
+    }
+    if (typeof routeState.searchTerm === 'string') {
+      setSearchTerm(routeState.searchTerm);
+    }
+    if (routeState.filters) {
+      setDashboardFilter(routeState.filters);
+      if (routeState.filters.onlyProcessing) {
+        setIsProcessingHidden(false);
+      }
+    } else {
+      setDashboardFilter(null);
+    }
 
-    navigate('/orders', { replace: true });
+    navigate('/orders', { replace: true, state: null });
   }, [location.state, navigate]);
 
   useEffect(() => {
@@ -291,6 +359,42 @@ export function Orders() {
       activeTab === 'all' ? true : order.status === 'draft' || order.status === 'pending';
 
     if (!matchesTab) {
+      return false;
+    }
+
+    if (dashboardFilter?.onlyProcessing && order.status !== 'draft' && order.status !== 'pending') {
+      return false;
+    }
+
+    if (dashboardFilter?.branchId && order.branch_id !== dashboardFilter.branchId) {
+      return false;
+    }
+
+    if (dashboardFilter?.status && order.status !== dashboardFilter.status) {
+      return false;
+    }
+
+    if (dashboardFilter?.paymentStatus === 'open') {
+      if (order.payment_status !== 'unpaid' && order.payment_status !== 'partial') {
+        return false;
+      }
+    } else if (dashboardFilter?.paymentStatus && order.payment_status !== dashboardFilter.paymentStatus) {
+      return false;
+    }
+
+    if (dashboardFilter?.deliveryStatus === 'cancelled_delivery') {
+      if (order.status !== 'cancelled' && order.delivery_status !== 'cancelled') {
+        return false;
+      }
+    } else if (dashboardFilter?.deliveryStatus && order.delivery_status !== dashboardFilter.deliveryStatus) {
+      return false;
+    }
+
+    if (dashboardFilter?.datePreset === 'today' && !isSameDay(order.sold_at)) {
+      return false;
+    }
+
+    if (dashboardFilter?.datePreset === 'this_month' && !isThisMonth(order.sold_at)) {
       return false;
     }
 

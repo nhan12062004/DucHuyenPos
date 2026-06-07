@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Search,
   ChevronDown,
@@ -26,6 +26,13 @@ type CustomerDetailTab =
   | 'address'
   | 'notes'
   | 'group';
+
+type CustomersRouteState = {
+  selectedCustomerId?: string;
+  detailTab?: CustomerDetailTab;
+  searchTerm?: string;
+  message?: string;
+} | null;
 
 type CustomerListItem = Customer & {
   debt: number;
@@ -121,6 +128,7 @@ export function Customers() {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     try {
@@ -156,6 +164,28 @@ export function Customers() {
       window.localStorage.removeItem(CUSTOMER_FILTERS_KEY);
     }
   }, []);
+
+  useEffect(() => {
+    const routeState = location.state as CustomersRouteState;
+    if (!routeState) {
+      return;
+    }
+
+    if (routeState.selectedCustomerId) {
+      setSelectedCustomerId(routeState.selectedCustomerId);
+    }
+    if (routeState.detailTab) {
+      setDetailTab(routeState.detailTab);
+    }
+    if (typeof routeState.searchTerm === 'string') {
+      setSearchTerm(routeState.searchTerm);
+    }
+    if (routeState.message) {
+      setInfoMessage(routeState.message);
+    }
+
+    navigate('/customers', { replace: true, state: null });
+  }, [location.state, navigate]);
 
   useEffect(() => {
     let active = true;
