@@ -174,6 +174,12 @@ create table if not exists public.sales_orders (
   paid_amount numeric(14,2) not null default 0,
   note text,
   delivery_address text,
+  delivery_method text not null default 'nhan_tai_cua_hang' check (
+    delivery_method in ('hang_van_chuyen', 'van_chuyen_ngoai', 'nhan_tai_cua_hang', 'giao_hang_sau')
+  ),
+  delivery_status text not null default 'delivered' check (
+    delivery_status in ('pending_packing', 'waiting_pick_up', 'delivering', 'delivered', 'cancelled')
+  ),
   delivery_due_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -338,6 +344,7 @@ create index if not exists idx_branch_stocks_branch_product on public.branch_sto
 create index if not exists idx_sales_orders_customer_id on public.sales_orders(customer_id);
 create index if not exists idx_sales_orders_branch_id on public.sales_orders(branch_id);
 create index if not exists idx_sales_orders_sold_at on public.sales_orders(sold_at desc);
+create index if not exists idx_sales_orders_delivery_status on public.sales_orders(delivery_status);
 create index if not exists idx_sales_order_items_order_id on public.sales_order_items(sales_order_id);
 create index if not exists idx_sales_payments_order_id on public.sales_payments(sales_order_id);
 create index if not exists idx_sales_returns_order_id on public.sales_returns(sales_order_id);

@@ -5,6 +5,7 @@ import { CreateSalesOrderDto, UpdateSalesOrderDto } from './dto/sales-order.dto.
 import { PaginationDto, PaginatedResult } from '../../common/dto/pagination.dto.js';
 import { generateNextCode, normalizeManualCode } from '../../common/code-generator.js';
 import { ActivityActor, ActivityLogsService } from '../../common/activity-logs.service.js';
+import { resolveDeliveryFields } from './delivery-fields.js';
 
 @Injectable()
 export class SalesOrdersService {
@@ -69,6 +70,7 @@ export class SalesOrdersService {
 
   async create(dto: CreateSalesOrderDto, actor?: ActivityActor) {
     const { items, ...orderData } = dto;
+    const deliveryFields = resolveDeliveryFields(orderData);
 
     orderData.order_no =
       normalizeManualCode(orderData.order_no) ??
@@ -91,7 +93,7 @@ export class SalesOrdersService {
 
     const { data: order, error: orderErr } = await this.supabase
       .from('sales_orders')
-      .insert({ ...orderData, subtotal, total_amount: totalAmount })
+      .insert({ ...orderData, ...deliveryFields, subtotal, total_amount: totalAmount })
       .select()
       .single();
 
@@ -136,6 +138,12 @@ export class SalesOrdersService {
   async update(id: string, dto: UpdateSalesOrderDto, actor?: ActivityActor) {
     const currentOrder = await this.findOne(id);
     const { items, ...orderData } = dto;
+    const deliveryFields = resolveDeliveryFields({
+      status: orderData.status ?? currentOrder.status,
+      delivery_method: orderData.delivery_method ?? currentOrder.delivery_method,
+      delivery_status: orderData.delivery_status ?? currentOrder.delivery_status,
+      note: orderData.note ?? currentOrder.note,
+    });
 
     const orderItems = items ?? currentOrder.sales_order_items ?? [];
     const subtotal = orderItems.reduce((sum: number, item: any) => {
@@ -154,6 +162,7 @@ export class SalesOrdersService {
       .from('sales_orders')
       .update({
         ...orderData,
+        ...deliveryFields,
         subtotal,
         total_amount: totalAmount,
       })

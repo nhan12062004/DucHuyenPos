@@ -11,17 +11,30 @@ export interface RecentActivity {
   metadata: Record<string, unknown>;
 }
 
+export interface InventorySummary {
+  low_stock_count: number;
+  total_stock_qty: number;
+  total_stock_value: number;
+}
+
 export interface DashboardStats {
   today_revenue: number;
   today_orders: number;
   month_revenue: number;
   total_customer_debt: number;
-  low_stock_count: number;
-  low_stock_items: {
+  pending_summary: {
+    pending_approval: number;
+    pending_payment: number;
+    pending_packing: number;
+    waiting_pick_up: number;
+    delivering: number;
+    cancelled_delivery: number;
+  };
+  top_products: {
     product_id: string;
     name: string;
-    total_on_hand_qty: number;
-    reorder_level: number;
+    sku: string | null;
+    sold_qty: number;
   }[];
   recent_activities: RecentActivity[];
 }
@@ -32,8 +45,14 @@ export interface RevenueChartPoint {
 }
 
 export const dashboardService = {
-  getStats: (branchId?: string) =>
-    api.get<DashboardStats>('/dashboard/stats', branchId ? { branch_id: branchId } : undefined),
+  getStats: (branchId?: string, topProductsDays = 7) =>
+    api.get<DashboardStats>('/dashboard/stats', {
+      ...(branchId ? { branch_id: branchId } : {}),
+      top_products_days: topProductsDays,
+    }),
+
+  getInventorySummary: (branchId?: string) =>
+    api.get<InventorySummary>('/dashboard/inventory-summary', branchId ? { branch_id: branchId } : undefined),
 
   getRevenueChart: (days = 30, branchId?: string) =>
     api.get<RevenueChartPoint[]>('/dashboard/revenue-chart', {

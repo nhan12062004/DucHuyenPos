@@ -6,10 +6,17 @@ import {
   DollarSign, ShoppingBag,
   FileText, CreditCard, Package, Truck, XSquare,
   ChevronDown, ChevronRight, AlertCircle, Loader2,
-  TrendingUp, Users, AlertTriangle,
+  TrendingUp, Users,
 } from 'lucide-react';
 import { dashboardService } from '../services/dashboardService';
-import type { DashboardStats, RecentActivity, RevenueChartPoint } from '../services/dashboardService';
+import type {
+  DashboardStats,
+  InventorySummary,
+  RecentActivity,
+  RevenueChartPoint,
+} from '../services/dashboardService';
+import { inventoryService } from '../services/inventoryService';
+import type { Branch } from '../services/inventoryService';
 
 function fmt(n: number) {
   if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}tỷ`;
@@ -29,30 +36,48 @@ function getActivityAction(activity: RecentActivity) {
   return activity.description;
 }
 
+function fmtRank(index: number) {
+  return String(index + 1).padStart(2, '0');
+}
+
 export function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [chart, setChart] = useState<RevenueChartPoint[]>([]);
+  const [inventorySummary, setInventorySummary] = useState<InventorySummary | null>(null);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'DOANH_THU' | 'TY_TRONG'>('DOANH_THU');
   const [chartDays, setChartDays] = useState(7);
+  const [topProductsDays, setTopProductsDays] = useState(7);
+  const [inventoryBranchId, setInventoryBranchId] = useState('');
 
   const selectClassName =
     'appearance-none bg-white border border-slate-200 text-slate-700 rounded-lg font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10';
 
   useEffect(() => {
+    inventoryService.getBranches()
+      .then(setBranches)
+      .catch(() => {
+        // Keep dashboard usable even if branch list fails.
+      });
+  }, []);
+
+  useEffect(() => {
     setLoading(true);
     Promise.all([
-      dashboardService.getStats(),
+      dashboardService.getStats(undefined, topProductsDays),
       dashboardService.getRevenueChart(chartDays),
+      dashboardService.getInventorySummary(inventoryBranchId || undefined),
     ])
-      .then(([s, c]) => {
+      .then(([s, c, inventory]) => {
         setStats(s);
         setChart(c);
+        setInventorySummary(inventory);
       })
       .catch((e) => setError(e?.message ?? 'Lỗi tải dữ liệu'))
       .finally(() => setLoading(false));
-  }, [chartDays]);
+  }, [chartDays, topProductsDays, inventoryBranchId]);
 
   if (loading) {
     return (
@@ -186,59 +211,95 @@ export function Dashboard() {
             <h2 className="font-bold text-slate-800 uppercase">Đơn hàng chờ xử lý</h2>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-6 divide-y md:divide-y-0 md:divide-x divide-slate-100 text-center">
-            <PendingItem icon={<FileText size={24} className="text-blue-500" />} label="Chờ duyệt" value="0" />
-            <PendingItem icon={<CreditCard size={24} className="text-blue-500" />} label="Chờ thanh toán" value="0" />
-            <PendingItem icon={<Package size={24} className="text-blue-500" />} label="Chờ đóng gói" value="0" />
-            <PendingItem icon={<Truck size={24} className="text-blue-500" />} label="Chờ lấy hàng" value="0" />
-            <PendingItem icon={<Truck size={24} className="text-blue-500" />} label="Đang giao hàng" value="0" />
-            <PendingItem icon={<XSquare size={24} className="text-red-500" />} label="Hủy giao - chờ nhận" value="0" />
+            <PendingItem icon={<FileText size={24} className="text-blue-500" />} label="Chờ duyệt" value={String(stats?.pending_summary?.pending_approval ?? 0)} />
+            <PendingItem icon={<CreditCard size={24} className="text-blue-500" />} label="Chờ thanh toán" value={String(stats?.pending_summary?.pending_payment ?? 0)} />
+            <PendingItem icon={<Package size={24} className="text-blue-500" />} label="Chờ đóng gói" value={String(stats?.pending_summary?.pending_packing ?? 0)} />
+            <PendingItem icon={<Truck size={24} className="text-blue-500" />} label="Chờ lấy hàng" value={String(stats?.pending_summary?.waiting_pick_up ?? 0)} />
+            <PendingItem icon={<Truck size={24} className="text-blue-500" />} label="Đang giao hàng" value={String(stats?.pending_summary?.delivering ?? 0)} />
+            <PendingItem icon={<XSquare size={24} className="text-red-500" />} label="Hủy giao - chờ nhận" value={String(stats?.pending_summary?.cancelled_delivery ?? 0)} />
           </div>
         </div>
       </div>
 
       <div className="xl:col-span-1 space-y-6">
-        <div className="ui-card">
-          <div className="ui-card-header">
-            <h2 className="font-bold text-slate-800 uppercase flex items-center gap-2">
-              <AlertTriangle size={16} className="text-amber-500" />
-              Hàng sắp hết
-            </h2>
-            <span className="text-xs font-bold bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
-              {stats?.low_stock_count ?? 0}
-            </span>
+        <div className="ui-card overflow-hidden">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+            <h2 className="text-[13px] font-bold uppercase tracking-wide text-slate-800">Top sản phẩm</h2>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <select
+                  className="appearance-none rounded-md border border-slate-200 bg-white py-1.5 pl-3 pr-8 text-[12px] font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={topProductsDays}
+                  onChange={(e) => setTopProductsDays(Number(e.target.value))}
+                >
+                  <option value={7}>7 ngày qua</option>
+                  <option value={30}>30 ngày qua</option>
+                  <option value={90}>3 tháng qua</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+              </div>
+              <button
+                type="button"
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-[12px] font-bold tracking-widest text-slate-400 hover:bg-slate-50"
+              >
+                ...
+              </button>
+            </div>
           </div>
-          {!stats?.low_stock_items?.length ? (
-            <div className="px-6 py-8 text-center text-slate-400 text-sm">Không có sản phẩm nào sắp hết</div>
+          {!stats?.top_products?.length ? (
+            <div className="px-4 py-10 text-center text-sm text-slate-400">Chưa có dữ liệu bán hàng</div>
           ) : (
-            <div className="divide-y divide-slate-100">
-              {stats.low_stock_items.map((item) => (
-                <div key={item.product_id} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors">
-                  <div className="min-w-0">
-                    <p className="text-[13px] font-semibold text-slate-800 truncate">{item.name}</p>
-                    <p className="text-[11px] text-slate-400">Định mức: {item.reorder_level}</p>
+            <div className="min-h-[178px] divide-y divide-slate-100">
+              {stats.top_products.map((item, index) => (
+                <div key={`${item.product_id}-${index}`} className="flex items-center justify-between px-4 py-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-500 text-[10px] font-bold text-white">
+                      {fmtRank(index)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] font-semibold text-slate-800">{item.name}</p>
+                      <p className="truncate text-[11px] uppercase text-slate-400">{item.sku ?? 'N/A'}</p>
+                    </div>
                   </div>
-                  <span className="ml-3 text-sm font-bold text-red-600 shrink-0">{item.total_on_hand_qty}</span>
+                  <span className="ml-3 shrink-0 text-[13px] font-bold text-slate-700">{fmt(item.sold_qty)}</span>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        <div className="ui-card">
-          <div className="ui-card-header">
-            <h2 className="font-bold text-slate-800 uppercase">Thông tin kho</h2>
-          </div>
-          <div className="flex flex-col divide-y divide-slate-100">
-            <div className="px-6 py-4 flex justify-between items-center hover:bg-slate-50 cursor-pointer transition-colors">
-              <div>
-                <div className="flex items-center gap-1.5 mb-1 text-[13px] text-slate-600 font-medium">
-                  Sản phẩm dưới định mức
-                  <span className="flex items-center justify-center w-[14px] h-[14px] rounded-full border border-red-500 text-red-500 text-[10px] font-bold">!</span>
-                </div>
-                <p className="text-[17px] font-bold text-slate-800">{stats?.low_stock_count ?? 0}</p>
-              </div>
-              <ChevronRight size={18} className="text-slate-400" />
+        <div className="ui-card overflow-hidden">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+            <h2 className="text-[13px] font-bold uppercase tracking-wide text-slate-800">Thông tin kho</h2>
+            <div className="relative">
+              <select
+                className="appearance-none rounded-md border border-slate-200 bg-white py-1.5 pl-3 pr-8 text-[12px] font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={inventoryBranchId}
+                onChange={(e) => setInventoryBranchId(e.target.value)}
+              >
+                <option value="">Tất cả chi nhánh</option>
+                {branches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>{branch.name}</option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
             </div>
+          </div>
+          <div className="space-y-3 bg-white px-3 py-4">
+            <InventorySummaryRow
+              label="Sản phẩm dưới định mức"
+              value={fmt(inventorySummary?.low_stock_count ?? 0)}
+              accent="text-red-500"
+              showAlert
+            />
+            <InventorySummaryRow
+              label="Số tồn kho chi nhánh"
+              value={fmt(inventorySummary?.total_stock_qty ?? 0)}
+            />
+            <InventorySummaryRow
+              label="Giá trị tồn kho chi nhánh"
+              value={fmtFull(inventorySummary?.total_stock_value ?? 0)}
+            />
           </div>
         </div>
 
@@ -293,6 +354,35 @@ function PendingItem({ icon, label, value }: { icon: React.ReactNode; label: str
         <p className="text-[13px] font-semibold text-slate-600 mb-1 leading-snug h-8 flex items-center justify-center text-center">{label}</p>
         <p className="text-xl font-bold text-slate-800">{value}</p>
       </div>
+    </div>
+  );
+}
+
+function InventorySummaryRow({
+  label,
+  value,
+  accent = 'text-slate-800',
+  showAlert = false,
+}: {
+  label: string;
+  value: string;
+  accent?: string;
+  showAlert?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-md bg-cyan-50/60 px-4 py-4 transition-colors hover:bg-cyan-50">
+      <div>
+        <div className="mb-1 flex items-center gap-1.5 text-[12px] text-slate-500">
+          <span>{label}</span>
+          {showAlert && (
+            <span className="flex h-4 w-4 items-center justify-center rounded-full border border-red-500 text-[10px] font-bold text-red-500">
+              !
+            </span>
+          )}
+        </div>
+        <p className={`text-[22px] font-bold leading-none ${accent}`}>{value}</p>
+      </div>
+      <ChevronRight size={18} className="text-slate-400" />
     </div>
   );
 }

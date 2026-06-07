@@ -6,8 +6,19 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get('stats')
-  getStats(@Query('branch_id') branchId?: string) {
-    return this.dashboardService.getStats(branchId);
+  getStats(
+    @Query('branch_id') branchId?: string,
+    @Query('top_products_days') topProductsDays?: string,
+  ) {
+    return this.dashboardService.getStats(
+      branchId,
+      topProductsDays ? parseInt(topProductsDays, 10) : 7,
+    );
+  }
+
+  @Get('inventory-summary')
+  getInventorySummary(@Query('branch_id') branchId?: string) {
+    return this.dashboardService.getInventorySummary(branchId);
   }
 
   @Get('revenue-chart')
@@ -15,6 +26,6 @@ export class DashboardController {
     @Query('days') days?: string,
     @Query('branch_id') branchId?: string,
   ) {
-    return this.dashboardService.getRevenueChart(days ? parseInt(days) : 30, branchId);
+    return this.dashboardService.getRevenueChart(days ? parseInt(days, 10) : 30, branchId);
   }
 }

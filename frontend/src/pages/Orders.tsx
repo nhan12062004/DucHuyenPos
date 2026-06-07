@@ -24,6 +24,7 @@ import {
   salesOrdersService,
   type SalesOrder,
 } from '../services/salesOrdersService';
+import { getDeliveryLabel, getDeliveryStatusFromTab, parseLegacyDeliveryTab } from '../utils/delivery';
 
 type OrderTab = 'all' | 'trading';
 
@@ -310,9 +311,22 @@ export function Orders() {
 
   const pendingOrders = orders.filter((order) => order.status === 'draft');
   const unpaidOrders = orders.filter(
-    (order) => order.payment_status === 'unpaid' || order.payment_status === 'partial',
+    (order) =>
+      order.status !== 'cancelled' &&
+      (order.payment_status === 'unpaid' || order.payment_status === 'partial'),
   );
-  const packingOrders = orders.filter((order) => order.status === 'pending');
+  const packingOrders = orders.filter(
+    (order) => order.status === 'pending' && order.delivery_status === 'pending_packing',
+  );
+  const waitingPickupOrders = orders.filter(
+    (order) => order.status === 'pending' && order.delivery_status === 'waiting_pick_up',
+  );
+  const deliveringOrders = orders.filter(
+    (order) => order.status === 'pending' && order.delivery_status === 'delivering',
+  );
+  const cancelledDeliveryOrders = orders.filter(
+    (order) => order.status === 'cancelled' || order.delivery_status === 'cancelled',
+  );
   const statusMeta = getOrderStatusMeta(selectedOrder?.status);
   const paymentMeta = getPaymentStatusMeta(selectedOrder?.payment_status);
   const selectedOrderItems = selectedOrder?.sales_order_items ?? [];
@@ -379,6 +393,15 @@ export function Orders() {
         paid_amount: 0,
         note: selectedOrder.note,
         delivery_address: selectedOrder.customers?.address,
+        delivery_method:
+          selectedOrder.delivery_method ??
+          parseLegacyDeliveryTab(selectedOrder.note, selectedOrder.status) ??
+          'giao_hang_sau',
+        delivery_status: getDeliveryStatusFromTab(
+          selectedOrder.delivery_method ??
+            parseLegacyDeliveryTab(selectedOrder.note, selectedOrder.status) ??
+            'giao_hang_sau',
+        ),
         items: selectedOrderItems.map((item) => ({
           product_id: item.product_id,
           product_name: item.product_name,
@@ -737,7 +760,14 @@ export function Orders() {
                   </div>
                   <div className="flex">
                     <div className="w-40 text-slate-600">Hình thức giao hàng</div>
-                    <div className="text-[#182537]">: {selectedOrder.source.toUpperCase()}</div>
+                    <div className="text-[#182537]">
+                      :{' '}
+                      {getDeliveryLabel(
+                        selectedOrder.delivery_method ??
+                          parseLegacyDeliveryTab(selectedOrder.note, selectedOrder.status) ??
+                          'nhan_tai_cua_hang',
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1002,27 +1032,43 @@ export function Orders() {
                   <div className="mb-1 flex items-center gap-1 text-[13px] text-slate-500">
                     Chờ đóng gói <span className="font-semibold text-[#0088FF]">{packingOrders.length}</span>
                   </div>
-                  <div className="font-semibold text-[#182537]">0</div>
+                  <div className="font-semibold text-[#182537]">
+                    {formatCurrency(
+                      packingOrders.reduce((sum, order) => sum + Number(order.total_amount || 0), 0),
+                    )}
+                  </div>
                 </div>
                 <div className="border-r border-slate-200 p-3">
                   <div className="mb-1 flex items-center gap-1 text-[13px] text-slate-500">
-                    Chờ lấy hàng <span className="font-semibold text-[#0088FF]">0</span>
+                    Chờ lấy hàng <span className="font-semibold text-[#0088FF]">{waitingPickupOrders.length}</span>
                   </div>
-                  <div className="font-semibold text-[#182537]">0</div>
+                  <div className="font-semibold text-[#182537]">
+                    {formatCurrency(
+                      waitingPickupOrders.reduce((sum, order) => sum + Number(order.total_amount || 0), 0),
+                    )}
+                  </div>
                 </div>
                 <div className="border-r border-slate-200 p-3">
                   <div className="mb-1 flex items-center gap-1 text-[13px] text-slate-500">
-                    Đang giao hàng <span className="font-semibold text-[#0088FF]">0</span>
+                    Đang giao hàng <span className="font-semibold text-[#0088FF]">{deliveringOrders.length}</span>
                   </div>
-                  <div className="font-semibold text-[#182537]">0</div>
+                  <div className="font-semibold text-[#182537]">
+                    {formatCurrency(
+                      deliveringOrders.reduce((sum, order) => sum + Number(order.total_amount || 0), 0),
+                    )}
+                  </div>
                 </div>
                 <div className="group relative flex flex-col justify-between border-r border-slate-200 p-3">
                   <div className="mb-1 flex items-center gap-1 text-[13px] text-slate-500">
                     Chờ giao lại <span className="rounded-full bg-red-100 px-1 text-[10px] text-red-500">!</span>{' '}
-                    <span className="font-semibold text-[#0088FF]">0</span>
+                    <span className="font-semibold text-[#0088FF]">{cancelledDeliveryOrders.length}</span>
                   </div>
                   <div className="flex items-end justify-between font-semibold text-[#182537]">
-                    <span>0</span>
+                    <span>
+                      {formatCurrency(
+                        cancelledDeliveryOrders.reduce((sum, order) => sum + Number(order.total_amount || 0), 0),
+                      )}
+                    </span>
                     <ChevronDown size={14} className="cursor-pointer text-slate-400 group-hover:text-[#0088FF]" />
                   </div>
                 </div>

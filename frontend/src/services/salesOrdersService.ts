@@ -1,5 +1,6 @@
 import { api } from './apiClient';
 import type { PaginatedResult } from './types';
+import type { DeliveryStatus, DeliveryTab } from '../utils/delivery';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,6 +36,9 @@ export interface SalesOrder {
   total_amount: number;
   paid_amount: number;
   note?: string;
+  delivery_address?: string;
+  delivery_method?: DeliveryTab;
+  delivery_status?: DeliveryStatus;
   created_at: string;
   // Relations
   customers?: { id: string; full_name: string; phone?: string; address?: string } | null;
@@ -76,6 +80,8 @@ export interface CreateSalesOrderPayload {
   paid_amount?: number;
   note?: string;
   delivery_address?: string;
+  delivery_method?: DeliveryTab;
+  delivery_status?: DeliveryStatus;
   items: {
     product_id: string;
     product_name: string;
@@ -99,6 +105,8 @@ export interface UpdateSalesOrderPayload {
   paid_amount?: number;
   note?: string;
   delivery_address?: string;
+  delivery_method?: DeliveryTab;
+  delivery_status?: DeliveryStatus;
   items?: CreateSalesOrderPayload['items'];
 }
 

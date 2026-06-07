@@ -28,6 +28,7 @@ import {
 } from '../services/productsService';
 import { salesOrdersService, type SalesOrder } from '../services/salesOrdersService';
 import { cn } from '../utils/cn';
+import { getDeliveryStatusFromTab, parseLegacyDeliveryTab } from '../utils/delivery';
 
 type CartProduct = {
   id: string;
@@ -45,6 +46,72 @@ type DeliveryTab =
   | 'van_chuyen_ngoai'
   | 'nhan_tai_cua_hang'
   | 'giao_hang_sau';
+
+const DELIVERY_MODE_TOKEN = '__DELIVERY_MODE__';
+
+function getDeliveryLabel(tab: DeliveryTab) {
+  if (tab === 'hang_van_chuyen') return 'Đẩy qua hãng vận chuyển';
+  if (tab === 'van_chuyen_ngoai') return 'Đẩy vận chuyển ngoài';
+  if (tab === 'nhan_tai_cua_hang') return 'Khách nhận tại cửa hàng';
+  return 'Giao hàng sau';
+}
+
+function parseOrderNote(rawNote?: string | null) {
+  const lines = (rawNote ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  let tags = '';
+  let deliveryDue = '';
+  let issueInvoice = false;
+  let deliveryTab: DeliveryTab = 'hang_van_chuyen';
+  const businessLines: string[] = [];
+
+  lines.forEach((line) => {
+    if (line.startsWith(`${DELIVERY_MODE_TOKEN}:`)) {
+      const value = line.slice(`${DELIVERY_MODE_TOKEN}:`.length).trim() as DeliveryTab;
+      if (value === 'hang_van_chuyen' || value === 'van_chuyen_ngoai' || value === 'nhan_tai_cua_hang' || value === 'giao_hang_sau') {
+        deliveryTab = value;
+      }
+      return;
+    }
+
+    if (line.startsWith('Tags: ')) {
+      tags = line.slice('Tags: '.length).trim();
+      return;
+    }
+
+    if (line.startsWith('Hẹn giao: ')) {
+      deliveryDue = line.slice('Hẹn giao: '.length).trim();
+      return;
+    }
+
+    if (line === 'Phát hành hóa đơn điện tử') {
+      issueInvoice = true;
+      return;
+    }
+
+    if (line.startsWith('Hình thức giao hàng: ')) {
+      const label = line.slice('Hình thức giao hàng: '.length).trim();
+      if (label === 'Đẩy qua hãng vận chuyển') deliveryTab = 'hang_van_chuyen';
+      else if (label === 'Đẩy vận chuyển ngoài') deliveryTab = 'van_chuyen_ngoai';
+      else if (label === 'Khách nhận tại cửa hàng') deliveryTab = 'nhan_tai_cua_hang';
+      else if (label === 'Giao hàng sau') deliveryTab = 'giao_hang_sau';
+      return;
+    }
+
+    businessLines.push(line);
+  });
+
+  return {
+    note: businessLines.join('\n'),
+    tags,
+    deliveryDue,
+    issueInvoice,
+    deliveryTab: parseLegacyDeliveryTab(rawNote) ?? deliveryTab,
+  };
+}
 
 function formatNumber(value: number) {
   return value.toLocaleString('vi-VN');
@@ -177,14 +244,19 @@ export function POS() {
         setBranchId(order.branch_id);
         setSource(order.source);
         setOrderNo(order.order_no);
-        setOrderNote(order.note ?? '');
-        setTags('');
-        setDeliveryDue('');
-        setIssueInvoice(false);
+        const parsedNote = parseOrderNote(order.note);
+        setOrderNote(parsedNote.note);
+        setTags(parsedNote.tags);
+        setDeliveryDue(parsedNote.deliveryDue);
+        setIssueInvoice(parsedNote.issueInvoice);
         setOrderDiscount(Number(order.discount_amount ?? 0));
         setShippingFee(Number(order.shipping_fee ?? 0));
         setPaidAmount(Number(order.paid_amount ?? 0));
-        setActiveDeliveryTab(order.status === 'completed' ? 'nhan_tai_cua_hang' : 'hang_van_chuyen');
+        setActiveDeliveryTab(
+          order.delivery_method ??
+            parseLegacyDeliveryTab(order.note, order.status) ??
+            (order.status === 'completed' ? 'nhan_tai_cua_hang' : parsedNote.deliveryTab),
+        );
         setCartProducts(
           (order.sales_order_items ?? []).map((item) => ({
             id: item.product_id,
@@ -340,19 +412,9 @@ export function POS() {
     try {
       const orderStatus: SalesOrder['status'] =
         activeDeliveryTab === 'nhan_tai_cua_hang' ? 'completed' : 'pending';
-      const deliveryLabel =
-        activeDeliveryTab === 'hang_van_chuyen'
-          ? 'Đẩy qua hãng vận chuyển'
-          : activeDeliveryTab === 'van_chuyen_ngoai'
-          ? 'Đẩy vận chuyển ngoài'
-          : activeDeliveryTab === 'nhan_tai_cua_hang'
-          ? 'Khách nhận tại cửa hàng'
-          : 'Giao hàng sau';
-
       const noteParts = [
         orderNote.trim(),
         tags.trim() ? `Tags: ${tags.trim()}` : '',
-        `Hình thức giao hàng: ${deliveryLabel}`,
         deliveryDue.trim() ? `Hẹn giao: ${deliveryDue.trim()}` : '',
         issueInvoice ? 'Phát hành hóa đơn điện tử' : '',
       ].filter(Boolean);
@@ -369,6 +431,8 @@ export function POS() {
         discount_amount: orderDiscount,
         note: noteParts.join('\n'),
         delivery_address: selectedCustomer?.address || undefined,
+        delivery_method: activeDeliveryTab,
+        delivery_status: getDeliveryStatusFromTab(activeDeliveryTab),
         items: cartProducts.map((item) => ({
           product_id: item.id,
           product_name: item.name,
