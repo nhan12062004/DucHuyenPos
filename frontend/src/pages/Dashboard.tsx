@@ -35,14 +35,14 @@ import {
 import { inventoryService, type Branch } from '../services/inventoryService';
 
 function fmt(value: number) {
-  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}ty`;
+  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)} tỷ`;
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}tr`;
   if (value >= 1_000) return `${(value / 1_000).toFixed(0)}k`;
   return value.toLocaleString('vi-VN');
 }
 
 function fmtFull(value: number) {
-  return `${value.toLocaleString('vi-VN')}d`;
+  return `${value.toLocaleString('vi-VN')}đ`;
 }
 
 function fmtRank(index: number) {
@@ -64,7 +64,7 @@ function getActivityRoute(activity: RecentActivity) {
       path: '/orders',
       state: {
         selectedOrderId: activity.entity_id ?? undefined,
-        message: 'Dang mo giao dich lien quan tu hoat dong gan day.',
+        message: 'Đang mở giao dịch liên quan từ hoạt động gần đây.',
       },
     };
   }
@@ -75,7 +75,7 @@ function getActivityRoute(activity: RecentActivity) {
       state: {
         selectedProductId: activity.entity_id ?? undefined,
         detailTab: 'stock' as const,
-        message: 'Dang mo san pham lien quan tu hoat dong gan day.',
+        message: 'Đang mở sản phẩm liên quan từ hoạt động gần đây.',
       },
     };
   }
@@ -86,7 +86,7 @@ function getActivityRoute(activity: RecentActivity) {
       state: {
         selectedCustomerId: activity.entity_id ?? undefined,
         detailTab: 'history' as const,
-        message: 'Dang mo khach hang lien quan tu hoat dong gan day.',
+        message: 'Đang mở khách hàng liên quan từ hoạt động gần đây.',
       },
     };
   }
@@ -95,7 +95,7 @@ function getActivityRoute(activity: RecentActivity) {
     return {
       path: '/inventory',
       state: {
-        message: 'Dang mo kho hang lien quan tu hoat dong gan day.',
+        message: 'Đang mở kho hàng liên quan từ hoạt động gần đây.',
       },
     };
   }
@@ -156,7 +156,7 @@ export function Dashboard() {
         if (!active) {
           return;
         }
-        setError(nextError?.message ?? 'Khong tai duoc du lieu tong quan.');
+        setError(nextError?.message ?? 'Không tải được dữ liệu tổng quan.');
       } finally {
         if (active) {
           setLoading(false);
@@ -176,7 +176,7 @@ export function Dashboard() {
     total: point.revenue,
   }));
   const selectedBranch = branches.find((branch) => branch.id === dashboardBranchId);
-  const branchLabel = selectedBranch?.name ?? 'tat ca chi nhanh';
+  const branchLabel = selectedBranch?.name ?? 'tất cả chi nhánh';
 
   const openOrders = (options: {
     message: string;
@@ -236,7 +236,7 @@ export function Dashboard() {
       <div className="page-shell flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-3 text-slate-400">
           <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-          <p className="text-sm font-medium">Dang tai du lieu...</p>
+          <p className="text-sm font-medium">Đang tải dữ liệu...</p>
         </div>
       </div>
     );
@@ -252,7 +252,7 @@ export function Dashboard() {
             onClick={() => window.location.reload()}
             className="text-xs text-blue-600 underline"
           >
-            Thu lai
+            Thử lại
           </button>
         </div>
       </div>
@@ -264,8 +264,8 @@ export function Dashboard() {
       <div className="ui-card">
         <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-4">
           <div>
-            <h1 className="text-lg font-bold uppercase tracking-wide text-slate-800">Tong quan kinh doanh</h1>
-            <p className="mt-1 text-sm text-slate-500">Du lieu dang hien thi theo {branchLabel}.</p>
+            <h1 className="text-lg font-bold uppercase tracking-wide text-slate-800">Tổng quan kinh doanh</h1>
+            <p className="mt-1 text-sm text-slate-500">Dữ liệu đang hiển thị theo {branchLabel}.</p>
           </div>
           <div className="relative">
             <select
@@ -273,7 +273,7 @@ export function Dashboard() {
               value={dashboardBranchId}
               onChange={(event) => setDashboardBranchId(event.target.value)}
             >
-              <option value="">Tat ca chi nhanh</option>
+              <option value="">Tất cả chi nhánh</option>
               {branches.map((branch) => (
                 <option key={branch.id} value={branch.id}>
                   {branch.name}
@@ -289,7 +289,7 @@ export function Dashboard() {
         <div className="xl:col-span-3 space-y-6">
           <div className="ui-card">
             <div className="ui-card-header">
-              <h2 className="font-bold text-slate-800 uppercase">Ket qua kinh doanh trong ngay</h2>
+              <h2 className="font-bold text-slate-800 uppercase">Kết quả kinh doanh trong ngày</h2>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-slate-100">
               <ResultItem
@@ -299,7 +299,7 @@ export function Dashboard() {
                 sub={fmtFull(stats?.today_revenue ?? 0)}
                 onClick={() =>
                   openOrders({
-                    message: `Dang xem doanh thu don hoan thanh hom nay cua ${branchLabel}.`,
+                    message: `Đang xem doanh thu đơn hoàn thành hôm nay của ${branchLabel}.`,
                     filters: {
                       branchId: dashboardBranchId || undefined,
                       status: 'completed',
@@ -310,11 +310,11 @@ export function Dashboard() {
               />
               <ResultItem
                 icon={<div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600"><ShoppingBag size={20} /></div>}
-                label="Don hang moi"
+                label="Đơn hàng mới"
                 value={String(stats?.today_orders ?? 0)}
                 onClick={() =>
                   openOrders({
-                    message: `Dang xem don hang moi hom nay cua ${branchLabel}.`,
+                    message: `Đang xem đơn hàng mới hôm nay của ${branchLabel}.`,
                     filters: {
                       branchId: dashboardBranchId || undefined,
                       datePreset: 'today',
@@ -324,12 +324,12 @@ export function Dashboard() {
               />
               <ResultItem
                 icon={<div className="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center text-violet-600"><TrendingUp size={20} /></div>}
-                label="Doanh thu thang"
+                label="Doanh thu tháng"
                 value={fmt(stats?.month_revenue ?? 0)}
                 sub={fmtFull(stats?.month_revenue ?? 0)}
                 onClick={() =>
                   openOrders({
-                    message: `Dang xem doanh thu thang hien tai cua ${branchLabel}.`,
+                    message: `Đang xem doanh thu tháng hiện tại của ${branchLabel}.`,
                     filters: {
                       branchId: dashboardBranchId || undefined,
                       status: 'completed',
@@ -340,10 +340,10 @@ export function Dashboard() {
               />
               <ResultItem
                 icon={<div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600"><Users size={20} /></div>}
-                label="Tong no KH"
+                label="Tổng nợ KH"
                 value={fmt(stats?.total_customer_debt ?? 0)}
                 sub={fmtFull(stats?.total_customer_debt ?? 0)}
-                onClick={() => openDebts(`Dang xem cong no khach hang cua ${branchLabel}.`)}
+                onClick={() => openDebts(`Đang xem công nợ khách hàng của ${branchLabel}.`)}
               />
             </div>
           </div>
@@ -351,14 +351,14 @@ export function Dashboard() {
           <div className="ui-card relative pt-4">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-6">
               <div>
-                <h2 className="pb-3 font-semibold text-[13px] uppercase tracking-wide text-slate-800">Doanh thu ban hang</h2>
+                <h2 className="pb-3 font-semibold text-[13px] uppercase tracking-wide text-slate-800">Doanh thu bán hàng</h2>
               </div>
               <div className="flex items-center gap-2 pb-2">
                 <button
                   type="button"
                   onClick={() =>
                     openOrders({
-                      message: `Dang xem cac don hoan thanh trong ${chartDays} ngay cua ${branchLabel}.`,
+                      message: `Đang xem các đơn hoàn thành trong ${chartDays} ngày của ${branchLabel}.`,
                       filters: {
                         branchId: dashboardBranchId || undefined,
                         status: 'completed',
@@ -367,7 +367,7 @@ export function Dashboard() {
                   }
                   className="rounded-md border border-slate-200 px-3 py-1.5 text-[12px] font-semibold text-slate-600 transition-colors hover:bg-slate-50"
                 >
-                  Xem don hang
+                  Xem đơn hàng
                 </button>
                 <div className="relative">
                   <select
@@ -375,9 +375,9 @@ export function Dashboard() {
                     value={chartDays}
                     onChange={(event) => setChartDays(Number(event.target.value))}
                   >
-                    <option value={7}>7 ngay qua</option>
-                    <option value={30}>30 ngay qua</option>
-                    <option value={90}>3 thang qua</option>
+                    <option value={7}>7 ngày qua</option>
+                    <option value={30}>30 ngày qua</option>
+                    <option value={90}>3 tháng qua</option>
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                 </div>
@@ -387,7 +387,7 @@ export function Dashboard() {
             <div className="p-6 h-[300px]">
               {chartData.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-slate-400">
-                  <p className="text-sm">Chua co du lieu doanh thu</p>
+                  <p className="text-sm">Chưa có dữ liệu doanh thu</p>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
@@ -420,16 +420,16 @@ export function Dashboard() {
 
           <div className="ui-card">
             <div className="ui-card-header">
-              <h2 className="font-bold text-slate-800 uppercase">Don hang cho xu ly</h2>
+              <h2 className="font-bold text-slate-800 uppercase">Đơn hàng chờ xử lý</h2>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-6 divide-y md:divide-y-0 md:divide-x divide-slate-100 text-center">
               <PendingItem
                 icon={<FileText size={24} className="text-blue-500" />}
-                label="Cho duyet"
+                label="Chờ duyệt"
                 value={String(stats?.pending_summary?.pending_approval ?? 0)}
                 onClick={() =>
                   openOrders({
-                    message: `Dang xem don cho duyet cua ${branchLabel}.`,
+                    message: `Đang xem đơn chờ duyệt của ${branchLabel}.`,
                     activeTab: 'trading',
                     filters: {
                       branchId: dashboardBranchId || undefined,
@@ -441,11 +441,11 @@ export function Dashboard() {
               />
               <PendingItem
                 icon={<CreditCard size={24} className="text-blue-500" />}
-                label="Cho thanh toan"
+                label="Chờ thanh toán"
                 value={String(stats?.pending_summary?.pending_payment ?? 0)}
                 onClick={() =>
                   openOrders({
-                    message: `Dang xem don cho thanh toan cua ${branchLabel}.`,
+                    message: `Đang xem đơn chờ thanh toán của ${branchLabel}.`,
                     activeTab: 'trading',
                     filters: {
                       branchId: dashboardBranchId || undefined,
@@ -457,11 +457,11 @@ export function Dashboard() {
               />
               <PendingItem
                 icon={<Package size={24} className="text-blue-500" />}
-                label="Cho dong goi"
+                label="Chờ đóng gói"
                 value={String(stats?.pending_summary?.pending_packing ?? 0)}
                 onClick={() =>
                   openOrders({
-                    message: `Dang xem don cho dong goi cua ${branchLabel}.`,
+                    message: `Đang xem đơn chờ đóng gói của ${branchLabel}.`,
                     activeTab: 'trading',
                     filters: {
                       branchId: dashboardBranchId || undefined,
@@ -474,11 +474,11 @@ export function Dashboard() {
               />
               <PendingItem
                 icon={<Truck size={24} className="text-blue-500" />}
-                label="Cho lay hang"
+                label="Chờ lấy hàng"
                 value={String(stats?.pending_summary?.waiting_pick_up ?? 0)}
                 onClick={() =>
                   openOrders({
-                    message: `Dang xem don cho lay hang cua ${branchLabel}.`,
+                    message: `Đang xem đơn chờ lấy hàng của ${branchLabel}.`,
                     activeTab: 'trading',
                     filters: {
                       branchId: dashboardBranchId || undefined,
@@ -491,11 +491,11 @@ export function Dashboard() {
               />
               <PendingItem
                 icon={<Truck size={24} className="text-blue-500" />}
-                label="Dang giao hang"
+                label="Đang giao hàng"
                 value={String(stats?.pending_summary?.delivering ?? 0)}
                 onClick={() =>
                   openOrders({
-                    message: `Dang xem don dang giao cua ${branchLabel}.`,
+                    message: `Đang xem đơn đang giao của ${branchLabel}.`,
                     activeTab: 'trading',
                     filters: {
                       branchId: dashboardBranchId || undefined,
@@ -508,11 +508,11 @@ export function Dashboard() {
               />
               <PendingItem
                 icon={<XSquare size={24} className="text-red-500" />}
-                label="Huy giao"
+                label="Hủy giao"
                 value={String(stats?.pending_summary?.cancelled_delivery ?? 0)}
                 onClick={() =>
                   openOrders({
-                    message: `Dang xem don giao that bai cua ${branchLabel}.`,
+                    message: `Đang xem đơn giao thất bại của ${branchLabel}.`,
                     filters: {
                       branchId: dashboardBranchId || undefined,
                       deliveryStatus: 'cancelled_delivery',
@@ -527,7 +527,7 @@ export function Dashboard() {
         <div className="xl:col-span-1 space-y-6">
           <div className="ui-card overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-              <h2 className="text-[13px] font-bold uppercase tracking-wide text-slate-800">Top san pham</h2>
+              <h2 className="text-[13px] font-bold uppercase tracking-wide text-slate-800">Top sản phẩm</h2>
               <div className="flex items-center gap-2">
                 <div className="relative">
                   <select
@@ -535,9 +535,9 @@ export function Dashboard() {
                     value={topProductsDays}
                     onChange={(event) => setTopProductsDays(Number(event.target.value))}
                   >
-                    <option value={7}>7 ngay qua</option>
-                    <option value={30}>30 ngay qua</option>
-                    <option value={90}>3 thang qua</option>
+                    <option value={7}>7 ngày qua</option>
+                    <option value={30}>30 ngày qua</option>
+                    <option value={90}>3 tháng qua</option>
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                 </div>
@@ -545,7 +545,7 @@ export function Dashboard() {
                   type="button"
                   onClick={() =>
                     openProducts({
-                      message: `Dang mo danh sach san pham ban chay cua ${branchLabel}.`,
+                      message: `Đang mở danh sách sản phẩm bán chạy của ${branchLabel}.`,
                     })
                   }
                   className="rounded-md border border-slate-200 px-3 py-1.5 text-[12px] font-bold tracking-widest text-slate-400 hover:bg-slate-50"
@@ -555,7 +555,7 @@ export function Dashboard() {
               </div>
             </div>
             {!stats?.top_products?.length ? (
-              <div className="px-4 py-10 text-center text-sm text-slate-400">Chua co du lieu ban hang</div>
+              <div className="px-4 py-10 text-center text-sm text-slate-400">Chưa có dữ liệu bán hàng</div>
             ) : (
               <div className="min-h-[178px] divide-y divide-slate-100">
                 {stats.top_products.map((item, index) => (
@@ -566,7 +566,7 @@ export function Dashboard() {
                       openProducts({
                         selectedProductId: item.product_id,
                         searchTerm: item.name,
-                        message: `Dang mo san pham ban chay ${item.name}.`,
+                        message: `Đang mở sản phẩm bán chạy ${item.name}.`,
                       })
                     }
                     className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-slate-50"
@@ -589,47 +589,47 @@ export function Dashboard() {
 
           <div className="ui-card overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-              <h2 className="text-[13px] font-bold uppercase tracking-wide text-slate-800">Thong tin kho</h2>
+              <h2 className="text-[13px] font-bold uppercase tracking-wide text-slate-800">Thông tin kho</h2>
               <button
                 type="button"
                 onClick={() =>
                   openInventory({
-                    message: `Dang mo kho hang cua ${branchLabel}.`,
+                    message: `Đang mở kho hàng của ${branchLabel}.`,
                   })
                 }
                 className="inline-flex items-center gap-1 text-[12px] font-semibold text-blue-600 hover:underline"
               >
-                Chi tiet <ArrowUpRight size={14} />
+                Chi tiết <ArrowUpRight size={14} />
               </button>
             </div>
             <div className="space-y-3 bg-white px-3 py-4">
               <InventorySummaryRow
-                label="San pham duoi dinh muc"
+                label="Sản phẩm dưới định mức"
                 value={fmt(inventorySummary?.low_stock_count ?? 0)}
                 accent="text-red-500"
                 showAlert
                 onClick={() =>
                   openInventory({
                     lowStockOnly: true,
-                    message: `Dang xem san pham can nhap cua ${branchLabel}.`,
+                    message: `Đang xem sản phẩm cần nhập của ${branchLabel}.`,
                   })
                 }
               />
               <InventorySummaryRow
-                label="So ton kho chi nhanh"
+                label="Số tồn kho chi nhánh"
                 value={fmt(inventorySummary?.total_stock_qty ?? 0)}
                 onClick={() =>
                   openInventory({
-                    message: `Dang xem so ton kho cua ${branchLabel}.`,
+                    message: `Đang xem số tồn kho của ${branchLabel}.`,
                   })
                 }
               />
               <InventorySummaryRow
-                label="Gia tri ton kho chi nhanh"
+                label="Giá trị tồn kho chi nhánh"
                 value={fmtFull(inventorySummary?.total_stock_value ?? 0)}
                 onClick={() =>
                   openInventory({
-                    message: `Dang xem gia tri ton kho cua ${branchLabel}.`,
+                    message: `Đang xem giá trị tồn kho của ${branchLabel}.`,
                   })
                 }
               />
@@ -638,11 +638,11 @@ export function Dashboard() {
 
           <div className="ui-card flex flex-col">
             <div className="ui-card-header">
-              <h2 className="font-bold text-slate-800 uppercase">Hoat dong gan day</h2>
+              <h2 className="font-bold text-slate-800 uppercase">Hoạt động gần đây</h2>
             </div>
             <div className="p-6 flex-1 relative">
               {!stats?.recent_activities?.length ? (
-                <p className="text-sm text-slate-400 text-center py-4">Chua co hoat dong nao</p>
+                <p className="text-sm text-slate-400 text-center py-4">Chưa có hoạt động nào</p>
               ) : (
                 <>
                   <div className="absolute left-[31px] top-8 bottom-6 w-px bg-slate-200 border-l border-dashed border-slate-300" />

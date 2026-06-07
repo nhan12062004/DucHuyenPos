@@ -18,7 +18,7 @@ type DebtCustomerRow = CustomerDebtSummary & {
 };
 
 function formatCurrency(value: number) {
-  return `${value.toLocaleString('vi-VN')} d`;
+  return `${value.toLocaleString('vi-VN')} đ`;
 }
 
 export function Debts() {
@@ -49,7 +49,7 @@ export function Debts() {
         state: {
           selectedCustomerId: routeState.customerId,
           detailTab: 'debt',
-          message: routeState.message ?? 'Dang mo chi tiet cong no khach hang.',
+          message: routeState.message ?? 'Đang mở chi tiết công nợ khách hàng.',
         },
       });
       return;
@@ -86,7 +86,7 @@ export function Debts() {
         if (!active) {
           return;
         }
-        setError(nextError?.message ?? 'Khong tai duoc danh sach cong no.');
+        setError(nextError?.message ?? 'Không tải được danh sách công nợ.');
       } finally {
         if (active) {
           setIsLoading(false);
@@ -142,14 +142,14 @@ export function Debts() {
           ) : null}
 
           <div className="flex justify-between items-center gap-3">
-            <h2 className="text-lg font-semibold tracking-tight text-slate-800">Danh sach khach no</h2>
+            <h2 className="text-lg font-semibold tracking-tight text-slate-800">Danh sách khách nợ</h2>
             <div className="relative w-72">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Tim ten, SDT..."
+                placeholder="Tìm tên, SĐT..."
                 className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-200 rounded text-sm focus:ring-blue-500 shadow-sm"
               />
             </div>
@@ -161,24 +161,24 @@ export function Debts() {
             <div className="flex h-full items-center justify-center text-slate-500">
               <div className="flex flex-col items-center gap-3">
                 <Loader2 className="h-8 w-8 animate-spin text-[#0088FF]" />
-                <p className="text-sm font-medium">Dang tai cong no khach hang...</p>
+                <p className="text-sm font-medium">Đang tải công nợ khách hàng...</p>
               </div>
             </div>
           ) : (
             <table className="w-full text-left border-collapse">
               <thead className="bg-white sticky top-0">
                 <tr className="text-[11px] text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                  <th className="py-3 px-4 font-semibold">Khach hang</th>
-                  <th className="py-3 px-4 font-semibold">SDT</th>
-                  <th className="py-3 px-4 text-right font-semibold">Tong no</th>
-                  <th className="py-3 px-4 text-center font-semibold">Thao tac</th>
+                  <th className="py-3 px-4 font-semibold">Khách hàng</th>
+                  <th className="py-3 px-4 font-semibold">SĐT</th>
+                  <th className="py-3 px-4 text-right font-semibold">Tổng nợ</th>
+                  <th className="py-3 px-4 text-center font-semibold">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
                 {debtors.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="px-4 py-10 text-center text-slate-500">
-                      Chua co khach hang no phu hop.
+                      Chưa có khách hàng nợ phù hợp.
                     </td>
                   </tr>
                 ) : (
@@ -191,7 +191,7 @@ export function Debts() {
                           state: {
                             selectedCustomerId: customer.customer_id,
                             detailTab: 'debt',
-                            message: `Dang mo cong no cua ${customer.full_name}.`,
+                            message: `Đang mở công nợ của ${customer.full_name}.`,
                           },
                         })
                       }
@@ -208,13 +208,13 @@ export function Debts() {
                               state: {
                                 selectedCustomerId: customer.customer_id,
                                 detailTab: 'debt',
-                                message: `Dang mo cong no cua ${customer.full_name}.`,
+                                message: `Đang mở công nợ của ${customer.full_name}.`,
                               },
                             });
                           }}
                           className="text-blue-600 text-sm font-medium hover:underline"
                         >
-                          Thu no
+                          Thu nợ
                         </button>
                       </td>
                     </tr>
@@ -230,22 +230,22 @@ export function Debts() {
         <div className="bg-orange-50 rounded-xl p-5 border border-orange-200">
           <div className="flex items-center gap-3 text-orange-800 mb-2">
             <HandCoins size={24} />
-            <h3 className="font-semibold text-sm uppercase">Tong khach no</h3>
+            <h3 className="font-semibold text-sm uppercase">Tổng khách nợ</h3>
           </div>
           <p className="text-3xl font-bold text-orange-700">{formatCurrency(totalDebt)}</p>
-          <p className="text-sm mt-1 text-orange-600 font-medium">Tu {debtors.length} khach hang</p>
+          <p className="text-sm mt-1 text-orange-600 font-medium">Từ {debtors.length} khách hàng</p>
         </div>
 
         <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm flex-1">
           <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
-            <Info size={18} className="text-blue-600" /> Huong dan thu no
+            <Info size={18} className="text-blue-600" /> Hướng dẫn thu nợ
           </h3>
           <ol className="text-sm text-slate-600 space-y-3 list-decimal list-inside">
-            <li>Chon khach hang trong danh sach ben trai.</li>
-            <li>Bam Thu no de mo chi tiet cong no khach hang.</li>
-            <li>Kiem tra tong doanh so, da thanh toan va cong no hien tai.</li>
-            <li>Tiep tuc xu ly giao dich tai trang Khach hang hoac Don hang lien quan.</li>
-            <li>Theo doi lai lich su mua hang trong chi tiet khach hang.</li>
+            <li>Chọn khách hàng trong danh sách bên trái.</li>
+            <li>Bấm Thu nợ để mở chi tiết công nợ khách hàng.</li>
+            <li>Kiểm tra tổng doanh số, đã thanh toán và công nợ hiện tại.</li>
+            <li>Tiếp tục xử lý giao dịch tại trang Khách hàng hoặc Đơn hàng liên quan.</li>
+            <li>Theo dõi lại lịch sử mua hàng trong chi tiết khách hàng.</li>
           </ol>
         </div>
       </div>

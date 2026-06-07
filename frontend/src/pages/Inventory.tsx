@@ -92,7 +92,7 @@ export function Inventory() {
         if (!active) {
           return;
         }
-        setError(nextError?.message ?? 'Khong tai duoc du lieu ton kho.');
+        setError(nextError?.message ?? 'Không tải được dữ liệu tồn kho.');
       } finally {
         if (active) {
           setIsLoading(false);
@@ -136,9 +136,9 @@ export function Inventory() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 shrink-0">
         <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-slate-500 mb-1">Tong san pham trong kho</p>
+            <p className="text-sm font-medium text-slate-500 mb-1">Tổng sản phẩm trong kho</p>
             <h4 className="text-2xl font-bold text-slate-800">
-              {formatNumber(visibleRows.length)} <span className="text-sm font-normal text-slate-500">ma hang</span>
+              {formatNumber(visibleRows.length)} <span className="text-sm font-normal text-slate-500">mã hàng</span>
             </h4>
           </div>
           <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
@@ -151,9 +151,9 @@ export function Inventory() {
           className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between text-left transition-colors hover:border-red-200 hover:bg-red-50/40"
         >
           <div>
-            <p className="text-sm font-medium text-slate-500 mb-1">Sap het hang</p>
+            <p className="text-sm font-medium text-slate-500 mb-1">Sắp hết hàng</p>
             <h4 className="text-2xl font-bold text-red-600">
-              {formatNumber(lowStockCount)} <span className="text-sm font-normal text-slate-500">mat hang can nhap</span>
+              {formatNumber(lowStockCount)} <span className="text-sm font-normal text-slate-500">mặt hàng cần nhập</span>
             </h4>
           </div>
           <div className="p-3 bg-red-50 text-red-600 rounded-lg">
@@ -162,9 +162,9 @@ export function Inventory() {
         </button>
         <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-slate-500 mb-1">Tong gia tri ton kho</p>
+            <p className="text-sm font-medium text-slate-500 mb-1">Tổng giá trị tồn kho</p>
             <h4 className="text-2xl font-bold text-slate-800">
-              {formatNumber(totalStockValue)} <span className="text-sm font-normal text-slate-500">d</span>
+              {formatNumber(totalStockValue)} <span className="text-sm font-normal text-slate-500">đ</span>
             </h4>
           </div>
           <div className="p-3 bg-green-50 text-green-600 rounded-lg">
@@ -181,7 +181,7 @@ export function Inventory() {
               type="text"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Tim mat hang kiem kho..."
+              placeholder="Tìm mặt hàng kiểm kho..."
               className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 transition-shadow shadow-sm"
             />
           </div>
@@ -192,7 +192,7 @@ export function Inventory() {
                 onChange={(event) => setSelectedBranchId(event.target.value)}
                 className="appearance-none rounded-lg border border-slate-200 bg-white py-2 pl-3 pr-9 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
-                <option value="">Tat ca chi nhanh</option>
+                <option value="">Tất cả chi nhánh</option>
                 {branches.map((branch) => (
                   <option key={branch.id} value={branch.id}>
                     {branch.name}
@@ -210,14 +210,14 @@ export function Inventory() {
                   : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >
-              {lowStockOnly ? 'Dang loc sap het hang' : 'Loc sap het hang'}
+              {lowStockOnly ? 'Đang lọc sắp hết hàng' : 'Lọc sắp hết hàng'}
             </button>
             <button
               type="button"
-              onClick={() => setInfoMessage(`Dang xem ton kho ${selectedBranch?.name ?? 'toan he thong'}.`)}
+              onClick={() => setInfoMessage(`Đang xem tồn kho ${selectedBranch?.name ?? 'toàn hệ thống'}.`)}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
             >
-              Kiem kho
+              Kiểm kho
             </button>
           </div>
         </div>
@@ -226,7 +226,7 @@ export function Inventory() {
           <div className="flex flex-1 items-center justify-center text-slate-500">
             <div className="flex flex-col items-center gap-3">
               <Loader2 className="h-8 w-8 animate-spin text-[#0088FF]" />
-              <p className="text-sm font-medium">Dang tai du lieu ton kho...</p>
+              <p className="text-sm font-medium">Đang tải dữ liệu tồn kho...</p>
             </div>
           </div>
         ) : (
@@ -234,20 +234,20 @@ export function Inventory() {
             <table className="w-full text-left border-collapse">
               <thead className="bg-white sticky top-0 z-10 backdrop-blur-sm">
                 <tr className="text-[11px] text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                  <th className="py-3 px-4 font-semibold">Ten san pham</th>
-                  <th className="py-3 px-4 font-semibold">Ma SKU</th>
-                  <th className="py-3 px-4 font-semibold">Danh muc</th>
-                  <th className="py-3 px-4 font-semibold">Nhan hieu</th>
-                  <th className="py-3 px-4 font-semibold">Chi nhanh</th>
-                  <th className="py-3 px-4 text-right font-semibold">Ton kho hien tai</th>
-                  <th className="py-3 px-4 text-center font-semibold">Trang thai</th>
+                  <th className="py-3 px-4 font-semibold">Tên sản phẩm</th>
+                  <th className="py-3 px-4 font-semibold">Mã SKU</th>
+                  <th className="py-3 px-4 font-semibold">Danh mục</th>
+                  <th className="py-3 px-4 font-semibold">Nhãn hiệu</th>
+                  <th className="py-3 px-4 font-semibold">Chi nhánh</th>
+                  <th className="py-3 px-4 text-right font-semibold">Tồn kho hiện tại</th>
+                  <th className="py-3 px-4 text-center font-semibold">Trạng thái</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
                 {visibleRows.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
-                      Chua co du lieu ton kho phu hop.
+                      Chưa có dữ liệu tồn kho phù hợp.
                     </td>
                   </tr>
                 ) : (
@@ -265,7 +265,7 @@ export function Inventory() {
                             state: {
                               selectedProductId: row.product_id,
                               detailTab: 'stock',
-                              message: `Dang mo chi tiet ton kho cua ${row.products?.name ?? 'san pham'}.`,
+                              message: `Đang mở chi tiết tồn kho của ${row.products?.name ?? 'sản phẩm'}.`,
                             },
                           })
                         }
@@ -281,11 +281,11 @@ export function Inventory() {
                         <td className="py-3 px-4 text-center">
                           {lowStock ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-red-100 text-red-700 w-fit">
-                              <AlertTriangle size={12} /> Can nhap
+                              <AlertTriangle size={12} /> Cần nhập
                             </span>
                           ) : (
                             <span className="inline-flex px-2.5 py-1 rounded text-xs font-medium bg-green-100 text-green-700 w-fit">
-                              Du hang
+                              Đủ hàng
                             </span>
                           )}
                         </td>
