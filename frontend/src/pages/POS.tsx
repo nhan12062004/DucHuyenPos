@@ -1,8 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
+  ArrowLeftRight,
   Box,
+  Calendar,
+  ChevronDown,
   Clock,
   Gift,
   ImageIcon,
@@ -27,6 +30,8 @@ import {
   type ProductStockSummary,
 } from '../services/productsService';
 import { salesOrdersService, type SalesOrder } from '../services/salesOrdersService';
+import { staffService, type StaffProfile } from '../services/staffService';
+import { useAuth } from '../context/AuthContext';
 import { cn } from '../utils/cn';
 import { getDeliveryStatusFromTab, parseLegacyDeliveryTab } from '../utils/delivery';
 
@@ -132,6 +137,616 @@ function getPaymentStatus(totalAmount: number, paidAmount: number): SalesOrder['
   return 'partial';
 }
 
+// ─── Vietnam Address API ──────────────────────────────────────────────────────
+
+interface VNProvince { code: number; name: string; }
+interface VNDistrict { code: number; name: string; }
+interface VNWard     { code: number; name: string; }
+
+const VN_API = 'https://provinces.open-api.vn/api';
+
+async function vnFetchProvinces(): Promise<VNProvince[]> {
+  const res = await fetch(`${VN_API}/p/`);
+  return res.json();
+}
+async function vnFetchDistricts(provinceCode: number): Promise<VNDistrict[]> {
+  const res = await fetch(`${VN_API}/p/${provinceCode}?depth=2`);
+  const data = await res.json();
+  return data.districts ?? [];
+}
+async function vnFetchWards(districtCode: number): Promise<VNWard[]> {
+  const res = await fetch(`${VN_API}/d/${districtCode}?depth=2`);
+  const data = await res.json();
+  return data.wards ?? [];
+}
+// ─── AddressSelect: custom searchable dropdown ───────────────────────────────
+
+interface AddressOption { code: number; name: string; }
+
+interface AddressSelectProps {
+  options: AddressOption[];
+  value: string;
+  placeholder: string;
+  disabled?: boolean;
+  loading?: boolean;
+  onChange: (code: string, name: string) => void;
+}
+
+function AddressSelect({ options, value, placeholder, disabled, loading, onChange }: AddressSelectProps) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const selectedLabel = options.find((o) => String(o.code) === value)?.name ?? '';
+
+  const filtered = query.trim()
+    ? options.filter((o) => o.name.toLowerCase().includes(query.toLowerCase()))
+    : options;
+
+  useEffect(() => {
+    if (!open) setQuery('');
+  }, [open]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        disabled={disabled || loading}
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between rounded border border-slate-300 bg-white px-3 py-2 text-left text-[13px] text-slate-700 transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-400"
+      >
+        <span className={selectedLabel ? 'text-slate-800' : 'text-slate-400'}>
+          {loading ? 'Đang tải...' : selectedLabel || placeholder}
+        </span>
+        {loading
+          ? <Loader2 size={14} className="shrink-0 animate-spin text-slate-400" />
+          : <ChevronDown size={14} className={`shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+        }
+      </button>
+
+      {open && !loading && (
+        <div className="absolute left-0 right-0 top-full z-40 mt-1 overflow-hidden rounded border border-slate-200 bg-white shadow-lg">
+          {/* Search input */}
+          <div className="border-b border-slate-100 p-2">
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                autoFocus
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Tìm kiếm..."
+                className="w-full rounded border border-slate-200 py-1.5 pl-7 pr-3 text-[12px] focus:border-blue-400 focus:outline-none"
+              />
+            </div>
+          </div>
+          {/* Options list */}
+          <ul className="max-h-48 overflow-y-auto">
+            <li>
+              <button
+                type="button"
+                onClick={() => { onChange('', ''); setOpen(false); }}
+                className="w-full px-3 py-2 text-left text-[13px] text-slate-400 hover:bg-slate-50"
+              >
+                {placeholder}
+              </button>
+            </li>
+            {filtered.length === 0 ? (
+              <li className="px-3 py-3 text-center text-[12px] text-slate-400">Không tìm thấy</li>
+            ) : (
+              filtered.map((o) => (
+                <li key={o.code}>
+                  <button
+                    type="button"
+                    onClick={() => { onChange(String(o.code), o.name); setOpen(false); }}
+                    className={`w-full px-3 py-2 text-left text-[13px] hover:bg-blue-50 ${String(o.code) === value ? 'bg-blue-50 font-medium text-blue-600' : 'text-slate-700'}`}
+                  >
+                    {o.name}
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── AddCustomerModal ────────────────────────────────────────────────────────
+
+interface AddCustomerModalProps {
+  open: boolean;
+  onClose: () => void;
+  onCreated: (customer: Customer) => void;
+}
+
+function AddCustomerModal({ open, onClose, onCreated }: AddCustomerModalProps) {
+  const backdropRef = useRef<HTMLDivElement>(null);
+  const { user } = useAuth();
+
+  // Basic fields
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+
+  // Vietnam Address API state
+  const [provinces, setProvinces]       = useState<VNProvince[]>([]);
+  const [districts, setDistricts]       = useState<VNDistrict[]>([]);
+  const [wards, setWards]               = useState<VNWard[]>([]);
+  const [provinceCode, setProvinceCode] = useState('');
+  const [provinceName, setProvinceName] = useState('');
+  const [districtCode, setDistrictCode] = useState('');
+  const [districtName, setDistrictName] = useState('');
+  const [wardCode, setWardCode]         = useState('');
+  const [wardName, setWardName]         = useState('');
+  const [loadingProvinces, setLoadingProvinces] = useState(false);
+  const [loadingDistricts, setLoadingDistricts] = useState(false);
+  const [loadingWards, setLoadingWards]         = useState(false);
+  const [addressLine, setAddressLine]   = useState('');
+
+  // Extra fields
+  const [customerCode, setCustomerCode] = useState('');
+  const [assignee, setAssignee] = useState('');
+  const [showExtra, setShowExtra] = useState(false);
+  const [birthdate, setBirthdate] = useState('');
+  const [gender, setGender] = useState('other');
+  const [email, setEmail] = useState('');
+  const [taxCode, setTaxCode] = useState('');
+  const [customerGroup, setCustomerGroup] = useState('');
+  const [website, setWebsite] = useState('');
+  const [customerTags, setCustomerTags] = useState('');
+  // Staff
+  const [staffList, setStaffList] = useState<StaffProfile[]>([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
+  // Saving
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  // Fetch provinces on first open
+  useEffect(() => {
+    if (open && provinces.length === 0) {
+      setLoadingProvinces(true);
+      vnFetchProvinces()
+        .then(setProvinces)
+        .catch(() => {})
+        .finally(() => setLoadingProvinces(false));
+    }
+  }, [open]);
+
+  // Fetch staff on first open → auto-select current user
+  useEffect(() => {
+    if (!open || !user) return;
+
+    // Luôn tạo fallback từ session data (không cần profiles table)
+    const currentUserFallback: StaffProfile = {
+      id: user.id,
+      full_name:
+        (user.user_metadata?.full_name as string | undefined) ||
+        user.email?.split('@')[0] ||
+        'Tôi',
+      role: 'staff',
+      is_active: true,
+    };
+
+    if (staffList.length === 0) {
+      setLoadingStaff(true);
+      staffService.getActive()
+        .then((list) => {
+          // Nếu user hiện tại chưa có trong list, thêm vào đầu
+          const hasCurrentUser = list.some((s) => s.id === user.id);
+          const finalList = hasCurrentUser ? list : [currentUserFallback, ...list];
+          setStaffList(finalList);
+          setAssignee(user.id);
+        })
+        .catch(() => {
+          // API lỗi → dùng fallback chỉ có user hiện tại
+          setStaffList([currentUserFallback]);
+          setAssignee(user.id);
+        })
+        .finally(() => setLoadingStaff(false));
+    } else if (!assignee) {
+      // Đã có list, chỉ set mặc định nếu chưa chọn
+      setAssignee(user.id);
+    }
+  }, [open]);
+
+  // Reset when closed
+  useEffect(() => {
+    if (!open) {
+      setFullName(''); setPhone('');
+      setProvinceCode(''); setProvinceName('');
+      setDistrictCode(''); setDistrictName('');
+      setWardCode(''); setWardName('');
+      setDistricts([]); setWards([]);
+      setAddressLine('');
+      setCustomerCode(''); setAssignee('');
+      setShowExtra(false); setBirthdate('');
+      setGender('other'); setEmail('');
+      setTaxCode(''); setCustomerGroup('');
+      setWebsite(''); setCustomerTags('');
+      setFormError(null);
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (e.target === backdropRef.current) onClose();
+  };
+
+  const handleProvinceChange = async (code: string, name: string) => {
+    setProvinceCode(code); setProvinceName(name);
+    setDistrictCode(''); setDistrictName('');
+    setWardCode(''); setWardName('');
+    setDistricts([]); setWards([]);
+    if (!code) return;
+    setLoadingDistricts(true);
+    try { setDistricts(await vnFetchDistricts(Number(code))); } catch {}
+    finally { setLoadingDistricts(false); }
+  };
+
+  const handleDistrictChange = async (code: string, name: string) => {
+    setDistrictCode(code); setDistrictName(name);
+    setWardCode(''); setWardName('');
+    setWards([]);
+    if (!code) return;
+    setLoadingWards(true);
+    try { setWards(await vnFetchWards(Number(code))); } catch {}
+    finally { setLoadingWards(false); }
+  };
+
+  const handleSubmit = async () => {
+    if (!fullName.trim()) {
+      setFormError('Vui lòng nhập tên khách hàng.');
+      return;
+    }
+    setSaving(true);
+    setFormError(null);
+    try {
+      const addrParts = [addressLine.trim(), wardName, districtName, provinceName].filter(Boolean);
+      const dto: Partial<Customer> = {
+        full_name: fullName.trim(),
+        phone:     phone.trim() || undefined,
+        address:   addrParts.join(', ') || undefined,
+        email:     email.trim() || undefined,
+        tax_code:  taxCode.trim() || undefined,
+        notes:     customerTags.trim() || undefined,
+      };
+      if (customerCode.trim()) dto.code = customerCode.trim();
+      const created = await customersService.create(dto);
+      onCreated(created);
+    } catch (err: any) {
+      setFormError(err?.message ?? 'Tạo khách hàng thất bại.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputCls =
+    'w-full rounded border border-slate-300 px-3 py-2 text-[13px] text-slate-800 placeholder-slate-400 transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
+  const selectCls =
+    'w-full rounded border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none';
+  const labelCls = 'mb-1 block text-[13px] font-medium text-slate-700';
+
+  return (
+    <div
+      ref={backdropRef}
+      onClick={handleBackdropClick}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px]"
+    >
+      <div className="relative flex max-h-[90vh] w-full max-w-[560px] flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
+        {/* Header */}
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-4">
+          <h2 className="text-[15px] font-semibold text-slate-800">Thêm mới khách hàng</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          {formError && (
+            <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-600">
+              {formError}
+            </div>
+          )}
+
+          {/* Row 1: Name + Phone */}
+          <div className="mb-4 grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelCls}>
+                Tên khách hàng <span className="text-red-500">*</span>
+              </label>
+              <input
+                autoFocus
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder=""
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Số điện thoại</label>
+              <input
+                type="text"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder=""
+                className={inputCls}
+              />
+            </div>
+          </div>
+
+          {/* Address section */}
+          <div className="mb-4 rounded border border-slate-200 bg-slate-50 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-400">
+                <div className="h-2.5 w-2.5 rounded-full bg-white" />
+              </div>
+              <span className="text-[13px] font-medium text-slate-700">Địa chỉ mới</span>
+              <Info size={14} className="text-slate-400" />
+            </div>
+
+            {/* Tỉnh / Quận */}
+            <div className="mb-3 grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Tỉnh / Thành phố</label>
+                <AddressSelect
+                  options={provinces}
+                  value={provinceCode}
+                  placeholder="Chọn Tỉnh/Thành phố"
+                  loading={loadingProvinces}
+                  onChange={handleProvinceChange}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Quận / Huyện</label>
+                <AddressSelect
+                  options={districts}
+                  value={districtCode}
+                  placeholder="Chọn Quận/Huyện"
+                  disabled={!provinceCode}
+                  loading={loadingDistricts}
+                  onChange={handleDistrictChange}
+                />
+              </div>
+            </div>
+
+            {/* Phường / Xã */}
+            <div className="mb-3">
+              <label className={labelCls}>Phường / Xã</label>
+              <AddressSelect
+                options={wards}
+                value={wardCode}
+                placeholder="Chọn Phường/Xã"
+                disabled={!districtCode}
+                loading={loadingWards}
+                onChange={(code, name) => { setWardCode(code); setWardName(name); }}
+              />
+            </div>
+
+            {/* Địa chỉ cụ thể */}
+            <div>
+              <label className={labelCls}>
+                Địa chỉ cụ thể <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={addressLine}
+                onChange={(e) => setAddressLine(e.target.value)}
+                placeholder="Nhập số nhà, tên đường, tên khu vực"
+                className={inputCls}
+              />
+            </div>
+
+            {/* Preview full address */}
+            {(addressLine || wardName || districtName || provinceName) && (
+              <p className="mt-2 text-[12px] text-slate-500">
+                📍{' '}
+                {[addressLine, wardName, districtName, provinceName]
+                  .filter(Boolean)
+                  .join(', ')}
+              </p>
+            )}
+          </div>
+
+          {/* Row: Customer code + Assignee */}
+          <div className="mb-4 grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelCls}>Mã khách hàng</label>
+              <input
+                type="text"
+                value={customerCode}
+                onChange={(e) => setCustomerCode(e.target.value)}
+                placeholder="Mã mặc định"
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Nhân viên phụ trách</label>
+              <div className="relative">
+                <select
+                  value={assignee}
+                  disabled={loadingStaff}
+                  onChange={(e) => setAssignee(e.target.value)}
+                  className={selectCls}
+                >
+                  <option value="">
+                    {loadingStaff ? 'Đang tải...' : '-- Chọn nhân viên --'}
+                  </option>
+                  {staffList.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.full_name}
+                      {s.role === 'owner' ? ' (Chủ)' : s.role === 'manager' ? ' (Quản lý)' : ''}
+                    </option>
+                  ))}
+                </select>
+                {loadingStaff
+                  ? <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-slate-400" />
+                  : <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                }
+              </div>
+            </div>
+          </div>
+
+          {/* Toggle extra info */}
+          <button
+            type="button"
+            onClick={() => setShowExtra((v) => !v)}
+            className="mb-4 flex items-center gap-1.5 text-[13px] font-medium text-blue-600 hover:text-blue-700"
+          >
+            <PlusCircle size={15} />
+            Thông tin thêm
+          </button>
+
+          {/* Extra fields */}
+          {showExtra && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Ngày sinh</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={birthdate}
+                      onChange={(e) => setBirthdate(e.target.value)}
+                      placeholder="--/--/----"
+                      className={inputCls}
+                    />
+                    <Calendar size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  </div>
+                </div>
+                <div>
+                  <label className={labelCls}>Giới tính</label>
+                  <div className="relative">
+                    <select
+                      value={gender}
+                      onChange={(e) => setGender(e.target.value)}
+                      className={selectCls}
+                    >
+                      <option value="other">Khác</option>
+                      <option value="male">Nam</option>
+                      <option value="female">Nữ</option>
+                    </select>
+                    <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Email</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="abc@gmail.com"
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Mã số thuế</label>
+                  <input
+                    type="text"
+                    value={taxCode}
+                    onChange={(e) => setTaxCode(e.target.value)}
+                    placeholder=""
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Nhóm khách hàng</label>
+                  <div className="relative">
+                    <select
+                      value={customerGroup}
+                      onChange={(e) => setCustomerGroup(e.target.value)}
+                      className={selectCls}
+                    >
+                      <option value="">Chọn nhóm khách hàng</option>
+                    </select>
+                    <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  </div>
+                </div>
+                <div>
+                  <label className={labelCls}>Website</label>
+                  <input
+                    type="text"
+                    value={website}
+                    onChange={(e) => setWebsite(e.target.value)}
+                    placeholder="Nhập website"
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 flex items-center gap-1 text-[13px] font-medium text-slate-700">
+                  Tags <Info size={13} className="text-blue-400" />
+                </label>
+                <textarea
+                  rows={3}
+                  value={customerTags}
+                  onChange={(e) => setCustomerTags(e.target.value)}
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-[13px] text-slate-800 placeholder-slate-400 transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex shrink-0 items-center justify-between border-t border-slate-100 px-5 py-3">
+          <button
+            type="button"
+            className="flex items-center gap-1.5 text-[13px] font-medium text-blue-600 hover:text-blue-700"
+          >
+            <ArrowLeftRight size={14} />
+            Chuyển đổi địa chỉ
+          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded border border-slate-300 bg-white px-4 py-1.5 text-[13px] font-medium text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              Thoát
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={saving}
+              className="flex items-center gap-1.5 rounded bg-blue-600 px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400"
+            >
+              {saving && <Loader2 size={13} className="animate-spin" />}
+              Thêm
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── POS ─────────────────────────────────────────────────────────────────────
+
 export function POS() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -166,6 +781,7 @@ export function POS() {
   const [hasHydratedRouteOrder, setHasHydratedRouteOrder] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -506,7 +1122,8 @@ export function POS() {
   }
 
   return (
-    <div className="min-h-full bg-[#F4F6F8] pb-20 font-sans text-sm">
+    <>
+      <div className="min-h-full bg-[#F4F6F8] pb-20 font-sans text-sm">
       <div className="mx-auto max-w-[1400px] space-y-6 p-4 md:p-6">
         {error ? (
           <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
@@ -566,6 +1183,13 @@ export function POS() {
 
                   {customerQuery.trim() ? (
                     <div className="mb-4 max-h-56 overflow-auto rounded border border-slate-200 bg-white">
+                      <button
+                        type="button"
+                        onClick={() => setIsAddCustomerOpen(true)}
+                        className="flex w-full items-center gap-2 border-b border-slate-100 px-4 py-3 text-left font-medium text-blue-600 hover:bg-blue-50"
+                      >
+                        <PlusCircle size={16} /> Thêm mới khách hàng
+                      </button>
                       {filteredCustomers.length === 0 ? (
                         <div className="px-4 py-6 text-center text-slate-400">
                           Không tìm thấy khách hàng phù hợp
@@ -1234,5 +1858,17 @@ export function POS() {
         </div>
       </div>
     </div>
+
+    <AddCustomerModal
+      open={isAddCustomerOpen}
+      onClose={() => setIsAddCustomerOpen(false)}
+      onCreated={(newCustomer) => {
+        setCustomers((prev) => [newCustomer, ...prev]);
+        setCustomerId(newCustomer.id);
+        setCustomerQuery('');
+        setIsAddCustomerOpen(false);
+      }}
+    />
+  </>  
   );
 }
