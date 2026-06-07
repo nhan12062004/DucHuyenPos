@@ -759,6 +759,9 @@ export function POS() {
   const [customerQuery, setCustomerQuery] = useState('');
   const [productQuery, setProductQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
+  const [isCustomerDetailsExpanded, setIsCustomerDetailsExpanded] = useState(false);
+  const customerSearchRef = useRef<HTMLDivElement>(null);
   const [cartProducts, setCartProducts] = useState<CartProduct[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState('');
@@ -782,6 +785,16 @@ export function POS() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (customerSearchRef.current && !customerSearchRef.current.contains(e.target as Node)) {
+        setIsCustomerDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -1169,122 +1182,181 @@ export function POS() {
 
               {!hasCustomer ? (
                 <div className="flex h-full flex-col p-5">
-                  <div className="relative mb-4">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                    <input
-                      id="pos-customer-search"
-                      type="text"
-                      value={customerQuery}
-                      onChange={(event) => setCustomerQuery(event.target.value)}
-                      placeholder="Tìm theo tên, SĐT, mã khách hàng ... (F4)"
-                      className="w-full rounded border border-slate-300 py-2 pl-9 pr-4 transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                  </div>
+                  <div className="relative" ref={customerSearchRef}>
+                    <div className="flex items-center rounded border border-blue-400">
+                      <div className="pl-3 text-slate-400">
+                        <Search size={16} />
+                      </div>
+                      <input
+                        id="pos-customer-search"
+                        type="text"
+                        value={customerQuery}
+                        onChange={(event) => setCustomerQuery(event.target.value)}
+                        onFocus={() => setIsCustomerDropdownOpen(true)}
+                        placeholder="Tìm theo tên, SĐT, mã khách hàng ... (F4)"
+                        className="w-full py-2 pl-2 pr-4 text-[13px] text-slate-700 outline-none placeholder:text-slate-400"
+                        autoComplete="off"
+                      />
+                    </div>
 
-                  {customerQuery.trim() ? (
-                    <div className="mb-4 max-h-56 overflow-auto rounded border border-slate-200 bg-white">
-                      <button
-                        type="button"
-                        onClick={() => setIsAddCustomerOpen(true)}
-                        className="flex w-full items-center gap-2 border-b border-slate-100 px-4 py-3 text-left font-medium text-blue-600 hover:bg-blue-50"
-                      >
-                        <PlusCircle size={16} /> Thêm mới khách hàng
-                      </button>
-                      {filteredCustomers.length === 0 ? (
-                        <div className="px-4 py-6 text-center text-slate-400">
-                          Không tìm thấy khách hàng phù hợp
-                        </div>
-                      ) : (
-                        filteredCustomers.slice(0, 8).map((customer) => (
+                    {isCustomerDropdownOpen && (
+                      <div className="absolute left-0 right-0 top-full z-50 mt-0.5 overflow-hidden rounded border border-slate-200 bg-white shadow-lg">
+                        <div className="max-h-80 overflow-y-auto pb-1">
                           <button
-                            key={customer.id}
                             type="button"
-                            onClick={() => handleCustomerSelect(customer)}
-                            className="flex w-full items-start justify-between border-b border-slate-100 px-4 py-3 text-left last:border-b-0 hover:bg-slate-50"
+                            onClick={() => {
+                               setIsCustomerDropdownOpen(false);
+                               setIsAddCustomerOpen(true);
+                            }}
+                            className="flex w-full items-center gap-2 border-b border-slate-100 px-4 py-3 text-left font-medium text-blue-500 hover:bg-slate-50"
                           >
-                            <div>
-                              <p className="font-medium text-slate-800">{customer.full_name}</p>
-                              <p className="mt-0.5 text-[12px] text-slate-500">
-                                {customer.code} {customer.phone ? `· ${customer.phone}` : ''}
-                              </p>
-                              <p className="mt-0.5 text-[12px] text-slate-400">
-                                {customer.address || 'Chưa có địa chỉ'}
-                              </p>
-                            </div>
+                            <PlusCircle size={18} />
+                            Thêm mới khách hàng
                           </button>
-                        ))
-                      )}
-                    </div>
-                  ) : null}
-
-                  <div className="flex flex-1 flex-col items-center justify-center rounded border border-dashed border-slate-200 bg-slate-50/50 py-8 text-slate-400">
-                    <div className="mb-3 flex h-16 w-16 items-center justify-center rounded bg-slate-100">
-                      <svg
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="text-slate-300"
-                      >
-                        <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-                        <circle cx="12" cy="7" r="4" />
-                      </svg>
-                    </div>
-                    <p>Chưa có thông tin khách hàng</p>
+                          
+                          {filteredCustomers.length === 0 && customerQuery.trim() ? (
+                            <div className="px-4 py-6 text-center text-[13px] text-slate-400">
+                              Không tìm thấy khách hàng phù hợp
+                            </div>
+                          ) : (
+                            filteredCustomers.slice(0, 10).map((customer) => (
+                              <button
+                                key={customer.id}
+                                type="button"
+                                onClick={() => {
+                                   handleCustomerSelect(customer);
+                                   setIsCustomerDropdownOpen(false);
+                                }}
+                                className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left hover:bg-slate-50 last:border-b-0"
+                              >
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-500">
+                                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                                  </svg>
+                                </div>
+                                <div>
+                                  <div className="text-[13px] font-medium text-slate-700">{customer.full_name}</div>
+                                  <div className="text-[13px] text-slate-500">{customer.phone}</div>
+                                </div>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
+
+                  {!isCustomerDropdownOpen && !customerQuery.trim() && (
+                    <div className="mt-8 flex flex-1 flex-col items-center justify-center rounded border border-dashed border-slate-200 bg-slate-50/50 py-8 text-slate-400">
+                      <div className="mb-3 flex h-16 w-16 items-center justify-center rounded bg-slate-100">
+                        <svg
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="text-slate-300"
+                        >
+                          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                          <circle cx="12" cy="7" r="4" />
+                        </svg>
+                      </div>
+                      <p>Chưa có thông tin khách hàng</p>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="flex h-full flex-col justify-between p-5">
                   <div className="flex justify-between gap-6">
-                    <div className="flex-1 space-y-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[13px] font-semibold uppercase text-slate-800">Địa chỉ giao hàng</span>
-                        <button
-                          type="button"
-                          onClick={() => setCustomerId('')}
-                          className="font-medium text-blue-600 hover:text-blue-700"
-                        >
-                          Thay đổi
-                        </button>
+                    {/* Left Column */}
+                    <div className="flex-1 space-y-6">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[13px] font-semibold uppercase text-slate-800">Địa chỉ giao hàng</span>
+                          <button
+                            type="button"
+                            className="font-medium text-blue-500 hover:text-blue-600"
+                          >
+                            Thay đổi
+                          </button>
+                        </div>
+                        <p className="text-[13px] text-slate-800">{selectedCustomer.phone || 'Chưa có số điện thoại'}</p>
+                        <p className="text-[13px] text-slate-800">{selectedCustomer.address || 'Chưa có địa chỉ giao hàng'}</p>
                       </div>
-                      <p className="text-slate-800">{selectedCustomer.phone || 'Chưa có số điện thoại'}</p>
-                      <p className="text-slate-800">{selectedCustomer.address || 'Chưa có địa chỉ giao hàng'}</p>
+
+                      {isCustomerDetailsExpanded && (
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[13px] font-semibold uppercase text-slate-800">Địa chỉ nhận hóa đơn</span>
+                            <button
+                              type="button"
+                              className="font-medium text-blue-500 hover:text-blue-600"
+                            >
+                              Thay đổi
+                            </button>
+                          </div>
+                          <p className="text-[13px] text-slate-800">{selectedCustomer.phone || 'Chưa có số điện thoại'}</p>
+                          <p className="text-[13px] text-slate-800">{selectedCustomer.address || 'Chưa có địa chỉ giao hàng'}</p>
+                        </div>
+                      )}
                     </div>
-                    <div className="w-[300px] space-y-3 rounded border border-dashed border-slate-300 bg-white p-4 text-[13px]">
-                      <div className="flex justify-between">
-                        <span className="text-slate-600">Nợ phải thu</span>
-                        <span className="font-medium text-red-500">
-                          {formatNumber(Number(selectedDebt?.current_debt ?? 0))}
-                        </span>
+
+                    {/* Right Column */}
+                    <div className="w-[320px] space-y-4">
+                      <div className="space-y-3 rounded border border-dashed border-slate-300 bg-white p-4 text-[13px]">
+                        <div className="flex justify-between">
+                          <span className="text-slate-600">Nợ phải thu</span>
+                          <span className="font-medium text-red-500">
+                            {formatNumber(Number(selectedDebt?.current_debt ?? 0))}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-600">Tổng chi tiêu (0 đơn)</span>
+                          <span className="font-medium text-blue-500">
+                            {formatNumber(Number(selectedDebt?.total_sales ?? 0))}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-600">Trả hàng (0 sản phẩm)</span>
+                          <span className="font-medium text-red-500">0</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-600">Giao hàng thất bại (0 đơn)</span>
+                          <span className="font-medium text-red-500">0</span>
+                        </div>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-600">Tổng chi tiêu</span>
-                        <span className="font-medium text-blue-600">
-                          {formatNumber(Number(selectedDebt?.total_sales ?? 0))}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-600">Đã thanh toán</span>
-                        <span className="font-medium text-blue-600">
-                          {formatNumber(Number(selectedDebt?.total_paid ?? 0))}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-600">Mã khách hàng</span>
-                        <span className="font-medium text-slate-700">{selectedCustomer.code}</span>
-                      </div>
+
+                      {isCustomerDetailsExpanded && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[13px] font-semibold uppercase text-slate-800">Liên hệ</span>
+                            <button
+                              type="button"
+                              className="font-medium text-blue-500 hover:text-blue-600"
+                            >
+                              Thêm mới
+                            </button>
+                          </div>
+                          <p className="text-[13px] text-slate-400">Chưa có thông tin liên hệ</p>
+                          <input
+                            type="text"
+                            placeholder="Email"
+                            className="w-full rounded border border-slate-300 py-1.5 px-3 text-[13px] outline-none focus:border-blue-500"
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
+                  
                   <div className="mt-4 flex justify-center border-t border-slate-50 pt-4">
                     <button
-                      onClick={() => navigate('/customers')}
-                      className="flex items-center gap-1 font-medium text-blue-600 hover:text-blue-700"
+                      onClick={() => setIsCustomerDetailsExpanded(!isCustomerDetailsExpanded)}
+                      className="flex items-center gap-1 font-medium text-blue-500 hover:text-blue-600"
                     >
-                      Xem thêm
+                      {isCustomerDetailsExpanded ? 'Rút gọn' : 'Mở rộng'}
                       <svg
                         width="14"
                         height="14"
@@ -1294,8 +1366,9 @@ export function POS() {
                         strokeWidth="2"
                         strokeLinecap="round"
                         strokeLinejoin="round"
+                        className={`transition-transform duration-200 ${isCustomerDetailsExpanded ? '' : 'rotate-180'}`}
                       >
-                        <path d="m6 9 6 6 6-6" />
+                        <path d="m18 15-6-6-6 6" />
                       </svg>
                     </button>
                   </div>
