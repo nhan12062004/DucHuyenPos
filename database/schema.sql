@@ -64,6 +64,7 @@ create table if not exists public.customers (
   full_name text not null,
   phone text,
   email citext,
+  birthdate date,
   company_name text,
   tax_code text,
   address text,

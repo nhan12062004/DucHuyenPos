@@ -22,6 +22,7 @@ import {
   customersService,
   type Customer,
   type CustomerDebtSummary,
+  type CustomerGroup,
 } from '../services/customersService';
 import { inventoryService, type Branch } from '../services/inventoryService';
 import {
@@ -305,6 +306,9 @@ function AddCustomerModal({ open, onClose, onCreated }: AddCustomerModalProps) {
   const [customerGroup, setCustomerGroup] = useState('');
   const [website, setWebsite] = useState('');
   const [customerTags, setCustomerTags] = useState('');
+  // Groups
+  const [customerGroupsList, setCustomerGroupsList] = useState<CustomerGroup[]>([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
   // Staff
   const [staffList, setStaffList] = useState<StaffProfile[]>([]);
   const [loadingStaff, setLoadingStaff] = useState(false);
@@ -312,14 +316,24 @@ function AddCustomerModal({ open, onClose, onCreated }: AddCustomerModalProps) {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Fetch provinces on first open
+  // Fetch provinces and groups on first open
   useEffect(() => {
-    if (open && provinces.length === 0) {
+    if (!open) return;
+    
+    if (provinces.length === 0) {
       setLoadingProvinces(true);
       vnFetchProvinces()
         .then(setProvinces)
         .catch(() => {})
         .finally(() => setLoadingProvinces(false));
+    }
+
+    if (customerGroupsList.length === 0) {
+      setLoadingGroups(true);
+      customersService.getGroups()
+        .then(setCustomerGroupsList)
+        .catch(() => {})
+        .finally(() => setLoadingGroups(false));
     }
   }, [open]);
 
@@ -414,14 +428,25 @@ function AddCustomerModal({ open, onClose, onCreated }: AddCustomerModalProps) {
     setFormError(null);
     try {
       const addrParts = [addressLine.trim(), wardName, districtName, provinceName].filter(Boolean);
-      const dto: Partial<Customer> = {
+      
+      let extraNotes = customerTags.trim() ? `Nhãn: ${customerTags.trim()}` : '';
+      if (gender !== 'other') extraNotes += (extraNotes ? ' | ' : '') + `Giới tính: ${gender === 'male' ? 'Nam' : 'Nữ'}`;
+      if (website.trim()) extraNotes += (extraNotes ? ' | ' : '') + `Website: ${website.trim()}`;
+
+      const dto: Partial<Customer> & { created_by?: string } = {
         full_name: fullName.trim(),
         phone:     phone.trim() || undefined,
         address:   addrParts.join(', ') || undefined,
         email:     email.trim() || undefined,
+        birthdate: birthdate.trim() || undefined,
         tax_code:  taxCode.trim() || undefined,
-        notes:     customerTags.trim() || undefined,
+        notes:     extraNotes || undefined,
+        customer_group_id: customerGroup || undefined,
       };
+      
+      // Some backends might allow setting assignee this way, otherwise it's handled by token
+      if (assignee) dto.created_by = assignee;
+      
       if (customerCode.trim()) dto.code = customerCode.trim();
       const created = await customersService.create(dto);
       onCreated(created);
@@ -622,13 +647,11 @@ function AddCustomerModal({ open, onClose, onCreated }: AddCustomerModalProps) {
                   <label className={labelCls}>Ngày sinh</label>
                   <div className="relative">
                     <input
-                      type="text"
+                      type="date"
                       value={birthdate}
                       onChange={(e) => setBirthdate(e.target.value)}
-                      placeholder="--/--/----"
                       className={inputCls}
                     />
-                    <Calendar size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   </div>
                 </div>
                 <div>
@@ -677,12 +700,24 @@ function AddCustomerModal({ open, onClose, onCreated }: AddCustomerModalProps) {
                   <div className="relative">
                     <select
                       value={customerGroup}
+                      disabled={loadingGroups}
                       onChange={(e) => setCustomerGroup(e.target.value)}
                       className={selectCls}
                     >
-                      <option value="">Chọn nhóm khách hàng</option>
+                      <option value="">
+                        {loadingGroups ? 'Đang tải...' : 'Chọn nhóm khách hàng'}
+                      </option>
+                      {customerGroupsList.map((group) => (
+                        <option key={group.id} value={group.id}>
+                          {group.name}
+                        </option>
+                      ))}
                     </select>
-                    <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    {loadingGroups ? (
+                      <Loader2 size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-slate-400" />
+                    ) : (
+                      <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    )}
                   </div>
                 </div>
                 <div>

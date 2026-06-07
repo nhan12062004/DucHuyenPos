@@ -23,6 +23,10 @@ export class CreateCustomerDto {
 
   @IsOptional()
   @IsString()
+  birthdate?: string;
+
+  @IsOptional()
+  @IsString()
   company_name?: string;
 
   @IsOptional()
@@ -59,6 +63,10 @@ export class UpdateCustomerDto {
   @IsOptional()
   @IsEmail()
   email?: string;
+
+  @IsOptional()
+  @IsString()
+  birthdate?: string;
 
   @IsOptional()
   @IsString()
