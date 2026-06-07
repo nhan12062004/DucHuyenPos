@@ -4,11 +4,13 @@ import { SUPABASE_CLIENT } from '../supabase/supabase.constants.js';
 import { CreateSalesOrderDto, UpdateSalesOrderDto } from './dto/sales-order.dto.js';
 import { PaginationDto, PaginatedResult } from '../../common/dto/pagination.dto.js';
 import { generateNextCode, normalizeManualCode } from '../../common/code-generator.js';
+import { ActivityActor, ActivityLogsService } from '../../common/activity-logs.service.js';
 
 @Injectable()
 export class SalesOrdersService {
   constructor(
     @Inject(SUPABASE_CLIENT) private readonly supabase: SupabaseClient,
+    private readonly activityLogsService: ActivityLogsService,
   ) {}
 
   async findAll(query: PaginationDto & { from_date?: string; to_date?: string; payment_status?: string }): Promise<PaginatedResult<any>> {
@@ -61,11 +63,11 @@ export class SalesOrdersService {
       .eq('id', id)
       .single();
 
-    if (error || !data) throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n hÃ ng');
+    if (error || !data) throw new NotFoundException('Không tìm thấy đơn hàng');
     return data;
   }
 
-  async create(dto: CreateSalesOrderDto) {
+  async create(dto: CreateSalesOrderDto, actor?: ActivityActor) {
     const { items, ...orderData } = dto;
 
     orderData.order_no =
@@ -93,14 +95,14 @@ export class SalesOrdersService {
       .select()
       .single();
 
-    if (orderErr || !order) throw new Error(orderErr?.message ?? 'Táº¡o Ä‘Æ¡n hÃ ng tháº¥t báº¡i');
+    if (orderErr || !order) throw new Error(orderErr?.message ?? 'Tạo đơn hàng thất bại');
 
     const itemsToInsert = items.map((item) => ({
       sales_order_id: order.id,
       product_id: item.product_id,
       product_name: item.product_name,
       sku: item.sku,
-      unit_name: item.unit_name ?? 'cÃ¡i',
+      unit_name: item.unit_name ?? 'cái',
       quantity: item.quantity,
       unit_price: item.unit_price,
       discount_amount: item.discount_amount ?? 0,
@@ -113,10 +115,25 @@ export class SalesOrdersService {
 
     if (itemsErr) throw new Error(itemsErr.message);
 
-    return this.findOne(order.id);
+    const createdOrder = await this.findOne(order.id);
+
+    await this.activityLogsService.logActivity({
+      actor,
+      action: 'create',
+      entityType: 'sales_order',
+      entityId: createdOrder.id,
+      description: `${this.activityLogsService.getActorName(actor)} vừa thêm mới đơn hàng ${createdOrder.order_no}`,
+      metadata: {
+        order_no: createdOrder.order_no,
+        total_amount: createdOrder.total_amount,
+        branch_id: createdOrder.branch_id,
+      },
+    });
+
+    return createdOrder;
   }
 
-  async update(id: string, dto: UpdateSalesOrderDto) {
+  async update(id: string, dto: UpdateSalesOrderDto, actor?: ActivityActor) {
     const currentOrder = await this.findOne(id);
     const { items, ...orderData } = dto;
 
@@ -144,7 +161,7 @@ export class SalesOrdersService {
       .select('id')
       .single();
 
-    if (error) throw new NotFoundException('KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n hÃ ng');
+    if (error) throw new NotFoundException('Không tìm thấy đơn hàng');
 
     if (items) {
       const { error: deleteItemsError } = await this.supabase
@@ -160,7 +177,7 @@ export class SalesOrdersService {
           product_id: item.product_id,
           product_name: item.product_name,
           sku: item.sku,
-          unit_name: item.unit_name ?? 'cÃ¡i',
+          unit_name: item.unit_name ?? 'cái',
           quantity: item.quantity,
           unit_price: item.unit_price,
           discount_amount: item.discount_amount ?? 0,
@@ -175,10 +192,28 @@ export class SalesOrdersService {
       }
     }
 
-    return this.findOne(id);
+    const updatedOrder = await this.findOne(id);
+    const isCancelled = orderData.status === 'cancelled' && currentOrder.status !== 'cancelled';
+
+    await this.activityLogsService.logActivity({
+      actor,
+      action: isCancelled ? 'cancel' : 'update',
+      entityType: 'sales_order',
+      entityId: updatedOrder.id,
+      description: isCancelled
+        ? `${this.activityLogsService.getActorName(actor)} vừa hủy đơn hàng ${updatedOrder.order_no}`
+        : `${this.activityLogsService.getActorName(actor)} vừa cập nhật đơn hàng ${updatedOrder.order_no}`,
+      metadata: {
+        order_no: updatedOrder.order_no,
+        total_amount: updatedOrder.total_amount,
+        branch_id: updatedOrder.branch_id,
+      },
+    });
+
+    return updatedOrder;
   }
 
-  async cancel(id: string) {
-    return this.update(id, { status: 'cancelled' });
+  async cancel(id: string, actor?: ActivityActor) {
+    return this.update(id, { status: 'cancelled' }, actor);
   }
 }

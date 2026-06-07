@@ -1,10 +1,11 @@
 import {
-  Controller, Get, Post, Put, Delete, Param, Body, Query,
+  Controller, Get, Post, Put, Delete, Param, Body, Query, Headers,
 } from '@nestjs/common';
 import { CustomersService } from './customers.service.js';
 import { CreateCustomerDto, UpdateCustomerDto } from './dto/customer.dto.js';
 import { CreateCustomerGroupDto, UpdateCustomerGroupDto } from './dto/customer-group.dto.js';
 import { PaginationDto } from '../../common/dto/pagination.dto.js';
+import { decodeActorHeader } from '../../common/actor-header.js';
 
 @Controller('customers')
 export class CustomersController {
@@ -46,17 +47,30 @@ export class CustomersController {
   }
 
   @Post()
-  create(@Body() dto: CreateCustomerDto) {
-    return this.customersService.create(dto);
+  create(
+    @Body() dto: CreateCustomerDto,
+    @Headers('x-actor-id') actorId?: string,
+    @Headers('x-actor-name') actorName?: string,
+  ) {
+    return this.customersService.create(dto, { actorId, actorName: decodeActorHeader(actorName) });
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateCustomerDto) {
-    return this.customersService.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateCustomerDto,
+    @Headers('x-actor-id') actorId?: string,
+    @Headers('x-actor-name') actorName?: string,
+  ) {
+    return this.customersService.update(id, dto, { actorId, actorName: decodeActorHeader(actorName) });
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.customersService.remove(id);
+  remove(
+    @Param('id') id: string,
+    @Headers('x-actor-id') actorId?: string,
+    @Headers('x-actor-name') actorName?: string,
+  ) {
+    return this.customersService.remove(id, { actorId, actorName: decodeActorHeader(actorName) });
   }
 }

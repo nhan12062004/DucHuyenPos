@@ -1,11 +1,13 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../supabase/supabase.constants.js';
+import { ActivityLogsService } from '../../common/activity-logs.service.js';
 
 @Injectable()
 export class DashboardService {
   constructor(
     @Inject(SUPABASE_CLIENT) private readonly supabase: SupabaseClient,
+    private readonly activityLogsService: ActivityLogsService,
   ) {}
 
   async getStats(branchId?: string) {
@@ -55,14 +57,7 @@ export class DashboardService {
         Number(product.reorder_level) > 0,
     );
 
-    let recentOrdersQuery = this.supabase
-      .from('sales_orders')
-      .select('*, customers(full_name)')
-      .order('sold_at', { ascending: false })
-      .limit(10);
-    if (branchId) recentOrdersQuery = recentOrdersQuery.eq('branch_id', branchId);
-    const { data: recentOrders, error: recentOrdersError } = await recentOrdersQuery;
-    if (recentOrdersError) throw new Error(recentOrdersError.message);
+    const recentActivities = await this.activityLogsService.getRecentActivities(10);
 
     const todayRevenue = (todayOrders ?? []).reduce(
       (sum: number, order: any) => sum + Number(order.total_amount),
@@ -84,7 +79,7 @@ export class DashboardService {
       total_customer_debt: totalDebt,
       low_stock_count: lowStock.length,
       low_stock_items: lowStock.slice(0, 5),
-      recent_orders: recentOrders ?? [],
+      recent_activities: recentActivities,
     };
   }
 

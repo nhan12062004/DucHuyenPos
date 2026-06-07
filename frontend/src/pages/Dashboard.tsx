@@ -3,28 +3,31 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import {
-  DollarSign, ShoppingBag, RotateCcw, XCircle,
+  DollarSign, ShoppingBag,
   FileText, CreditCard, Package, Truck, XSquare,
   ChevronDown, ChevronRight, AlertCircle, Loader2,
   TrendingUp, Users, AlertTriangle,
 } from 'lucide-react';
 import { dashboardService } from '../services/dashboardService';
-import type { DashboardStats, RevenueChartPoint } from '../services/dashboardService';
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+import type { DashboardStats, RecentActivity, RevenueChartPoint } from '../services/dashboardService';
 
 function fmt(n: number) {
-  if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + 'tỷ';
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'tr';
-  if (n >= 1_000) return (n / 1_000).toFixed(0) + 'k';
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}tỷ`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}tr`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
   return n.toLocaleString('vi-VN');
 }
 
 function fmtFull(n: number) {
-  return n.toLocaleString('vi-VN') + 'đ';
+  return `${n.toLocaleString('vi-VN')}đ`;
 }
 
-// ─── Dashboard ────────────────────────────────────────────────────────────────
+function getActivityAction(activity: RecentActivity) {
+  if (activity.description.startsWith(activity.actor_name)) {
+    return activity.description.slice(activity.actor_name.length).trim();
+  }
+  return activity.description;
+}
 
 export function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -37,14 +40,16 @@ export function Dashboard() {
   const selectClassName =
     'appearance-none bg-white border border-slate-200 text-slate-700 rounded-lg font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10';
 
-  // Load dashboard stats
   useEffect(() => {
     setLoading(true);
     Promise.all([
       dashboardService.getStats(),
       dashboardService.getRevenueChart(chartDays),
     ])
-      .then(([s, c]) => { setStats(s); setChart(c); })
+      .then(([s, c]) => {
+        setStats(s);
+        setChart(c);
+      })
       .catch((e) => setError(e?.message ?? 'Lỗi tải dữ liệu'))
       .finally(() => setLoading(false));
   }, [chartDays]);
@@ -77,7 +82,6 @@ export function Dashboard() {
     );
   }
 
-  // Format chart data
   const chartData = chart.map((p) => ({
     name: p.date.slice(5).replace('-', '/'),
     total: p.revenue,
@@ -85,11 +89,7 @@ export function Dashboard() {
 
   return (
     <div className="page-shell grid grid-cols-1 gap-6 text-sm xl:grid-cols-4">
-
-      {/* ── Left / Main ── */}
       <div className="xl:col-span-3 space-y-6">
-
-        {/* Kết quả kinh doanh trong ngày */}
         <div className="ui-card">
           <div className="ui-card-header">
             <h2 className="font-bold text-slate-800 uppercase">Kết quả kinh doanh trong ngày</h2>
@@ -121,7 +121,6 @@ export function Dashboard() {
           </div>
         </div>
 
-        {/* Chart */}
         <div className="ui-card relative pt-4">
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-6">
             <div className="flex gap-6">
@@ -182,42 +181,6 @@ export function Dashboard() {
           </div>
         </div>
 
-        {/* Đơn hàng gần nhất */}
-        <div className="ui-card">
-          <div className="ui-card-header">
-            <h2 className="font-bold text-slate-800 uppercase">Đơn hàng gần nhất</h2>
-          </div>
-          {!stats?.recent_orders?.length ? (
-            <div className="px-6 py-10 text-center text-slate-400 text-sm">Chưa có đơn hàng nào</div>
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {stats.recent_orders.map((order) => (
-                <div key={order.id} className="flex items-center justify-between px-6 py-3 hover:bg-slate-50 transition-colors">
-                  <div>
-                    <p className="font-semibold text-slate-800">{order.order_no}</p>
-                    <p className="text-[12px] text-slate-400">{order.customers?.full_name ?? 'Khách lẻ'}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-slate-800">{fmtFull(order.total_amount)}</p>
-                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                      order.payment_status === 'paid'
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : order.payment_status === 'partial'
-                        ? 'bg-amber-100 text-amber-700'
-                        : 'bg-red-100 text-red-700'
-                    }`}>
-                      {order.payment_status === 'paid' ? 'Đã thanh toán'
-                        : order.payment_status === 'partial' ? 'Thanh toán 1 phần'
-                        : 'Chưa thanh toán'}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Đơn hàng chờ xử lý */}
         <div className="ui-card">
           <div className="ui-card-header">
             <h2 className="font-bold text-slate-800 uppercase">Đơn hàng chờ xử lý</h2>
@@ -233,10 +196,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* ── Right Column ── */}
       <div className="xl:col-span-1 space-y-6">
-
-        {/* Hàng sắp hết */}
         <div className="ui-card">
           <div className="ui-card-header">
             <h2 className="font-bold text-slate-800 uppercase flex items-center gap-2">
@@ -264,7 +224,6 @@ export function Dashboard() {
           )}
         </div>
 
-        {/* Thông tin kho */}
         <div className="ui-card">
           <div className="ui-card-header">
             <h2 className="font-bold text-slate-800 uppercase">Thông tin kho</h2>
@@ -283,24 +242,23 @@ export function Dashboard() {
           </div>
         </div>
 
-        {/* Đơn hàng gần đây dạng timeline */}
         <div className="ui-card flex flex-col">
           <div className="ui-card-header">
             <h2 className="font-bold text-slate-800 uppercase">Hoạt động gần đây</h2>
           </div>
           <div className="p-6 flex-1 relative">
-            {!stats?.recent_orders?.length ? (
+            {!stats?.recent_activities?.length ? (
               <p className="text-sm text-slate-400 text-center py-4">Chưa có hoạt động nào</p>
             ) : (
               <>
                 <div className="absolute left-[31px] top-8 bottom-6 w-px bg-slate-200 border-l border-dashed border-slate-300" />
                 <div className="space-y-5 relative ml-1">
-                  {stats.recent_orders.map((order) => (
-                    <div key={order.id}>
+                  {stats.recent_activities.map((activity) => (
+                    <div key={activity.id}>
                       <ActivityItem
-                        user={order.customers?.full_name ?? 'Khách lẻ'}
-                        action={`tạo đơn hàng ${order.order_no} — ${fmtFull(order.total_amount)}`}
-                        time={new Date(order.sold_at).toLocaleString('vi-VN')}
+                        user={activity.actor_name}
+                        action={getActivityAction(activity)}
+                        time={new Date(activity.created_at).toLocaleString('vi-VN')}
                       />
                     </div>
                   ))}
@@ -309,13 +267,10 @@ export function Dashboard() {
             )}
           </div>
         </div>
-
       </div>
     </div>
   );
 }
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function ResultItem({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub?: string }) {
   return (

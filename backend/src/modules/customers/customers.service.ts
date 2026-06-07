@@ -5,11 +5,13 @@ import { CreateCustomerDto, UpdateCustomerDto } from './dto/customer.dto.js';
 import { CreateCustomerGroupDto, UpdateCustomerGroupDto } from './dto/customer-group.dto.js';
 import { PaginationDto, PaginatedResult } from '../../common/dto/pagination.dto.js';
 import { generateNextCode, normalizeManualCode } from '../../common/code-generator.js';
+import { ActivityActor, ActivityLogsService } from '../../common/activity-logs.service.js';
 
 @Injectable()
 export class CustomersService {
   constructor(
     @Inject(SUPABASE_CLIENT) private readonly supabase: SupabaseClient,
+    private readonly activityLogsService: ActivityLogsService,
   ) {}
 
   async findAll(query: PaginationDto): Promise<PaginatedResult<any>> {
@@ -19,7 +21,7 @@ export class CustomersService {
 
     let q = this.supabase
       .from('customers')
-      .select(`*, customer_groups(id, name)`, { count: 'exact' })
+      .select('*, customer_groups(id, name)', { count: 'exact' })
       .range(from, to)
       .order('created_at', { ascending: false });
 
@@ -45,7 +47,7 @@ export class CustomersService {
   async findOne(id: string) {
     const { data, error } = await this.supabase
       .from('customers')
-      .select(`*, customer_groups(id, name), customer_addresses(*)`)
+      .select('*, customer_groups(id, name), customer_addresses(*)')
       .eq('id', id)
       .single();
 
@@ -53,7 +55,7 @@ export class CustomersService {
     return data;
   }
 
-  async create(dto: CreateCustomerDto) {
+  async create(dto: CreateCustomerDto, actor?: ActivityActor) {
     const code =
       normalizeManualCode(dto.code) ??
       await generateNextCode(this.supabase, {
@@ -72,10 +74,23 @@ export class CustomersService {
       .single();
 
     if (error) throw new Error(error.message);
+
+    await this.activityLogsService.logActivity({
+      actor,
+      action: 'create',
+      entityType: 'customer',
+      entityId: data.id,
+      description: `${this.activityLogsService.getActorName(actor)} vừa thêm mới khách hàng ${data.full_name}`,
+      metadata: {
+        customer_name: data.full_name,
+        customer_code: data.code,
+      },
+    });
+
     return data;
   }
 
-  async update(id: string, dto: UpdateCustomerDto) {
+  async update(id: string, dto: UpdateCustomerDto, actor?: ActivityActor) {
     const { data, error } = await this.supabase
       .from('customers')
       .update(dto)
@@ -84,16 +99,44 @@ export class CustomersService {
       .single();
 
     if (error || !data) throw new NotFoundException('Không tìm thấy khách hàng');
+
+    await this.activityLogsService.logActivity({
+      actor,
+      action: 'update',
+      entityType: 'customer',
+      entityId: data.id,
+      description: `${this.activityLogsService.getActorName(actor)} vừa cập nhật khách hàng ${data.full_name}`,
+      metadata: {
+        customer_name: data.full_name,
+        customer_code: data.code,
+      },
+    });
+
     return data;
   }
 
-  async remove(id: string) {
-    const { error } = await this.supabase
+  async remove(id: string, actor?: ActivityActor) {
+    const { data, error } = await this.supabase
       .from('customers')
       .update({ status: 'inactive' })
-      .eq('id', id);
+      .eq('id', id)
+      .select('id, full_name, code')
+      .single();
 
-    if (error) throw new Error(error.message);
+    if (error || !data) throw new NotFoundException('Không tìm thấy khách hàng');
+
+    await this.activityLogsService.logActivity({
+      actor,
+      action: 'delete',
+      entityType: 'customer',
+      entityId: data.id,
+      description: `${this.activityLogsService.getActorName(actor)} vừa xóa khách hàng ${data.full_name}`,
+      metadata: {
+        customer_name: data.full_name,
+        customer_code: data.code,
+      },
+    });
+
     return { message: 'Đã vô hiệu hóa khách hàng' };
   }
 

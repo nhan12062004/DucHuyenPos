@@ -1,6 +1,8 @@
+import { supabase } from '../lib/supabase';
+
 /**
- * API Client — thin wrapper gọi NestJS backend
- * Base URL: VITE_API_URL (mặc định http://localhost:4000/api)
+ * API Client - thin wrapper gọi NestJS backend
+ * Base URL: VITE_API_URL (mặc định /api)
  */
 
 const _apiUrl = import.meta.env.VITE_API_URL as string | undefined;
@@ -15,6 +17,25 @@ export class ApiError extends Error {
     super(message);
     this.name = 'ApiError';
   }
+}
+
+async function getActorHeaders() {
+  const { data } = await supabase.auth.getSession();
+  const user = data.session?.user;
+
+  if (!user) {
+    return {};
+  }
+
+  const actorName =
+    (typeof user.user_metadata?.full_name === 'string' && user.user_metadata.full_name.trim()) ||
+    user.email ||
+    'Người dùng hệ thống';
+
+  return {
+    'x-actor-id': user.id,
+    'x-actor-name': encodeURIComponent(actorName),
+  };
 }
 
 async function request<T>(
@@ -38,6 +59,7 @@ async function request<T>(
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    ...(await getActorHeaders()),
   };
 
   const res = await fetch(url, {
@@ -55,7 +77,6 @@ async function request<T>(
     );
   }
 
-  // 204 No Content
   if (res.status === 204) return undefined as unknown as T;
 
   return res.json() as Promise<T>;

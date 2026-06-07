@@ -1,6 +1,15 @@
 import { api } from './apiClient';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+export interface RecentActivity {
+  id: string;
+  action: string;
+  entity_type: string;
+  entity_id?: string | null;
+  description: string;
+  actor_name: string;
+  created_at: string;
+  metadata: Record<string, unknown>;
+}
 
 export interface DashboardStats {
   today_revenue: number;
@@ -14,22 +23,13 @@ export interface DashboardStats {
     total_on_hand_qty: number;
     reorder_level: number;
   }[];
-  recent_orders: {
-    id: string;
-    order_no: string;
-    total_amount: number;
-    payment_status: string;
-    sold_at: string;
-    customers?: { full_name: string } | null;
-  }[];
+  recent_activities: RecentActivity[];
 }
 
 export interface RevenueChartPoint {
   date: string;
   revenue: number;
 }
-
-// ─── Service ─────────────────────────────────────────────────────────────────
 
 export const dashboardService = {
   getStats: (branchId?: string) =>
