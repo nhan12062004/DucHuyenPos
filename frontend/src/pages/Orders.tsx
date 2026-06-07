@@ -1051,6 +1051,10 @@ export function Orders() {
     );
   }
 
+  if (isListLoading && !selectedOrderId) {
+    return <PageLoader text="Đang tải danh sách đơn hàng..." minHeight="60vh" />;
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -1260,9 +1264,7 @@ export function Orders() {
             </div>
           </div>
 
-          {isListLoading ? (
-            <PageLoader text="Đang tải danh sách đơn hàng..." minHeight="400px" />
-          ) : visibleOrders.length === 0 ? (
+          {visibleOrders.length === 0 ? (
             <div className="flex items-center justify-center py-16 text-slate-500">
               <div className="flex flex-col items-center gap-3">
                 <AlertCircle className="h-8 w-8 text-slate-300" />

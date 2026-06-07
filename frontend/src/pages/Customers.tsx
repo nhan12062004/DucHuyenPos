@@ -793,6 +793,10 @@ export function Customers() {
     return start + index;
   });
 
+  if (isListLoading && !selectedCustomerId) {
+    return <PageLoader text="Đang tải danh sách khách hàng..." minHeight="60vh" />;
+  }
+
   return (
     <div className="flex flex-col gap-6">
       {infoMessage ? (
@@ -861,10 +865,7 @@ export function Customers() {
             </div>
           </div>
 
-          {isListLoading ? (
-            <PageLoader text="Đang tải danh sách khách hàng..." minHeight="500px" />
-          ) : (
-            <div className="min-h-[500px] w-full overflow-x-auto">
+          <div className="min-h-[500px] w-full overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/50 text-[13px] font-semibold text-[#182537]">
@@ -914,7 +915,6 @@ export function Customers() {
                 </tbody>
               </table>
             </div>
-          )}
 
           <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-[13px] text-[#182537]">
             <div className="flex items-center gap-2">

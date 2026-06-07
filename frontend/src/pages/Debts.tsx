@@ -126,6 +126,10 @@ export function Debts() {
 
   const totalDebt = debtors.reduce((sum, customer) => sum + Number(customer.current_debt ?? 0), 0);
 
+  if (isLoading) {
+    return <PageLoader text="Đang tải công nợ khách hàng..." minHeight="60vh" />;
+  }
+
   return (
     <div className="flex flex-col md:flex-row gap-6">
       <div className="flex-1 ui-card overflow-hidden flex flex-col">
@@ -158,9 +162,6 @@ export function Debts() {
         </div>
 
         <div className="w-full overflow-x-auto flex-1">
-          {isLoading ? (
-            <PageLoader text="Đang tải công nợ khách hàng..." minHeight="300px" />
-          ) : (
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/50 text-[13px] font-semibold text-[#182537]">
@@ -218,7 +219,6 @@ export function Debts() {
                 )}
               </tbody>
             </table>
-          )}
         </div>
       </div>
 

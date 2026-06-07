@@ -719,6 +719,10 @@ export function Products() {
     );
   }
 
+  if (isListLoading && !selectedProductId) {
+    return <PageLoader text="Đang tải danh sách sản phẩm..." minHeight="60vh" />;
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -848,10 +852,7 @@ export function Products() {
             </div>
           </div>
 
-          {isListLoading ? (
-            <PageLoader text="Đang tải danh sách sản phẩm..." minHeight="500px" />
-          ) : (
-            <div className="min-h-[500px] w-full overflow-x-auto">
+          <div className="min-h-[500px] w-full overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/50 text-[13px] font-semibold text-[#182537]">
@@ -911,7 +912,6 @@ export function Products() {
                 </tbody>
               </table>
             </div>
-          )}
         </div>
       </div>
     </div>

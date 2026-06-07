@@ -120,6 +120,10 @@ export function Inventory() {
   const lowStockCount = visibleRows.filter(isLowStock).length;
   const selectedBranch = branches.find((branch) => branch.id === selectedBranchId);
 
+  if (isLoading) {
+    return <PageLoader text="Đang tải dữ liệu tồn kho..." minHeight="60vh" />;
+  }
+
   return (
     <div className="flex flex-col gap-6">
       {infoMessage ? (
@@ -223,9 +227,6 @@ export function Inventory() {
           </div>
         </div>
 
-        {isLoading ? (
-          <PageLoader text="Đang tải dữ liệu tồn kho..." minHeight="300px" />
-        ) : (
           <div className="w-full overflow-x-auto">
             <table className="w-full text-left">
               <thead>
@@ -292,7 +293,6 @@ export function Inventory() {
               </tbody>
             </table>
           </div>
-        )}
       </div>
     </div>
   );

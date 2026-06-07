@@ -182,6 +182,10 @@ export function CustomerGroups() {
     }
   };
 
+  if (isLoading) {
+    return <PageLoader text="Đang tải nhóm khách hàng..." minHeight="60vh" />;
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -201,9 +205,6 @@ export function CustomerGroups() {
             </div>
           ) : null}
 
-          {isLoading ? (
-            <PageLoader text="Đang tải nhóm khách hàng..." minHeight="300px" />
-          ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
@@ -258,7 +259,6 @@ export function CustomerGroups() {
                 </tbody>
               </table>
             </div>
-          )}
 
           <div className="flex items-center justify-end border-t border-slate-200 px-5 py-4 text-[13px] text-[#182537]">
             <div className="mr-6 flex items-center gap-2">
