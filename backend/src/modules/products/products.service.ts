@@ -6,6 +6,12 @@ import { PaginationDto, PaginatedResult } from '../../common/dto/pagination.dto.
 import { generateNextCode, normalizeManualCode } from '../../common/code-generator.js';
 import { ActivityActor, ActivityLogsService } from '../../common/activity-logs.service.js';
 
+const PRODUCT_SELECT = `*, 
+        product_categories(id, name), 
+        brands(id, name), 
+        suppliers:default_supplier_id(id, name),
+        default_branch:default_branch_id(id, name, is_default)`;
+
 @Injectable()
 export class ProductsService {
   constructor(
@@ -20,13 +26,7 @@ export class ProductsService {
 
     let q = this.supabase
       .from('products')
-      .select(
-        `*, 
-        product_categories(id, name), 
-        brands(id, name), 
-        suppliers:default_supplier_id(id, name)`,
-        { count: 'exact' },
-      )
+      .select(PRODUCT_SELECT, { count: 'exact' })
       .range(from, to)
       .order('created_at', { ascending: false });
 
@@ -53,11 +53,8 @@ export class ProductsService {
     const { data, error } = await this.supabase
       .from('products')
       .select(
-        `*, 
-        product_categories(id, name), 
-        brands(id, name), 
-        suppliers:default_supplier_id(id, name),
-        branch_stocks(branch_id, on_hand_qty, available_qty, average_cost, branches(name))`,
+        `${PRODUCT_SELECT},
+        branch_stocks(branch_id, on_hand_qty, available_qty, average_cost, branches(id, name))`,
       )
       .eq('id', id)
       .single();
@@ -75,13 +72,30 @@ export class ProductsService {
         prefix: 'SP',
       });
 
+    let defaultBranchId = dto.default_branch_id;
+    if (!defaultBranchId) {
+      const { data: defaultBranch, error: defaultBranchError } = await this.supabase
+        .from('branches')
+        .select('id')
+        .eq('status', 'active')
+        .eq('is_default', true)
+        .maybeSingle();
+
+      if (defaultBranchError) {
+        throw new Error(defaultBranchError.message);
+      }
+
+      defaultBranchId = defaultBranch?.id;
+    }
+
     const { data, error } = await this.supabase
       .from('products')
       .insert({
         ...dto,
+        default_branch_id: defaultBranchId,
         sku,
       })
-      .select()
+      .select(PRODUCT_SELECT)
       .single();
 
     if (error) throw new Error(error.message);
@@ -106,7 +120,7 @@ export class ProductsService {
       .from('products')
       .update(dto)
       .eq('id', id)
-      .select()
+      .select(PRODUCT_SELECT)
       .single();
 
     if (error || !data) throw new NotFoundException('Không tìm thấy sản phẩm');

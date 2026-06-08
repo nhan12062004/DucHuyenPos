@@ -1,5 +1,5 @@
 import {
-  IsString, IsOptional, IsNumber, IsIn, IsArray, ValidateNested, Min, IsUUID,
+  IsString, IsOptional, IsNumber, IsIn, IsArray, ValidateNested, Min, IsUUID, IsDateString,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { DELIVERY_METHODS, DELIVERY_STATUSES } from '../delivery-fields.js';
@@ -44,6 +44,10 @@ export class CreateSalesOrderDto {
   @IsOptional()
   @IsUUID()
   customer_id?: string;
+
+  @IsOptional()
+  @IsUUID()
+  cashier_id?: string;
 
   @IsOptional()
   @IsString()
@@ -97,6 +101,10 @@ export class CreateSalesOrderDto {
   @IsIn(DELIVERY_STATUSES)
   delivery_status?: string;
 
+  @IsOptional()
+  @IsDateString()
+  delivery_due_at?: string;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreateSalesOrderItemDto)
@@ -111,6 +119,14 @@ export class UpdateSalesOrderDto {
   @IsOptional()
   @IsUUID()
   customer_id?: string;
+
+  @IsOptional()
+  @IsUUID()
+  cashier_id?: string;
+
+  @IsOptional()
+  @IsString()
+  order_no?: string;
 
   @IsOptional()
   @IsIn(['pos', 'web', 'phone', 'manual'])
@@ -159,6 +175,10 @@ export class UpdateSalesOrderDto {
   @IsOptional()
   @IsIn(DELIVERY_STATUSES)
   delivery_status?: string;
+
+  @IsOptional()
+  @IsDateString()
+  delivery_due_at?: string;
 
   @IsOptional()
   @IsArray()

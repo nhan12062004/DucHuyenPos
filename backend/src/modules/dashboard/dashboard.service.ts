@@ -66,17 +66,32 @@ export class DashboardService {
     if (topProductsOrdersError) throw new Error(topProductsOrdersError.message);
 
     const topProductsOrderIds = (topProductsOrders ?? []).map((order: any) => order.id).filter(Boolean);
-    let topProducts: Array<{ product_id: string; name: string; sku: string | null; sold_qty: number }> = [];
+    let topProducts: Array<{
+      product_id: string;
+      name: string;
+      sku: string | null;
+      order_count: number;
+      sold_qty: number;
+      revenue: number;
+    }> = [];
 
     if (topProductsOrderIds.length > 0) {
       const { data: orderItems, error: orderItemsError } = await this.supabase
         .from('sales_order_items')
-        .select('product_id, product_name, sku, quantity')
+        .select('sales_order_id, product_id, product_name, sku, quantity, line_total')
         .in('sales_order_id', topProductsOrderIds);
 
       if (orderItemsError) throw new Error(orderItemsError.message);
 
-      const groupedProducts = new Map<string, { product_id: string; name: string; sku: string | null; sold_qty: number }>();
+      const groupedProducts = new Map<string, {
+        product_id: string;
+        name: string;
+        sku: string | null;
+        order_count: number;
+        sold_qty: number;
+        revenue: number;
+        order_ids: Set<string>;
+      }>();
 
       (orderItems ?? []).forEach((item: any) => {
         const key = item.product_id ?? `${item.product_name}-${item.sku ?? ''}`;
@@ -84,14 +99,30 @@ export class DashboardService {
           product_id: item.product_id ?? key,
           name: item.product_name,
           sku: item.sku ?? null,
+          order_count: 0,
           sold_qty: 0,
+          revenue: 0,
+          order_ids: new Set<string>(),
         };
 
         current.sold_qty += Number(item.quantity ?? 0);
+        current.revenue += Number(item.line_total ?? 0);
+        if (item.sales_order_id) {
+          current.order_ids.add(String(item.sales_order_id));
+          current.order_count = current.order_ids.size;
+        }
         groupedProducts.set(key, current);
       });
 
       topProducts = Array.from(groupedProducts.values())
+        .map((item) => ({
+          product_id: item.product_id,
+          name: item.name,
+          sku: item.sku,
+          order_count: item.order_count,
+          sold_qty: item.sold_qty,
+          revenue: item.revenue,
+        }))
         .sort((a, b) => b.sold_qty - a.sold_qty)
         .slice(0, 5);
     }

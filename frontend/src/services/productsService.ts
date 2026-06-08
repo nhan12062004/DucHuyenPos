@@ -11,6 +11,7 @@ export interface Product {
   product_category_id?: string;
   brand_id?: string;
   default_supplier_id?: string;
+  default_branch_id?: string;
   unit_name: string;
   image_url?: string;
   description?: string;
@@ -26,6 +27,7 @@ export interface Product {
   product_categories?: { id: string; name: string } | null;
   brands?: { id: string; name: string } | null;
   suppliers?: { id: string; name: string } | null;
+  default_branch?: { id: string; name: string; is_default?: boolean } | null;
   branch_stocks?: BranchStock[];
 }
 
@@ -34,7 +36,7 @@ export interface BranchStock {
   on_hand_qty: number;
   available_qty: number;
   average_cost: number;
-  branches?: { name: string };
+  branches?: { id?: string; name: string };
 }
 
 export interface ProductCategory {

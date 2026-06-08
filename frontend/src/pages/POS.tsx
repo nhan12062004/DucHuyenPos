@@ -130,6 +130,37 @@ function parseNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function toDateTimeLocalValue(value?: string | null) {
+  if (!value) {
+    return '';
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) {
+    return value;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const pad = (input: number) => String(input).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function toIsoDateTimeValue(value?: string) {
+  if (!value) {
+    return undefined;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return undefined;
+  }
+
+  return date.toISOString();
+}
+
 function getPaymentStatus(totalAmount: number, paidAmount: number): SalesOrder['payment_status'] {
   if (paidAmount <= 0) {
     return 'unpaid';
@@ -787,6 +818,7 @@ function AddCustomerModal({ open, onClose, onCreated }: AddCustomerModalProps) {
 export function POS() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
   const routeState = location.state as { orderId?: string } | null;
   const editingOrderIdFromRoute = routeState?.orderId ?? '';
 
@@ -804,7 +836,9 @@ export function POS() {
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
   const [cartProducts, setCartProducts] = useState<CartProduct[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [staffList, setStaffList] = useState<StaffProfile[]>([]);
   const [branchId, setBranchId] = useState('');
+  const [cashierId, setCashierId] = useState('');
   const [source, setSource] = useState<'pos' | 'web' | 'phone' | 'manual'>('web');
   const [deliveryDue, setDeliveryDue] = useState('');
   const [orderNo, setOrderNo] = useState('');
@@ -820,6 +854,7 @@ export function POS() {
   const [debtSummary, setDebtSummary] = useState<Record<string, CustomerDebtSummary>>({});
   const [loading, setLoading] = useState(true);
   const [hydratingOrder, setHydratingOrder] = useState(false);
+  const [loadingStaff, setLoadingStaff] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [hasHydratedRouteOrder, setHasHydratedRouteOrder] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -842,14 +877,16 @@ export function POS() {
     async function loadData() {
       setLoading(true);
       setError(null);
+      setLoadingStaff(true);
 
       try {
-        const [branchList, customerList, debtList, productList, stockList] = await Promise.all([
+        const [branchList, customerList, debtList, productList, stockList, activeStaff] = await Promise.all([
           inventoryService.getBranches(),
           customersService.getAll({ page: 1, limit: 100, status: 'active' }),
           customersService.getDebtSummary(),
           productsService.getAll({ page: 1, limit: 100, status: 'active' }),
           productsService.getStockSummary(),
+          staffService.getActive().catch(() => [] as StaffProfile[]),
         ]);
 
         if (!active) {
@@ -865,9 +902,27 @@ export function POS() {
           acc[item.customer_id] = item;
           return acc;
         }, {});
+        const currentUserFallback = user
+          ? {
+              id: user.id,
+              full_name:
+                (user.user_metadata?.full_name as string | undefined) ||
+                user.email?.split('@')[0] ||
+                'Tôi',
+              role: 'staff' as const,
+              is_active: true,
+            }
+          : null;
+        const hasCurrentUser = currentUserFallback
+          ? activeStaff.some((staff) => staff.id === currentUserFallback.id)
+          : false;
+        const finalStaffList =
+          currentUserFallback && !hasCurrentUser ? [currentUserFallback, ...activeStaff] : activeStaff;
 
         setBranches(branchList);
-        setBranchId(defaultBranch?.id ?? '');
+        setStaffList(finalStaffList);
+        setBranchId((current) => current || defaultBranch?.id || '');
+        setCashierId((current) => current || currentUserFallback?.id || finalStaffList[0]?.id || '');
         setCustomers(customerList.data);
         setProducts(productList.data);
         setStockSummary(stockMap);
@@ -880,6 +935,7 @@ export function POS() {
       } finally {
         if (active) {
           setLoading(false);
+          setLoadingStaff(false);
         }
       }
     }
@@ -889,7 +945,7 @@ export function POS() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (!editingOrderIdFromRoute || loading || hasHydratedRouteOrder) {
@@ -911,12 +967,13 @@ export function POS() {
         setEditingOrderId(order.id);
         setCustomerId(order.customer_id ?? '');
         setBranchId(order.branch_id);
+        setCashierId(order.cashier_id ?? user?.id ?? '');
         setSource(order.source);
         setOrderNo(order.order_no);
         const parsedNote = parseOrderNote(order.note);
         setOrderNote(parsedNote.note);
         setTags(parsedNote.tags);
-        setDeliveryDue(parsedNote.deliveryDue);
+        setDeliveryDue(toDateTimeLocalValue(order.delivery_due_at ?? parsedNote.deliveryDue));
         setIssueInvoice(parsedNote.issueInvoice);
         setOrderDiscount(Number(order.discount_amount ?? 0));
         setShippingFee(Number(order.shipping_fee ?? 0));
@@ -956,7 +1013,7 @@ export function POS() {
     return () => {
       active = false;
     };
-  }, [editingOrderIdFromRoute, hasHydratedRouteOrder, loading]);
+  }, [editingOrderIdFromRoute, hasHydratedRouteOrder, loading, user]);
 
   const selectedCustomer = customers.find((customer) => customer.id === customerId) ?? null;
   const selectedDebt = selectedCustomer ? debtSummary[selectedCustomer.id] : null;
@@ -1081,6 +1138,7 @@ export function POS() {
     try {
       const orderStatus: SalesOrder['status'] =
         activeDeliveryTab === 'nhan_tai_cua_hang' ? 'completed' : 'pending';
+      const deliveryDueAt = toIsoDateTimeValue(deliveryDue);
       const noteParts = [
         orderNote.trim(),
         tags.trim() ? `Tags: ${tags.trim()}` : '',
@@ -1091,6 +1149,7 @@ export function POS() {
       const payload = {
         branch_id: branchId,
         customer_id: customerId || undefined,
+        cashier_id: cashierId || undefined,
         order_no: orderNo.trim() || undefined,
         source,
         status: orderStatus,
@@ -1102,6 +1161,7 @@ export function POS() {
         delivery_address: selectedCustomer?.address || undefined,
         delivery_method: activeDeliveryTab,
         delivery_status: getDeliveryStatusFromTab(activeDeliveryTab),
+        delivery_due_at: deliveryDueAt,
         items: cartProducts.map((item) => ({
           product_id: item.id,
           product_name: item.name,
@@ -1282,8 +1342,12 @@ export function POS() {
                     )}
                   </div>
 
-                  {!isCustomerDropdownOpen && !customerQuery.trim() && (
-                    <div className="mt-8 flex flex-1 flex-col items-center justify-center rounded border border-dashed border-slate-200 bg-slate-50/50 py-8 text-slate-400">
+                  <div
+                    aria-hidden={isCustomerDropdownOpen || !!customerQuery.trim()}
+                    className={`mt-8 flex flex-1 flex-col items-center justify-center rounded border border-dashed border-slate-200 bg-slate-50/50 py-8 text-slate-400 transition-opacity ${
+                      isCustomerDropdownOpen || customerQuery.trim() ? 'pointer-events-none opacity-0' : 'opacity-100'
+                    }`}
+                  >
                       <div className="mb-3 flex h-16 w-16 items-center justify-center rounded bg-slate-100">
                         <svg
                           width="24"
@@ -1302,7 +1366,6 @@ export function POS() {
                       </div>
                       <p>Chưa có thông tin khách hàng</p>
                     </div>
-                  )}
                 </div>
               ) : (
                 <div className="flex h-full flex-col justify-between p-5">
@@ -1432,15 +1495,24 @@ export function POS() {
                   >
                     {branches.map((branch) => (
                       <option key={branch.id} value={branch.id}>
-                        {branch.name}
+                        {branch.name}{branch.is_default ? ' (Mặc định)' : ''}
                       </option>
                     ))}
                   </select>
                 </div>
                 <div className="flex items-center gap-4">
                   <label className="w-20 text-[13px] text-slate-600">Bán bởi</label>
-                  <select className="flex-1 rounded border border-slate-300 bg-white px-3 py-1.5 text-[13px] focus:border-blue-500 focus:outline-none">
-                    <option>Nhân viên tại quầy</option>
+                  <select
+                    value={cashierId}
+                    onChange={(event) => setCashierId(event.target.value)}
+                    className="flex-1 rounded border border-slate-300 bg-white px-3 py-1.5 text-[13px] focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="">{loadingStaff ? 'Đang tải nhân viên...' : 'Chọn người bán'}</option>
+                    {staffList.map((staff) => (
+                      <option key={staff.id} value={staff.id}>
+                        {staff.full_name}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="flex items-center gap-4">
@@ -1462,7 +1534,7 @@ export function POS() {
                   <label className="w-20 text-[13px] text-slate-600">Hẹn giao</label>
                   <div className="relative flex-1">
                     <input
-                      type="text"
+                      type="datetime-local"
                       value={deliveryDue}
                       onChange={(event) => setDeliveryDue(event.target.value)}
                       className="w-full rounded border border-slate-300 px-3 py-1.5 text-[13px] focus:border-blue-500 focus:outline-none"

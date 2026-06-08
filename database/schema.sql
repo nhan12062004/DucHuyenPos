@@ -130,6 +130,7 @@ create table if not exists public.products (
   product_category_id uuid references public.product_categories(id) on delete set null,
   brand_id uuid references public.brands(id) on delete set null,
   default_supplier_id uuid references public.suppliers(id) on delete set null,
+  default_branch_id uuid references public.branches(id) on delete set null,
   unit_name text not null default 'cai',
   image_url text,
   description text,
@@ -341,6 +342,7 @@ create table if not exists public.activity_logs (
 create index if not exists idx_customers_group_id on public.customers(customer_group_id);
 create index if not exists idx_products_category_id on public.products(product_category_id);
 create index if not exists idx_products_supplier_id on public.products(default_supplier_id);
+create index if not exists idx_products_default_branch_id on public.products(default_branch_id);
 create index if not exists idx_branch_stocks_branch_product on public.branch_stocks(branch_id, product_id);
 create index if not exists idx_sales_orders_customer_id on public.sales_orders(customer_id);
 create index if not exists idx_sales_orders_branch_id on public.sales_orders(branch_id);

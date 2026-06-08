@@ -6,6 +6,7 @@ import {
   Filter,
   Settings,
   ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import {
   customersService,
@@ -441,7 +442,7 @@ export function Customers() {
     const historyRows = selectedCustomerOrders;
 
     return (
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <button
             onClick={() => setSelectedCustomerId(null)}
@@ -473,7 +474,7 @@ export function Customers() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-5">
           {infoMessage ? (
             <div className="mb-4 rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
               {infoMessage}
@@ -785,20 +786,12 @@ export function Customers() {
   }
 
   const totalPages = Math.max(1, Math.ceil((totalRows || 1) / limit));
-  const pageNumbers = Array.from({ length: Math.min(5, totalPages) }, (_, index) => {
-    if (totalPages <= 5) {
-      return index + 1;
-    }
-    const start = Math.max(1, Math.min(page - 2, totalPages - 4));
-    return start + index;
-  });
-
   if (isListLoading && !selectedCustomerId) {
     return <PageLoader text="Đang tải danh sách khách hàng..." fullScreen />;
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       {infoMessage ? (
         <div className="rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
           {infoMessage}
@@ -844,7 +837,7 @@ export function Customers() {
                   setPage(1);
                 }}
                 placeholder="Tìm kiếm theo mã khách hàng, tên, SĐT khách hàng"
-                className="w-full rounded border border-slate-300 bg-white py-2 pl-9 pr-4 text-[13px] transition-colors focus:border-[#0088FF] focus:outline-none focus:ring-1 focus:ring-[#0088FF]"
+                className="w-full rounded border border-slate-300 bg-white py-2 pl-9 pr-4 text-[13px] transition-colors focus:border-[#0088FF] focus:outline-none"
               />
             </div>
 
@@ -916,49 +909,46 @@ export function Customers() {
               </table>
             </div>
 
-          <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-[13px] text-[#182537]">
-            <div className="flex items-center gap-2">
-              <span>Hiển thị</span>
-              <select
-                value={limit}
-                onChange={(event) => {
-                  setLimit(Number(event.target.value));
-                  setPage(1);
-                }}
-                className="rounded border border-slate-300 bg-white px-2 py-1 outline-none focus:border-[#0088FF]"
-              >
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-              <span>kết quả</span>
-              <span className="ml-2 text-slate-500">Từ {pageStart} đến {pageEnd} trên tổng {totalRows}</span>
+          <div className="flex items-center justify-end border-t border-slate-200 px-5 py-4 text-[13px] text-[#182537]">
+            <div className="mr-6 flex items-center gap-2">
+              <span className="text-slate-600">Hiển thị</span>
+              <div className="relative">
+                <select
+                  value={limit}
+                  onChange={(event) => {
+                    setLimit(Number(event.target.value));
+                    setPage(1);
+                  }}
+                  className="appearance-none rounded border border-slate-300 bg-white px-3 py-1 pr-8 text-[#182537] focus:border-[#0088FF] focus:outline-none"
+                >
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <ChevronDown size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-500" />
+              </div>
+              <span className="text-slate-600">kết quả</span>
+            </div>
+            <div className="mr-6 text-slate-600">
+              Từ {pageStart} đến {pageEnd} trên tổng {totalRows}
             </div>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setPage((current) => Math.max(1, current - 1))}
                 disabled={page === 1}
-                className="flex h-8 w-8 items-center justify-center rounded text-slate-400 disabled:opacity-50"
+                className="flex h-7 w-7 items-center justify-center rounded text-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <ChevronLeft size={16} />
               </button>
-              {pageNumbers.map((pageNumber) => (
-                <button
-                  key={pageNumber}
-                  onClick={() => setPage(pageNumber)}
-                  className={`flex h-8 w-8 items-center justify-center rounded transition-colors ${
-                    pageNumber === page ? 'bg-[#0088FF] font-medium text-white' : 'hover:bg-slate-100'
-                  }`}
-                >
-                  {pageNumber}
-                </button>
-              ))}
+              <button className="flex h-7 w-7 items-center justify-center rounded bg-[#0088FF] font-medium text-white">
+                {page}
+              </button>
               <button
                 onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
                 disabled={page === totalPages}
-                className="flex h-8 w-8 rotate-180 items-center justify-center rounded transition-colors hover:bg-slate-100 disabled:opacity-50"
+                className="flex h-7 w-7 items-center justify-center rounded text-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <ChevronLeft size={16} />
+                <ChevronRight size={16} />
               </button>
             </div>
           </div>

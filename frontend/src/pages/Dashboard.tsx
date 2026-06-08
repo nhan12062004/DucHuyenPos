@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LineChart,
@@ -23,7 +23,6 @@ import {
   Loader2,
   TrendingUp,
   Users,
-  ArrowUpRight,
 } from 'lucide-react';
 import {
   dashboardService,
@@ -34,6 +33,8 @@ import {
 } from '../services/dashboardService';
 import { PageLoader } from '../components/PageLoader';
 import { inventoryService, type Branch } from '../services/inventoryService';
+
+const DEFAULT_BRANCH_FILTER = '__default__';
 
 function fmt(value: number) {
   if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)} tỷ`;
@@ -120,16 +121,34 @@ export function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [chartDays, setChartDays] = useState(7);
   const [topProductsDays, setTopProductsDays] = useState(7);
+  const [salesInsightTab, setSalesInsightTab] = useState<'revenue' | 'share'>('revenue');
+  const [topProductsMetric, setTopProductsMetric] = useState<'orders' | 'quantity' | 'revenue'>('quantity');
+  const [isTopProductsMenuOpen, setIsTopProductsMenuOpen] = useState(false);
   const [dashboardBranchId, setDashboardBranchId] = useState('');
   const navigate = useNavigate();
+  const topProductsMenuRef = useRef<HTMLDivElement | null>(null);
 
   const selectClassName =
     'appearance-none bg-white border border-slate-200 text-slate-700 rounded-lg font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10';
+  const defaultBranch = branches.find((branch) => branch.is_default) ?? branches[0] ?? null;
+  const effectiveDashboardBranchId =
+    dashboardBranchId === DEFAULT_BRANCH_FILTER ? defaultBranch?.id ?? '' : dashboardBranchId;
 
   useEffect(() => {
     inventoryService.getBranches().then(setBranches).catch(() => {
       // Keep dashboard usable even if the branch list cannot be loaded.
     });
+  }, []);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (topProductsMenuRef.current && !topProductsMenuRef.current.contains(event.target as Node)) {
+        setIsTopProductsMenuOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   useEffect(() => {
@@ -141,9 +160,9 @@ export function Dashboard() {
 
       try {
         const [nextStats, nextChart, nextInventory] = await Promise.all([
-          dashboardService.getStats(dashboardBranchId || undefined, topProductsDays),
-          dashboardService.getRevenueChart(chartDays, dashboardBranchId || undefined),
-          dashboardService.getInventorySummary(dashboardBranchId || undefined),
+          dashboardService.getStats(effectiveDashboardBranchId || undefined, topProductsDays),
+          dashboardService.getRevenueChart(chartDays, effectiveDashboardBranchId || undefined),
+          dashboardService.getInventorySummary(effectiveDashboardBranchId || undefined),
         ]);
 
         if (!active) {
@@ -170,14 +189,51 @@ export function Dashboard() {
     return () => {
       active = false;
     };
-  }, [chartDays, dashboardBranchId, topProductsDays]);
+  }, [chartDays, effectiveDashboardBranchId, topProductsDays]);
 
   const chartData = chart.map((point) => ({
     name: point.date.slice(5).replace('-', '/'),
     total: point.revenue,
   }));
-  const selectedBranch = branches.find((branch) => branch.id === dashboardBranchId);
-  const branchLabel = selectedBranch?.name ?? 'tất cả chi nhánh';
+  const selectedBranch = branches.find((branch) => branch.id === effectiveDashboardBranchId);
+  const branchLabel =
+    dashboardBranchId && defaultBranch && dashboardBranchId === defaultBranch.id
+      ? 'chi nhánh mặc định'
+      : selectedBranch?.name ?? 'tất cả chi nhánh';
+  const totalTopProductsQty = (stats?.top_products ?? []).reduce((sum, item) => sum + Number(item.sold_qty ?? 0), 0);
+  const shareRows = (stats?.top_products ?? []).map((item) => ({
+    ...item,
+    sharePercent: totalTopProductsQty > 0 ? (Number(item.sold_qty ?? 0) / totalTopProductsQty) * 100 : 0,
+  }));
+  const topProductsRows = [...(stats?.top_products ?? [])].sort((a, b) => {
+    if (topProductsMetric === 'orders') {
+      return Number(b.order_count ?? 0) - Number(a.order_count ?? 0);
+    }
+    if (topProductsMetric === 'revenue') {
+      return Number(b.revenue ?? 0) - Number(a.revenue ?? 0);
+    }
+    return Number(b.sold_qty ?? 0) - Number(a.sold_qty ?? 0);
+  });
+
+  function getTopProductsMetricLabel() {
+    if (topProductsMetric === 'orders') {
+      return 'đơn hàng';
+    }
+    if (topProductsMetric === 'revenue') {
+      return 'doanh thu';
+    }
+    return 'đã bán';
+  }
+
+  function getTopProductsMetricValue(item: DashboardStats['top_products'][number]) {
+    if (topProductsMetric === 'orders') {
+      return fmt(item.order_count ?? 0);
+    }
+    if (topProductsMetric === 'revenue') {
+      return fmtFull(Number(item.revenue ?? 0));
+    }
+    return fmt(item.sold_qty ?? 0);
+  }
 
   const openOrders = (options: {
     message: string;
@@ -221,7 +277,7 @@ export function Dashboard() {
   }) => {
     navigate('/inventory', {
       state: {
-        branchId: dashboardBranchId || undefined,
+        branchId: effectiveDashboardBranchId || undefined,
         lowStockOnly: options.lowStockOnly,
         message: options.message,
       },
@@ -257,30 +313,6 @@ export function Dashboard() {
 
   return (
     <div className="page-shell space-y-6 text-sm">
-      <div className="ui-card">
-        <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-4">
-          <div>
-            <h1 className="text-lg font-bold uppercase tracking-wide text-slate-800">Tổng quan kinh doanh</h1>
-            <p className="mt-1 text-sm text-slate-500">Dữ liệu đang hiển thị theo {branchLabel}.</p>
-          </div>
-          <div className="relative">
-            <select
-              className={`${selectClassName} py-2 pl-4`}
-              value={dashboardBranchId}
-              onChange={(event) => setDashboardBranchId(event.target.value)}
-            >
-              <option value="">Tất cả chi nhánh</option>
-              {branches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          </div>
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 gap-6 text-sm xl:grid-cols-4">
         <div className="xl:col-span-3 space-y-6">
           <div className="ui-card">
@@ -297,7 +329,7 @@ export function Dashboard() {
                   openOrders({
                     message: `Đang xem doanh thu đơn hoàn thành hôm nay của ${branchLabel}.`,
                     filters: {
-                      branchId: dashboardBranchId || undefined,
+                      branchId: effectiveDashboardBranchId || undefined,
                       status: 'completed',
                       datePreset: 'today',
                     },
@@ -312,7 +344,7 @@ export function Dashboard() {
                   openOrders({
                     message: `Đang xem đơn hàng mới hôm nay của ${branchLabel}.`,
                     filters: {
-                      branchId: dashboardBranchId || undefined,
+                      branchId: effectiveDashboardBranchId || undefined,
                       datePreset: 'today',
                     },
                   })
@@ -327,7 +359,7 @@ export function Dashboard() {
                   openOrders({
                     message: `Đang xem doanh thu tháng hiện tại của ${branchLabel}.`,
                     filters: {
-                      branchId: dashboardBranchId || undefined,
+                      branchId: effectiveDashboardBranchId || undefined,
                       status: 'completed',
                       datePreset: 'this_month',
                     },
@@ -344,32 +376,53 @@ export function Dashboard() {
             </div>
           </div>
 
-          <div className="ui-card relative pt-4">
-            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-6">
-              <div>
-                <h2 className="pb-3 font-semibold text-[13px] uppercase tracking-wide text-slate-800">Doanh thu bán hàng</h2>
-              </div>
-              <div className="flex items-center gap-2 pb-2">
+          <div className="ui-card overflow-hidden">
+            <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pr-5 pt-2">
+              <div className="flex">
                 <button
                   type="button"
-                  onClick={() =>
-                    openOrders({
-                      message: `Đang xem các đơn hoàn thành trong ${chartDays} ngày của ${branchLabel}.`,
-                      filters: {
-                        branchId: dashboardBranchId || undefined,
-                        status: 'completed',
-                      },
-                    })
-                  }
-                  className="rounded-md border border-slate-200 px-3 py-1.5 text-[12px] font-semibold text-slate-600 transition-colors hover:bg-slate-50"
+                  onClick={() => setSalesInsightTab('revenue')}
+                  className={`border-b-2 px-4 py-3 text-[14px] font-medium transition-colors ${
+                    salesInsightTab === 'revenue'
+                      ? 'border-[#0088FF] text-[#0088FF]'
+                      : 'border-transparent text-slate-600 hover:text-[#0088FF]'
+                  }`}
                 >
-                  Xem đơn hàng
+                  Doanh thu bán hàng
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setSalesInsightTab('share')}
+                  className={`border-b-2 px-4 py-3 text-[14px] font-medium transition-colors ${
+                    salesInsightTab === 'share'
+                      ? 'border-[#0088FF] text-[#0088FF]'
+                      : 'border-transparent text-slate-600 hover:text-[#0088FF]'
+                  }`}
+                >
+                  Tỷ trọng bán hàng
+                </button>
+              </div>
+              <div className="flex items-center gap-2 pb-2">
+                <div className="relative">
+                  <select
+                    className={`${selectClassName} py-1.5 pl-3 pr-8 text-[12px]`}
+                    value={dashboardBranchId}
+                    onChange={(event) => setDashboardBranchId(event.target.value)}
+                  >
+                    <option value="">Tất cả chi nhánh</option>
+                    <option value={DEFAULT_BRANCH_FILTER}>Chi nhánh mặc định</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                </div>
                 <div className="relative">
                   <select
                     className={`${selectClassName} py-1.5 pl-4`}
-                    value={chartDays}
-                    onChange={(event) => setChartDays(Number(event.target.value))}
+                    value={salesInsightTab === 'revenue' ? chartDays : topProductsDays}
+                    onChange={(event) =>
+                      salesInsightTab === 'revenue'
+                        ? setChartDays(Number(event.target.value))
+                        : setTopProductsDays(Number(event.target.value))
+                    }
                   >
                     <option value={7}>7 ngày qua</option>
                     <option value={30}>30 ngày qua</option>
@@ -380,38 +433,82 @@ export function Dashboard() {
               </div>
             </div>
 
-            <div className="p-6 h-[300px]">
-              {chartData.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-slate-400">
-                  <p className="text-sm">Chưa có dữ liệu doanh thu</p>
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                    <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
-                    <YAxis
-                      tick={{ fontSize: 12, fill: '#94A3B8' }}
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={(value) => fmt(value)}
-                    />
-                    <Tooltip
-                      formatter={(value: number) => [fmtFull(value), 'Doanh thu']}
-                      contentStyle={{ borderRadius: 12, border: '1px solid #E2E8F0', fontSize: 13 }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="total"
-                      stroke="#2563EB"
-                      strokeWidth={2.5}
-                      dot={{ r: 4, fill: '#2563EB', strokeWidth: 0 }}
-                      activeDot={{ r: 6 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
-            </div>
+            {salesInsightTab === 'revenue' ? (
+              <div className="p-6 h-[300px]">
+                {chartData.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                    <p className="text-sm">Chưa có dữ liệu doanh thu</p>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                      <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+                      <YAxis
+                        tick={{ fontSize: 12, fill: '#94A3B8' }}
+                        axisLine={false}
+                        tickLine={false}
+                        tickFormatter={(value) => fmt(value)}
+                      />
+                      <Tooltip
+                        formatter={(value: number) => [fmtFull(value), 'Doanh thu']}
+                        contentStyle={{ borderRadius: 12, border: '1px solid #E2E8F0', fontSize: 13 }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="total"
+                        stroke="#2563EB"
+                        strokeWidth={2.5}
+                        dot={{ r: 4, fill: '#2563EB', strokeWidth: 0 }}
+                        activeDot={{ r: 6 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            ) : (
+              <div className="p-6">
+                {shareRows.length === 0 ? (
+                  <div className="flex h-[252px] flex-col items-center justify-center text-slate-400">
+                    <p className="text-sm">Chưa có dữ liệu tỷ trọng bán hàng</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {shareRows.map((item, index) => (
+                      <button
+                        key={`share-${item.product_id}-${index}`}
+                        type="button"
+                        onClick={() =>
+                          openProducts({
+                            selectedProductId: item.product_id,
+                            searchTerm: item.name,
+                            message: `Đang mở sản phẩm bán chạy ${item.name}.`,
+                          })
+                        }
+                        className="block w-full rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-4 text-left transition-colors hover:bg-slate-50"
+                      >
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-semibold text-slate-800">{item.name}</p>
+                            <p className="truncate text-[11px] uppercase text-slate-400">{item.sku ?? 'N/A'}</p>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p className="text-[14px] font-bold text-slate-800">{item.sharePercent.toFixed(1)}%</p>
+                            <p className="text-[11px] text-slate-400">{fmt(item.sold_qty)} đã bán</p>
+                          </div>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                          <div
+                            className="h-full rounded-full bg-[#0088FF]"
+                            style={{ width: `${Math.max(6, item.sharePercent)}%` }}
+                          ></div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="ui-card">
@@ -428,7 +525,7 @@ export function Dashboard() {
                     message: `Đang xem đơn chờ duyệt của ${branchLabel}.`,
                     activeTab: 'trading',
                     filters: {
-                      branchId: dashboardBranchId || undefined,
+                      branchId: effectiveDashboardBranchId || undefined,
                       status: 'draft',
                       onlyProcessing: true,
                     },
@@ -444,7 +541,7 @@ export function Dashboard() {
                     message: `Đang xem đơn chờ thanh toán của ${branchLabel}.`,
                     activeTab: 'trading',
                     filters: {
-                      branchId: dashboardBranchId || undefined,
+                      branchId: effectiveDashboardBranchId || undefined,
                       paymentStatus: 'open',
                       onlyProcessing: true,
                     },
@@ -460,7 +557,7 @@ export function Dashboard() {
                     message: `Đang xem đơn chờ đóng gói của ${branchLabel}.`,
                     activeTab: 'trading',
                     filters: {
-                      branchId: dashboardBranchId || undefined,
+                      branchId: effectiveDashboardBranchId || undefined,
                       status: 'pending',
                       deliveryStatus: 'pending_packing',
                       onlyProcessing: true,
@@ -477,7 +574,7 @@ export function Dashboard() {
                     message: `Đang xem đơn chờ lấy hàng của ${branchLabel}.`,
                     activeTab: 'trading',
                     filters: {
-                      branchId: dashboardBranchId || undefined,
+                      branchId: effectiveDashboardBranchId || undefined,
                       status: 'pending',
                       deliveryStatus: 'waiting_pick_up',
                       onlyProcessing: true,
@@ -494,7 +591,7 @@ export function Dashboard() {
                     message: `Đang xem đơn đang giao của ${branchLabel}.`,
                     activeTab: 'trading',
                     filters: {
-                      branchId: dashboardBranchId || undefined,
+                      branchId: effectiveDashboardBranchId || undefined,
                       status: 'pending',
                       deliveryStatus: 'delivering',
                       onlyProcessing: true,
@@ -510,7 +607,7 @@ export function Dashboard() {
                   openOrders({
                     message: `Đang xem đơn giao thất bại của ${branchLabel}.`,
                     filters: {
-                      branchId: dashboardBranchId || undefined,
+                      branchId: effectiveDashboardBranchId || undefined,
                       deliveryStatus: 'cancelled_delivery',
                     },
                   })
@@ -518,120 +615,163 @@ export function Dashboard() {
               />
             </div>
           </div>
-        </div>
 
-        <div className="xl:col-span-1 space-y-6">
-          <div className="ui-card overflow-hidden">
-            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-              <h2 className="text-[13px] font-bold uppercase tracking-wide text-slate-800">Top sản phẩm</h2>
-              <div className="flex items-center gap-2">
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <div className="ui-card overflow-hidden">
+              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                <h2 className="text-[13px] font-bold uppercase tracking-wide text-slate-800">Top sản phẩm</h2>
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <select
+                      className="appearance-none rounded-md border border-slate-200 bg-white py-1.5 pl-3 pr-8 text-[12px] font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={topProductsDays}
+                      onChange={(event) => setTopProductsDays(Number(event.target.value))}
+                    >
+                      <option value={7}>7 ngày qua</option>
+                      <option value={30}>30 ngày qua</option>
+                      <option value={90}>3 tháng qua</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                  </div>
+                  <div ref={topProductsMenuRef} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsTopProductsMenuOpen((current) => !current)}
+                      className="rounded-md border border-slate-200 px-3 py-1.5 text-[12px] font-bold tracking-widest text-slate-400 hover:bg-slate-50"
+                    >
+                      ...
+                    </button>
+                    {isTopProductsMenuOpen ? (
+                      <div className="absolute right-0 top-full z-20 mt-2 min-w-[160px] overflow-hidden rounded-md border border-slate-200 bg-white py-1 text-[13px] text-slate-700 shadow-lg shadow-slate-200/70">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTopProductsMetric('orders');
+                            setIsTopProductsMenuOpen(false);
+                          }}
+                          className={`block w-full px-4 py-2 text-left hover:bg-slate-50 ${
+                            topProductsMetric === 'orders' ? 'text-[#0088FF]' : ''
+                          }`}
+                        >
+                          Theo đơn hàng
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTopProductsMetric('quantity');
+                            setIsTopProductsMenuOpen(false);
+                          }}
+                          className={`block w-full px-4 py-2 text-left hover:bg-slate-50 ${
+                            topProductsMetric === 'quantity' ? 'text-[#0088FF]' : ''
+                          }`}
+                        >
+                          Theo số lượng
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTopProductsMetric('revenue');
+                            setIsTopProductsMenuOpen(false);
+                          }}
+                          className={`block w-full px-4 py-2 text-left hover:bg-slate-50 ${
+                            topProductsMetric === 'revenue' ? 'text-[#0088FF]' : ''
+                          }`}
+                        >
+                          Theo doanh thu
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+              {!stats?.top_products?.length ? (
+                <div className="px-4 py-10 text-center text-sm text-slate-400">Chưa có dữ liệu bán hàng</div>
+              ) : (
+                <div className="min-h-[178px] divide-y divide-slate-100">
+                  {topProductsRows.map((item, index) => (
+                    <button
+                      key={`${item.product_id}-${index}`}
+                      type="button"
+                      onClick={() =>
+                        openProducts({
+                          selectedProductId: item.product_id,
+                          searchTerm: item.name,
+                          message: `Đang mở sản phẩm bán chạy ${item.name}.`,
+                        })
+                      }
+                      className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-slate-50"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-500 text-[10px] font-bold text-white">
+                          {fmtRank(index)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-semibold text-slate-800">{item.name}</p>
+                          <p className="truncate text-[11px] uppercase text-slate-400">{item.sku ?? 'N/A'}</p>
+                        </div>
+                      </div>
+                      <div className="ml-3 shrink-0 text-right">
+                        <span className="block text-[13px] font-bold text-slate-700">{getTopProductsMetricValue(item)}</span>
+                        <span className="block text-[11px] text-slate-400">{getTopProductsMetricLabel()}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="ui-card overflow-hidden">
+              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                <h2 className="text-[13px] font-bold uppercase tracking-wide text-slate-800">Thông tin kho</h2>
                 <div className="relative">
                   <select
-                    className="appearance-none rounded-md border border-slate-200 bg-white py-1.5 pl-3 pr-8 text-[12px] font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={topProductsDays}
-                    onChange={(event) => setTopProductsDays(Number(event.target.value))}
+                    className={`${selectClassName} py-1.5 pl-3 pr-8 text-[12px]`}
+                    value={dashboardBranchId}
+                    onChange={(event) => setDashboardBranchId(event.target.value)}
                   >
-                    <option value={7}>7 ngày qua</option>
-                    <option value={30}>30 ngày qua</option>
-                    <option value={90}>3 tháng qua</option>
+                    <option value="">Tất cả chi nhánh</option>
+                    <option value={DEFAULT_BRANCH_FILTER}>Chi nhánh mặc định</option>
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                 </div>
-                <button
-                  type="button"
+              </div>
+              <div className="space-y-3 bg-white px-3 py-4">
+                <InventorySummaryRow
+                  label="Sản phẩm dưới định mức"
+                  value={fmt(inventorySummary?.low_stock_count ?? 0)}
+                  accent="text-red-500"
+                  showAlert
                   onClick={() =>
-                    openProducts({
-                      message: `Đang mở danh sách sản phẩm bán chạy của ${branchLabel}.`,
+                    openInventory({
+                      lowStockOnly: true,
+                      message: `Đang xem sản phẩm cần nhập của ${branchLabel}.`,
                     })
                   }
-                  className="rounded-md border border-slate-200 px-3 py-1.5 text-[12px] font-bold tracking-widest text-slate-400 hover:bg-slate-50"
-                >
-                  ...
-                </button>
+                />
+                <InventorySummaryRow
+                  label="Số tồn kho chi nhánh"
+                  value={fmt(inventorySummary?.total_stock_qty ?? 0)}
+                  onClick={() =>
+                    openInventory({
+                      message: `Đang xem số tồn kho của ${branchLabel}.`,
+                    })
+                  }
+                />
+                <InventorySummaryRow
+                  label="Giá trị tồn kho chi nhánh"
+                  value={fmtFull(inventorySummary?.total_stock_value ?? 0)}
+                  onClick={() =>
+                    openInventory({
+                      message: `Đang xem giá trị tồn kho của ${branchLabel}.`,
+                    })
+                  }
+                />
               </div>
             </div>
-            {!stats?.top_products?.length ? (
-              <div className="px-4 py-10 text-center text-sm text-slate-400">Chưa có dữ liệu bán hàng</div>
-            ) : (
-              <div className="min-h-[178px] divide-y divide-slate-100">
-                {stats.top_products.map((item, index) => (
-                  <button
-                    key={`${item.product_id}-${index}`}
-                    type="button"
-                    onClick={() =>
-                      openProducts({
-                        selectedProductId: item.product_id,
-                        searchTerm: item.name,
-                        message: `Đang mở sản phẩm bán chạy ${item.name}.`,
-                      })
-                    }
-                    className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-slate-50"
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-500 text-[10px] font-bold text-white">
-                        {fmtRank(index)}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-[13px] font-semibold text-slate-800">{item.name}</p>
-                        <p className="truncate text-[11px] uppercase text-slate-400">{item.sku ?? 'N/A'}</p>
-                      </div>
-                    </div>
-                    <span className="ml-3 shrink-0 text-[13px] font-bold text-slate-700">{fmt(item.sold_qty)}</span>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
+        </div>
 
-          <div className="ui-card overflow-hidden">
-            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-              <h2 className="text-[13px] font-bold uppercase tracking-wide text-slate-800">Thông tin kho</h2>
-              <button
-                type="button"
-                onClick={() =>
-                  openInventory({
-                    message: `Đang mở kho hàng của ${branchLabel}.`,
-                  })
-                }
-                className="inline-flex items-center gap-1 text-[12px] font-semibold text-blue-600 hover:underline"
-              >
-                Chi tiết <ArrowUpRight size={14} />
-              </button>
-            </div>
-            <div className="space-y-3 bg-white px-3 py-4">
-              <InventorySummaryRow
-                label="Sản phẩm dưới định mức"
-                value={fmt(inventorySummary?.low_stock_count ?? 0)}
-                accent="text-red-500"
-                showAlert
-                onClick={() =>
-                  openInventory({
-                    lowStockOnly: true,
-                    message: `Đang xem sản phẩm cần nhập của ${branchLabel}.`,
-                  })
-                }
-              />
-              <InventorySummaryRow
-                label="Số tồn kho chi nhánh"
-                value={fmt(inventorySummary?.total_stock_qty ?? 0)}
-                onClick={() =>
-                  openInventory({
-                    message: `Đang xem số tồn kho của ${branchLabel}.`,
-                  })
-                }
-              />
-              <InventorySummaryRow
-                label="Giá trị tồn kho chi nhánh"
-                value={fmtFull(inventorySummary?.total_stock_value ?? 0)}
-                onClick={() =>
-                  openInventory({
-                    message: `Đang xem giá trị tồn kho của ${branchLabel}.`,
-                  })
-                }
-              />
-            </div>
-          </div>
-
+        <div className="xl:col-span-1 space-y-6">
           <div className="ui-card flex flex-col">
             <div className="ui-card-header">
               <h2 className="font-bold text-slate-800 uppercase">Hoạt động gần đây</h2>
@@ -643,7 +783,7 @@ export function Dashboard() {
                 <>
                   <div className="absolute left-[31px] top-8 bottom-6 w-px bg-slate-200 border-l border-dashed border-slate-300" />
                   <div className="space-y-5 relative ml-1">
-                    {stats.recent_activities.map((activity) => {
+                    {stats.recent_activities.slice(0, 10).map((activity) => {
                       const nextRoute = getActivityRoute(activity);
                       return (
                         <div key={activity.id}>

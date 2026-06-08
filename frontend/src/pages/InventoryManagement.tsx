@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import {
   Search,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Filter,
   Printer,
   ImageIcon,
@@ -48,6 +50,8 @@ function formatDate(value?: string) {
 export function InventoryManagement() {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [products, setProducts] = useState<Product[]>([]);
   const [stockMap, setStockMap] = useState<Record<string, ProductStockSummary>>({});
   const [isListLoading, setIsListLoading] = useState(true);
@@ -109,12 +113,17 @@ export function InventoryManagement() {
     });
   }, [products, stockMap]);
 
+  const totalPages = Math.max(1, Math.ceil((visibleProducts.length || 1) / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedProducts = visibleProducts.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const pageStart = pagedProducts.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const pageEnd = pagedProducts.length === 0 ? 0 : pageStart + pagedProducts.length - 1;
   if (isListLoading) {
     return <PageLoader text="Đang tải quản lý kho..." fullScreen />;
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
 
 
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -146,8 +155,8 @@ export function InventoryManagement() {
       </div>
 
       <div className="ui-card overflow-hidden">
-        <div className="flex border-b border-slate-200 px-5 pt-2">
-          <button className="mr-4 border-b-2 border-[#0088FF] px-4 py-3 text-[14px] font-medium text-[#0088FF] transition-colors">
+        <div className="flex border-b border-slate-200 pr-5 pt-2">
+          <button className="border-b-2 border-[#0088FF] px-4 py-3 text-[14px] font-medium text-[#0088FF] transition-colors">
             Tất cả phiên bản sản phẩm
           </button>
         </div>
@@ -160,7 +169,7 @@ export function InventoryManagement() {
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Tìm theo mã sản phẩm, tên sản phẩm, barcode"
-              className="w-full rounded border border-slate-300 bg-white py-2 pl-9 pr-4 text-[13px] transition-colors focus:border-[#0088FF] focus:outline-none focus:ring-1 focus:ring-[#0088FF]"
+              className="w-full rounded border border-slate-300 bg-white py-2 pl-9 pr-4 text-[13px] transition-colors focus:border-[#0088FF] focus:outline-none"
             />
           </div>
 
@@ -202,12 +211,12 @@ export function InventoryManagement() {
                   </th>
                   <th className="px-2 py-3">Ảnh</th>
                   <th className="min-w-[200px] px-2 py-3">Tên phiên bản sản phẩm</th>
-                  <th className="px-2 py-3 text-right">Có thể bán <ChevronDown size={12} className="inline-block text-slate-400" /></th>
-                  <th className="px-2 py-3 text-right">Tồn kho <ChevronDown size={12} className="inline-block text-slate-400" /></th>
+                  <th className="px-2 py-3 text-center">Có thể bán <ChevronDown size={12} className="inline-block text-slate-400" /></th>
+                  <th className="px-2 py-3 text-center">Tồn kho <ChevronDown size={12} className="inline-block text-slate-400" /></th>
                   <th className="px-2 py-3">Ngày khởi tạo <ChevronDown size={12} className="inline-block text-slate-400" /></th>
-                  <th className="px-2 py-3 text-right">Giá bán lẻ</th>
-                  <th className="px-2 py-3 text-right">Giá nhập</th>
-                  <th className="px-5 py-3 text-right">Giá bán buôn</th>
+                  <th className="px-2 py-3 text-center">Giá bán lẻ</th>
+                  <th className="px-2 py-3 text-center">Giá nhập</th>
+                  <th className="px-5 py-3 text-center">Giá bán buôn</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -218,7 +227,7 @@ export function InventoryManagement() {
                     </td>
                   </tr>
                 ) : (
-                  visibleProducts.map((product) => (
+                  pagedProducts.map((product) => (
                     <tr
                       key={product.id}
                       className="cursor-pointer text-[13px] transition-colors hover:bg-slate-50"
@@ -244,22 +253,22 @@ export function InventoryManagement() {
                         </div>
                         <div className="text-[12px] text-slate-400">{product.sku || '---'}</div>
                       </td>
-                      <td className="px-2 py-4 text-right text-[#182537]">
+                      <td className="px-2 py-4 text-center text-[#182537]">
                         {formatNumber(product.available)}
                       </td>
-                      <td className="px-2 py-4 text-right text-[#182537]">
+                      <td className="px-2 py-4 text-center text-[#182537]">
                         {formatNumber(product.instock)}
                       </td>
                       <td className="px-2 py-4 text-[#182537]">
                         {formatDate(product.created_at)}
                       </td>
-                      <td className="px-2 py-4 text-right text-[#182537]">
+                      <td className="px-2 py-4 text-center text-[#182537]">
                         {formatNumber(Number(product.sale_price ?? 0))}
                       </td>
-                      <td className="px-2 py-4 text-right text-[#182537]">
+                      <td className="px-2 py-4 text-center text-[#182537]">
                         {formatNumber(Number(product.cost_price ?? 0))}
                       </td>
-                      <td className="px-5 py-4 text-right text-[#182537]">
+                      <td className="px-5 py-4 text-center text-[#182537]">
                         0
                       </td>
                     </tr>
@@ -269,6 +278,50 @@ export function InventoryManagement() {
             </table>
           </div>
         )}
+
+        <div className="flex items-center justify-end border-t border-slate-200 px-5 py-4 text-[13px] text-[#182537]">
+          <div className="mr-6 flex items-center gap-2">
+            <span className="text-slate-600">Hiển thị</span>
+            <div className="relative">
+              <select
+                value={pageSize}
+                onChange={(event) => {
+                  setPageSize(Number(event.target.value));
+                  setPage(1);
+                }}
+                className="appearance-none rounded border border-slate-300 bg-white px-3 py-1 pr-8 text-[#182537] focus:border-[#0088FF] focus:outline-none"
+              >
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <ChevronDown size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-500" />
+            </div>
+            <span className="text-slate-600">kết quả</span>
+          </div>
+          <div className="mr-6 text-slate-600">
+            Từ {pageStart} đến {pageEnd} trên tổng {visibleProducts.length}
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={safePage === 1}
+              className="flex h-7 w-7 items-center justify-center rounded text-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button className="flex h-7 w-7 items-center justify-center rounded bg-[#0088FF] font-medium text-white">
+              {safePage}
+            </button>
+            <button
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              disabled={safePage === totalPages}
+              className="flex h-7 w-7 items-center justify-center rounded text-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

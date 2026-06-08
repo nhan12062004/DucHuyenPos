@@ -4,7 +4,7 @@ import { mockProducts } from '../services/mockData';
 
 export function CostPrice() {
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <h1 className="text-2xl font-bold text-slate-800">Giá vốn</h1>
         <button className="flex items-center gap-2 rounded bg-[#0088FF] px-4 py-2 text-[14px] font-medium text-white transition-colors hover:bg-blue-700">
@@ -19,7 +19,7 @@ export function CostPrice() {
             <input 
               type="text" 
               placeholder="Tìm sản phẩm cập nhật giá vốn..." 
-              className="w-full rounded border border-slate-300 bg-white py-2 pl-9 pr-4 text-[13px] transition-colors focus:border-[#0088FF] focus:outline-none focus:ring-1 focus:ring-[#0088FF]"
+              className="w-full rounded border border-slate-300 bg-white py-2 pl-9 pr-4 text-[13px] transition-colors focus:border-[#0088FF] focus:outline-none"
             />
           </div>
         </div>

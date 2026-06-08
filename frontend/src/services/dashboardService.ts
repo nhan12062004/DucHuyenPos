@@ -34,7 +34,9 @@ export interface DashboardStats {
     product_id: string;
     name: string;
     sku: string | null;
+    order_count: number;
     sold_qty: number;
+    revenue: number;
   }[];
   recent_activities: RecentActivity[];
 }

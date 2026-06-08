@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Search,
@@ -209,6 +209,23 @@ function isThisMonth(value?: string) {
   );
 }
 
+function isWithinRecentDays(value: string | null | undefined, days: number) {
+  if (!value) {
+    return false;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return false;
+  }
+
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+  return diffDays >= 0 && diffDays <= days;
+}
+
 export function Orders() {
   const [activeTab, setActiveTab] = useState<OrderTab>('all');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -223,8 +240,11 @@ export function Orders() {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [isProcessingHidden, setIsProcessingHidden] = useState(false);
+  const [processingWindowDays, setProcessingWindowDays] = useState<7 | 30 | 90>(90);
+  const [showProcessingWindowMenu, setShowProcessingWindowMenu] = useState(false);
   const [showCustomerExtra, setShowCustomerExtra] = useState(false);
   const [dashboardFilter, setDashboardFilter] = useState<DashboardOrderFilter | null>(null);
+  const processingWindowRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -355,6 +375,24 @@ export function Orders() {
     };
   }, [selectedOrderId]);
 
+  useEffect(() => {
+    if (!showProcessingWindowMenu) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!processingWindowRef.current?.contains(event.target as Node)) {
+        setShowProcessingWindowMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+    };
+  }, [showProcessingWindowMenu]);
+
   const visibleOrders = orders.filter((order) => {
     const matchesTab =
       activeTab === 'all' ? true : order.status === 'draft' || order.status === 'pending';
@@ -414,22 +452,24 @@ export function Orders() {
   const selectedOrder =
     selectedOrderDetail ?? orders.find((order) => order.id === selectedOrderId) ?? null;
 
-  const pendingOrders = orders.filter((order) => order.status === 'draft');
-  const unpaidOrders = orders.filter(
+  const processingOrders = orders.filter((order) => isWithinRecentDays(order.sold_at, processingWindowDays));
+
+  const pendingOrders = processingOrders.filter((order) => order.status === 'draft');
+  const unpaidOrders = processingOrders.filter(
     (order) =>
       order.status !== 'cancelled' &&
       (order.payment_status === 'unpaid' || order.payment_status === 'partial'),
   );
-  const packingOrders = orders.filter(
+  const packingOrders = processingOrders.filter(
     (order) => order.status === 'pending' && order.delivery_status === 'pending_packing',
   );
-  const waitingPickupOrders = orders.filter(
+  const waitingPickupOrders = processingOrders.filter(
     (order) => order.status === 'pending' && order.delivery_status === 'waiting_pick_up',
   );
-  const deliveringOrders = orders.filter(
+  const deliveringOrders = processingOrders.filter(
     (order) => order.status === 'pending' && order.delivery_status === 'delivering',
   );
-  const cancelledDeliveryOrders = orders.filter(
+  const cancelledDeliveryOrders = processingOrders.filter(
     (order) => order.status === 'cancelled' || order.delivery_status === 'cancelled',
   );
   const statusMeta = getOrderStatusMeta(selectedOrder?.status);
@@ -584,7 +624,7 @@ export function Orders() {
     const progress = getTimelineProgress(selectedOrder.status);
 
     return (
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <button
             onClick={() => setSelectedOrderId(null)}
@@ -615,7 +655,7 @@ export function Orders() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-5">
           {infoMessage ? (
             <div className="mb-4 rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
               {infoMessage}
@@ -891,7 +931,7 @@ export function Orders() {
                   </div>
                   <div className="flex">
                     <div className="w-32 text-slate-600">Hẹn giao hàng</div>
-                    <div className="text-[#182537]">: ---</div>
+                    <div className="text-[#182537]">: {formatDateTime(selectedOrder.delivery_due_at)}</div>
                   </div>
                   <div className="flex">
                     <div className="w-32 text-slate-600">Nguồn</div>
@@ -1056,7 +1096,7 @@ export function Orders() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4 text-sm font-medium">
           <button
@@ -1072,15 +1112,25 @@ export function Orders() {
             <Upload size={16} /> Nhập file
           </button>
         </div>
-        <button
-          onClick={() => navigate('/pos')}
-          className="flex items-center gap-2 rounded bg-[#0088FF] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-        >
-          <Plus size={16} /> Tạo đơn hàng
-        </button>
+        <div className="flex items-center gap-3">
+          {isProcessingHidden ? (
+            <button
+              onClick={() => setIsProcessingHidden(false)}
+              className="text-sm font-medium text-[#0088FF] transition-colors hover:text-blue-800"
+            >
+              Hiện đơn hàng cần xử lý
+            </button>
+          ) : null}
+          <button
+            onClick={() => navigate('/pos')}
+            className="flex items-center gap-2 rounded bg-[#0088FF] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+          >
+            <Plus size={16} /> Tạo đơn hàng
+          </button>
+        </div>
       </div>
 
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-5">
         {infoMessage ? (
           <div className="rounded-lg border border-blue-200 bg-blue-50 px-5 py-4 text-sm text-blue-700">
             {infoMessage}
@@ -1093,13 +1143,42 @@ export function Orders() {
           </div>
         ) : null}
 
-        <div className="ui-card">
-          {!isProcessingHidden ? (
+        {!isProcessingHidden ? (
+          <div className="ui-card">
             <div className="p-5">
               <div className="mb-3 flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2 text-[15px] font-semibold uppercase tracking-tight text-[#182537]">
                   ĐƠN HÀNG CẦN XỬ LÝ{' '}
-                  <span className="cursor-pointer text-[14px] font-normal normal-case text-[#0088FF]">
+                  <div ref={processingWindowRef} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowProcessingWindowMenu((current) => !current)}
+                      className="cursor-pointer text-[14px] font-normal normal-case text-[#0088FF]"
+                    >
+                      {processingWindowDays} ngày gần nhất <ChevronDown size={14} className="ml-1 inline" />
+                    </button>
+                    {showProcessingWindowMenu ? (
+                      <div className="absolute left-0 top-full z-20 mt-2 min-w-[180px] overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-[13px] font-medium normal-case text-slate-700 shadow-lg shadow-slate-200/70">
+                        {[7, 30, 90].map((days) => (
+                          <button
+                            key={days}
+                            type="button"
+                            onClick={() => {
+                              setProcessingWindowDays(days as 7 | 30 | 90);
+                              setShowProcessingWindowMenu(false);
+                            }}
+                            className={`flex w-full items-center justify-between px-4 py-2 text-left transition-colors hover:bg-slate-50 ${
+                              processingWindowDays === days ? 'bg-sky-50 text-[#0088FF]' : ''
+                            }`}
+                          >
+                            <span>{days} ngày gần nhất</span>
+                            {processingWindowDays === days ? <Check size={14} /> : null}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                  <span className="hidden">
                     90 ngày gần nhất <ChevronDown size={14} className="ml-1 inline" />
                   </span>
                 </div>
@@ -1178,22 +1257,13 @@ export function Orders() {
                 </div>
               </div>
             </div>
-          ) : (
-            <div className="px-5 py-4 text-right">
-              <button
-                onClick={() => setIsProcessingHidden(false)}
-                className="text-sm font-medium text-[#0088FF] hover:text-blue-800"
-              >
-                Hiện đơn hàng cần xử lý
-              </button>
-            </div>
-          )}
-        </div>
+          </div>
+        ) : null}
 
         <div className="ui-card overflow-hidden">
-          <div className="flex border-b border-slate-200 px-5 pt-2">
+          <div className="flex border-b border-slate-200 pr-5 pt-2">
             <button
-              className={`mr-4 border-b-2 px-4 py-3 text-[14px] font-medium transition-colors ${
+              className={`border-b-2 px-4 py-3 text-[14px] font-medium transition-colors ${
                 activeTab === 'all'
                   ? 'border-[#0088FF] text-[#0088FF]'
                   : 'border-transparent text-slate-600 hover:text-[#0088FF]'
@@ -1222,35 +1292,35 @@ export function Orders() {
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Tìm kiếm theo mã đơn hàng, tên, SĐT khách hàng / người nhận hàng"
-                className="w-full rounded border border-slate-300 bg-white py-2 pl-9 pr-4 text-[13px] transition-colors focus:border-[#0088FF] focus:outline-none focus:ring-1 focus:ring-[#0088FF]"
+                className="w-full rounded border border-slate-300 bg-white py-2 pl-9 pr-4 text-[13px] transition-colors focus:border-[#0088FF] focus:outline-none"
               />
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-0">
               <button
                 onClick={() => setInfoMessage('Lọc ngày tạo sẽ được mở rộng ở bước sau, hiện tại hệ thống đang lấy 200 đơn gần nhất.')}
-                className="flex w-32 items-center justify-between rounded border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
+                className="flex w-32 items-center justify-between rounded-l border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
               >
                 <span>Ngày tạo</span>
                 <ChevronDown size={14} className="text-slate-400" />
               </button>
               <button
                 onClick={() => setInfoMessage('Bạn có thể dùng tab và ô tìm kiếm để lọc nhanh trạng thái giao dịch hiện tại.')}
-                className="flex w-32 items-center justify-between rounded border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
+                className="-ml-px flex w-32 items-center justify-between border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
               >
                 <span>Trạng thái</span>
                 <ChevronDown size={14} className="text-slate-400" />
               </button>
               <button
                 onClick={() => setInfoMessage('Chức năng lọc theo nhân viên sẽ được nối khi backend có dữ liệu người bán.')}
-                className="flex w-[160px] items-center justify-between rounded border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
+                className="-ml-px flex w-[190px] items-center justify-between border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
               >
-                <span className="truncate">Nhân viên phụ trách</span>
+                <span>Nhân viên phụ trách</span>
                 <ChevronDown size={14} className="shrink-0 text-slate-400" />
               </button>
               <button
                 onClick={() => setInfoMessage('Bộ lọc khác sẽ được mở rộng khi có thêm trạng thái vận chuyển từ backend.')}
-                className="flex w-32 items-center justify-between rounded border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
+                className="-ml-px flex w-32 items-center justify-between rounded-r border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
               >
                 <span>Bộ lọc khác</span>
                 <Filter size={14} className="text-slate-400" />

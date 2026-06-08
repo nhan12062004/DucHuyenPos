@@ -125,7 +125,7 @@ export function Inventory() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       {infoMessage ? (
         <div className="rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
           {infoMessage}
@@ -187,7 +187,7 @@ export function Inventory() {
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Tìm mặt hàng kiểm kho..."
-              className="w-full rounded border border-slate-300 bg-white py-2 pl-9 pr-4 text-[13px] transition-colors focus:border-[#0088FF] focus:outline-none focus:ring-1 focus:ring-[#0088FF]"
+              className="w-full rounded border border-slate-300 bg-white py-2 pl-9 pr-4 text-[13px] transition-colors focus:border-[#0088FF] focus:outline-none"
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">

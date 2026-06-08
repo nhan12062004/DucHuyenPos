@@ -25,6 +25,7 @@ export class SalesOrdersService {
         `*, 
         customers(id, full_name, phone), 
         branches(id, name),
+        cashier:cashier_id(id, full_name, branch_id),
         sales_order_items(*, products(name, sku))`,
         { count: 'exact' },
       )
@@ -58,6 +59,7 @@ export class SalesOrdersService {
         `*, 
         customers(id, full_name, phone, address), 
         branches(id, name),
+        cashier:cashier_id(id, full_name, branch_id),
         sales_order_items(*, products(name, sku, image_url)),
         sales_payments(*)`,
       )
@@ -138,6 +140,9 @@ export class SalesOrdersService {
   async update(id: string, dto: UpdateSalesOrderDto, actor?: ActivityActor) {
     const currentOrder = await this.findOne(id);
     const { items, ...orderData } = dto;
+    if (orderData.order_no) {
+      orderData.order_no = normalizeManualCode(orderData.order_no) ?? currentOrder.order_no;
+    }
     const deliveryFields = resolveDeliveryFields({
       status: orderData.status ?? currentOrder.status,
       delivery_method: orderData.delivery_method ?? currentOrder.delivery_method,

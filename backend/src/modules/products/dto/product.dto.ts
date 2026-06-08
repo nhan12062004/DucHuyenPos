@@ -36,6 +36,10 @@ export class CreateProductDto {
 
   @IsOptional()
   @IsString()
+  default_branch_id?: string;
+
+  @IsOptional()
+  @IsString()
   unit_name?: string = 'cái';
 
   @IsOptional()
@@ -93,6 +97,10 @@ export class UpdateProductDto {
   @IsOptional()
   @IsString()
   default_supplier_id?: string;
+
+  @IsOptional()
+  @IsString()
+  default_branch_id?: string;
 
   @IsOptional()
   @IsString()

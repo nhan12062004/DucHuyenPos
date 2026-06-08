@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   Copy,
   ImageIcon,
+  Info,
 } from 'lucide-react';
 import {
   productsService,
@@ -19,6 +20,7 @@ import {
   type ProductCategory,
   type ProductStockSummary,
 } from '../services/productsService';
+import { inventoryService, type Branch } from '../services/inventoryService';
 import { PageLoader } from '../components/PageLoader';
 
 type ProductDetailTab = 'stock' | 'history';
@@ -81,6 +83,10 @@ function buildProductsData(products: Product[], stockMap: Record<string, Product
   });
 }
 
+function getSystemDefaultBranch(branches: Branch[]) {
+  return branches.find((branch) => branch.is_default) ?? branches[0] ?? null;
+}
+
 export function Products() {
   const [activeTab, setActiveTab] = useState('all');
   const [detailTab, setDetailTab] = useState<ProductDetailTab>('stock');
@@ -94,6 +100,7 @@ export function Products() {
   const [selectedProductDetail, setSelectedProductDetail] = useState<Product | null>(null);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [stockMap, setStockMap] = useState<Record<string, ProductStockSummary>>({});
   const [isListLoading, setIsListLoading] = useState(true);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
@@ -103,6 +110,7 @@ export function Products() {
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const systemDefaultBranch = useMemo(() => getSystemDefaultBranch(branches), [branches]);
 
   useEffect(() => {
     try {
@@ -169,7 +177,7 @@ export function Products() {
       setListError(null);
 
       try {
-        const [productsResponse, stockSummary, categoriesResponse, brandsResponse] = await Promise.all([
+        const [productsResponse, stockSummary, categoriesResponse, brandsResponse, branchesResponse] = await Promise.all([
           productsService.getAll({
             page: 1,
             limit: 200,
@@ -179,6 +187,7 @@ export function Products() {
           productsService.getStockSummary(),
           productsService.getCategories(),
           productsService.getBrands(),
+          inventoryService.getBranches(),
         ]);
 
         if (!active) {
@@ -194,6 +203,7 @@ export function Products() {
         setStockMap(nextStockMap);
         setCategories(categoriesResponse);
         setBrands(brandsResponse);
+        setBranches(branchesResponse);
       } catch (error: any) {
         if (!active) {
           return;
@@ -381,6 +391,7 @@ export function Products() {
         unit_name: unitName.trim() || 'cái',
         sale_price: Number.isFinite(salePrice) ? salePrice : 0,
         cost_price: Number.isFinite(costPrice) ? costPrice : 0,
+        default_branch_id: systemDefaultBranch?.id,
         status: 'active',
       });
 
@@ -448,6 +459,31 @@ export function Products() {
       return;
     }
 
+    let nextDefaultBranchId = selectedProduct.default_branch_id ?? systemDefaultBranch?.id;
+    if (branches.length) {
+      const currentBranchId = selectedProduct.default_branch_id ?? systemDefaultBranch?.id;
+      const currentBranchIndex = branches.findIndex((branch) => branch.id === currentBranchId);
+      const branchOptions = branches
+        .map((branch, index) =>
+          `${index + 1}. ${branch.name}${branch.id === currentBranchId ? ' (hiện tại)' : ''}${branch.is_default ? ' [mặc định hệ thống]' : ''}`)
+        .join('\n');
+      const branchInput = window.prompt(
+        `Chi nhánh mặc định:\n${branchOptions}\n\nNhập số tương ứng.`,
+        currentBranchIndex >= 0 ? String(currentBranchIndex + 1) : '',
+      );
+      if (branchInput === null) {
+        return;
+      }
+
+      const branchIndex = Number(branchInput.trim());
+      if (!Number.isInteger(branchIndex) || branchIndex < 1 || branchIndex > branches.length) {
+        setInfoMessage('Chi nhánh mặc định không hợp lệ.');
+        return;
+      }
+
+      nextDefaultBranchId = branches[branchIndex - 1].id;
+    }
+
     try {
       const updated = await productsService.update(selectedProduct.id, {
         name: name.trim(),
@@ -455,6 +491,7 @@ export function Products() {
         sale_price: Number(salePrice) || 0,
         cost_price: Number(costPrice) || 0,
         description: description.trim() || undefined,
+        default_branch_id: nextDefaultBranchId,
       });
 
       setProducts((current) =>
@@ -490,6 +527,7 @@ export function Products() {
         product_category_id: selectedProduct.product_category_id,
         brand_id: selectedProduct.brand_id,
         default_supplier_id: selectedProduct.default_supplier_id,
+        default_branch_id: selectedProduct.default_branch_id,
         status: 'active',
       });
 
@@ -504,39 +542,60 @@ export function Products() {
     }
   };
 
-  if (selectedProduct) {
-    return (
-      <div className="flex h-full flex-col bg-[#f3f4f6]">
-        <div className="z-10 flex shrink-0 items-center justify-between border-b bg-white p-3 px-6">
-          <button
-            onClick={() => setSelectedProductId(null)}
-            className="flex items-center gap-2 text-[14px] font-medium text-slate-600 transition-colors hover:text-[#0088FF]"
-          >
-            <ChevronLeft size={16} /> Quay lại danh sách sản phẩm
-          </button>
-          <div className="flex gap-3">
-            <button
-              onClick={() => setSelectedProductId(null)}
-              className="rounded border border-slate-300 bg-white px-4 py-1.5 text-[13px] font-medium text-slate-700 transition-colors hover:bg-slate-50"
-            >
-              Thoát
-            </button>
-            <button
-              onClick={handleDeleteProduct}
-              className="rounded border border-red-500 bg-white px-4 py-1.5 text-[13px] font-medium text-red-500 transition-colors hover:bg-red-50"
-            >
-              Xóa
-            </button>
-            <button
-              onClick={handleUpdateProduct}
-              className="rounded bg-[#0088FF] px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-blue-700"
-            >
-              Sửa sản phẩm
-            </button>
-          </div>
-        </div>
+  const handleUpdateDefaultBranch = async () => {
+    if (!selectedProduct) {
+      return;
+    }
 
-        <div className="custom-scrollbar flex-1 overflow-auto p-4 pb-20 md:p-6">
+    if (!branches.length) {
+      setInfoMessage('Chưa tải được danh sách chi nhánh.');
+      return;
+    }
+
+    const currentBranchId = selectedProduct.default_branch_id ?? systemDefaultBranch?.id;
+    const currentBranchIndex = branches.findIndex((branch) => branch.id === currentBranchId);
+    const branchOptions = branches
+      .map((branch, index) =>
+        `${index + 1}. ${branch.name}${branch.id === currentBranchId ? ' (hiện tại)' : ''}${branch.is_default ? ' [mặc định hệ thống]' : ''}`)
+      .join('\n');
+    const branchInput = window.prompt(
+      `Chọn chi nhánh mặc định cho ${selectedProduct.name}:\n${branchOptions}\n\nNhập số tương ứng.`,
+      currentBranchIndex >= 0 ? String(currentBranchIndex + 1) : '',
+    );
+    if (branchInput === null) {
+      return;
+    }
+
+    const branchIndex = Number(branchInput.trim());
+    if (!Number.isInteger(branchIndex) || branchIndex < 1 || branchIndex > branches.length) {
+      setInfoMessage('Chi nhánh mặc định không hợp lệ.');
+      return;
+    }
+
+    const nextBranch = branches[branchIndex - 1];
+
+    try {
+      const updated = await productsService.update(selectedProduct.id, {
+        default_branch_id: nextBranch.id,
+      });
+
+      setProducts((current) =>
+        current.map((product) => (product.id === updated.id ? { ...product, ...updated } : product)),
+      );
+      setSelectedProductDetail((current) => (current ? { ...current, ...updated } : updated));
+      setInfoMessage(`Đã cập nhật chi nhánh mặc định sang ${nextBranch.name}.`);
+    } catch (error: any) {
+      setDetailError(error?.message ?? 'Cập nhật chi nhánh mặc định thất bại.');
+    }
+  };
+
+  if (selectedProduct) {
+    const resolvedDefaultBranchId = selectedProduct.default_branch_id ?? systemDefaultBranch?.id;
+    const resolvedDefaultBranchName = selectedProduct.default_branch?.name ?? systemDefaultBranch?.name ?? '---';
+
+    return (
+      <div className="-mx-6 -my-6 flex min-h-full flex-col bg-[#f3f4f6] lg:-mx-7 xl:-mx-8">
+        <div className="custom-scrollbar flex-1 overflow-auto px-6 pb-20 pt-4 lg:px-7 xl:px-8">
           {infoMessage ? (
             <div className="mb-4 rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
               {infoMessage}
@@ -554,6 +613,35 @@ export function Products() {
               Đang cập nhật chi tiết sản phẩm...
             </div>
           ) : null}
+
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+            <button
+              onClick={() => setSelectedProductId(null)}
+              className="flex items-center gap-2 text-[14px] font-medium text-slate-600 transition-colors hover:text-[#0088FF]"
+            >
+              <ChevronLeft size={16} /> Quay lại danh sách sản phẩm
+            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setSelectedProductId(null)}
+                className="rounded border border-slate-300 bg-white px-4 py-1.5 text-[13px] font-medium text-slate-700 transition-colors hover:bg-slate-50"
+              >
+                Thoát
+              </button>
+              <button
+                onClick={handleDeleteProduct}
+                className="rounded border border-red-500 bg-white px-4 py-1.5 text-[13px] font-medium text-red-500 transition-colors hover:bg-red-50"
+              >
+                Xóa
+              </button>
+              <button
+                onClick={handleUpdateProduct}
+                className="rounded bg-[#0088FF] px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-blue-700"
+              >
+                Sửa sản phẩm
+              </button>
+            </div>
+          </div>
 
           <div className="mb-4">
             <h1 className="mb-3 text-[22px] font-semibold text-[#182537]">{selectedProduct.name}</h1>
@@ -583,7 +671,7 @@ export function Products() {
                   <div className="flex"><div className="w-40 text-slate-600">Khối lượng</div><div className="text-[#182537]">: ---</div></div>
                   <div className="flex"><div className="w-40 text-slate-600">Nhóm ngành nghề tính thuế GTGT, TNCN</div><div className="text-[#182537]">: ---</div></div>
                   <div className="flex"><div className="w-40 text-slate-600">Đơn vị tính</div><div className="text-[#182537]">: {selectedProduct.unit_name || '---'}</div></div>
-                  <div className="flex"><div className="w-40 text-slate-600">Tags</div><div className="text-[#182537]">: ---</div></div>
+                  <div className="flex"><div className="w-40 text-slate-600">Chi nhánh mặc định</div><div className="text-[#182537]">: {resolvedDefaultBranchName}</div></div>
                   <div className="flex"><div className="w-40 text-slate-600">Phân loại</div><div className="text-[#182537]">: Sản phẩm thường</div></div>
                   <div className="flex"><div className="w-40 text-slate-600">Ngày tạo</div><div className="text-[#182537]">: {formatDateTime(selectedProduct.created_at)}</div></div>
                   <div className="flex"><button onClick={() => setInfoMessage(selectedProduct.description || 'Sản phẩm chưa có mô tả.')} className="w-40 cursor-pointer text-[#0088FF] hover:underline">Xem mô tả</button></div>
@@ -612,31 +700,55 @@ export function Products() {
               </div>
 
               <div className="ui-card w-[300px] shrink-0">
-                <div className="border-b border-slate-100 p-4">
+                <div className="border-b border-slate-100 px-4 py-3.5">
                   <h3 className="text-[15px] font-semibold text-[#182537]">Thông tin thêm</h3>
                 </div>
-                <div className="space-y-4 p-5 text-[13px] text-slate-700">
+                <div className="space-y-3 px-4 py-3.5 text-[13px] text-slate-700">
                   <label className="flex cursor-pointer items-center gap-2">
-                    <input type="checkbox" checked={selectedProduct.status === 'active'} readOnly className="rounded border-slate-300 text-[#0088FF]" />
-                    <span>Cho phép bán</span>
+                    <input
+                      type="checkbox"
+                      checked={selectedProduct.status === 'active'}
+                      readOnly
+                      className="h-3.5 w-3.5 rounded-sm border-slate-300 text-[#0088FF] focus:ring-0"
+                    />
+                    <span className="flex items-center gap-1.5">
+                      Cho phép bán
+                      <Info size={12} className="text-[#4da3ff]" />
+                    </span>
                   </label>
                   <label className="flex cursor-pointer items-center gap-2">
-                    <input type="checkbox" checked={selectedProduct.track_inventory} readOnly className="rounded border-slate-300 text-[#0088FF]" />
-                    <span>Theo dõi tồn kho</span>
+                    <input
+                      type="checkbox"
+                      checked={false}
+                      readOnly
+                      className="h-3.5 w-3.5 rounded-sm border-slate-300 text-[#0088FF] focus:ring-0"
+                    />
+                    <span className="flex items-center gap-1.5">
+                      Áp dụng thuế
+                      <Info size={12} className="text-[#4da3ff]" />
+                    </span>
                   </label>
                   <label className="flex cursor-pointer items-center gap-2">
-                    <input type="checkbox" checked={selectedProduct.allow_negative_stock} readOnly className="rounded border-slate-300 text-[#0088FF]" />
-                    <span>Cho phép âm kho</span>
+                    <input
+                      type="checkbox"
+                      checked={false}
+                      readOnly
+                      className="h-3.5 w-3.5 rounded-sm border-slate-300 text-[#0088FF] focus:ring-0"
+                    />
+                    <span className="flex items-center gap-1.5">
+                      Áp dụng bảo hành
+                      <Info size={12} className="text-[#4da3ff]" />
+                    </span>
                   </label>
                 </div>
               </div>
             </div>
 
             <div className="ui-card">
-              <div className="flex border-b border-slate-200 px-4 pt-1">
+              <div className="flex border-b border-slate-200 pr-4 pt-1">
                 <button
                   onClick={() => setDetailTab('stock')}
-                  className={`mr-4 border-b-2 px-4 py-3 text-[14px] font-medium transition-colors ${
+                  className={`border-b-2 px-4 py-3 text-[14px] font-medium transition-colors ${
                     detailTab === 'stock'
                       ? 'border-[#0088FF] text-[#0088FF]'
                       : 'border-transparent text-slate-600 hover:text-[#0088FF]'
@@ -683,7 +795,16 @@ export function Products() {
                       ) : (
                         selectedProduct.branch_stocks.map((stock) => (
                           <tr key={stock.branch_id} className="text-[13px] transition-colors hover:bg-slate-50">
-                            <td className="px-5 py-4 text-[#182537]">{stock.branches?.name ?? 'Chi nhánh mặc định'}</td>
+                            <td className="px-5 py-4 text-[#182537]">
+                              <div className="flex items-center gap-2">
+                                <span>{stock.branches?.name ?? '---'}</span>
+                                {stock.branch_id === resolvedDefaultBranchId ? (
+                                  <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-[#0088FF]">
+                                    Mặc định
+                                  </span>
+                                ) : null}
+                              </div>
+                            </td>
                             <td className="px-2 py-4 text-right font-medium text-[#182537]">{formatNumber(Number(stock.on_hand_qty ?? 0))}</td>
                             <td className="px-2 py-4 text-right text-[#182537]">{formatNumber(Number(stock.average_cost ?? 0))}</td>
                             <td className="px-2 py-4 text-right font-medium text-[#182537]">{formatNumber(Number(stock.available_qty ?? 0))}</td>
@@ -704,6 +825,15 @@ export function Products() {
                   <div>Ngày tạo: {formatDateTime(selectedProduct.created_at)}</div>
                   <div>Ngày cập nhật cuối: {formatDateTime(selectedProduct.updated_at)}</div>
                   <div>Nhà cung cấp mặc định: {selectedProduct.suppliers?.name ?? '---'}</div>
+                  <div className="flex items-center gap-2">
+                    <span>Chi nhánh mặc định: {resolvedDefaultBranchName}</span>
+                    <button
+                      onClick={handleUpdateDefaultBranch}
+                      className="font-medium text-[#0088FF] hover:underline"
+                    >
+                      Cập nhật
+                    </button>
+                  </div>
                   <button
                     onClick={() => navigate('/inventory')}
                     className="text-[13px] font-medium text-[#0088FF] hover:underline"
@@ -724,7 +854,7 @@ export function Products() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4 text-sm font-medium">
           <button
@@ -775,7 +905,7 @@ export function Products() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-5">
         {infoMessage ? (
           <div className="rounded-lg border border-blue-200 bg-blue-50 px-5 py-4 text-sm text-blue-700">
             {infoMessage}
@@ -789,9 +919,9 @@ export function Products() {
         ) : null}
 
         <div className="ui-card overflow-hidden">
-          <div className="flex border-b border-slate-200 px-5 pt-2">
+          <div className="flex border-b border-slate-200 pr-5 pt-2">
             <button
-              className={`mr-4 border-b-2 px-4 py-3 text-[14px] font-medium transition-colors ${
+              className={`border-b-2 px-4 py-3 text-[14px] font-medium transition-colors ${
                 activeTab === 'all'
                   ? 'border-[#0088FF] text-[#0088FF]'
                   : 'border-transparent text-slate-600 hover:text-[#0088FF]'
@@ -810,35 +940,35 @@ export function Products() {
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Tìm kiếm theo mã sản phẩm, tên sản phẩm, barcode"
-                className="w-full rounded border border-slate-300 bg-white py-2 pl-9 pr-4 text-[13px] transition-colors focus:border-[#0088FF] focus:outline-none focus:ring-1 focus:ring-[#0088FF]"
+                className="w-full rounded border border-slate-300 bg-white py-2 pl-9 pr-4 text-[13px] transition-colors focus:border-[#0088FF] focus:outline-none"
               />
             </div>
 
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 items-center gap-0">
               <button
                 onClick={handleCycleCategoryFilter}
-                className="flex min-w-[130px] items-center justify-between gap-2 whitespace-nowrap rounded border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
+                className="flex min-w-[130px] items-center justify-between gap-2 whitespace-nowrap rounded-l border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
               >
                 <span>Loại sản phẩm</span>
                 <ChevronDown size={14} className="text-slate-400 shrink-0" />
               </button>
               <button
                 onClick={handleToggleSortOrder}
-                className="flex min-w-[130px] items-center justify-between gap-2 whitespace-nowrap rounded border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
+                className="-ml-px flex min-w-[130px] items-center justify-between gap-2 whitespace-nowrap border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
               >
                 <span>Ngày tạo</span>
                 <ChevronDown size={14} className="text-slate-400 shrink-0" />
               </button>
               <button
                 onClick={handleCycleBrandFilter}
-                className="flex min-w-[130px] items-center justify-between gap-2 whitespace-nowrap rounded border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
+                className="-ml-px flex min-w-[130px] items-center justify-between gap-2 whitespace-nowrap border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
               >
                 <span>Nhãn hiệu</span>
                 <ChevronDown size={14} className="text-slate-400 shrink-0" />
               </button>
               <button
                 onClick={handleToggleStatusFilter}
-                className="flex min-w-[130px] items-center justify-between gap-2 whitespace-nowrap rounded border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
+                className="-ml-px flex min-w-[130px] items-center justify-between gap-2 whitespace-nowrap rounded-r border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
               >
                 <span>Bộ lọc khác</span>
                 <Filter size={14} className="text-slate-400 shrink-0" />

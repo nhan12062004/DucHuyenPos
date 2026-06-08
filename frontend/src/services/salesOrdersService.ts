@@ -39,10 +39,12 @@ export interface SalesOrder {
   delivery_address?: string;
   delivery_method?: DeliveryTab;
   delivery_status?: DeliveryStatus;
+  delivery_due_at?: string;
   created_at: string;
   // Relations
   customers?: { id: string; full_name: string; phone?: string; address?: string } | null;
   branches?: { id: string; name: string } | null;
+  cashier?: { id: string; full_name: string; branch_id?: string } | null;
   sales_order_items?: SalesOrderItem[];
   sales_payments?: SalesPayment[];
 }
@@ -70,6 +72,7 @@ export interface SalesOrdersQuery {
 export interface CreateSalesOrderPayload {
   branch_id: string;
   customer_id?: string;
+  cashier_id?: string;
   order_no?: string;
   source?: string;
   status?: string;
@@ -82,6 +85,7 @@ export interface CreateSalesOrderPayload {
   delivery_address?: string;
   delivery_method?: DeliveryTab;
   delivery_status?: DeliveryStatus;
+  delivery_due_at?: string;
   items: {
     product_id: string;
     product_name: string;
@@ -96,6 +100,8 @@ export interface CreateSalesOrderPayload {
 export interface UpdateSalesOrderPayload {
   branch_id?: string;
   customer_id?: string;
+  cashier_id?: string;
+  order_no?: string;
   source?: SalesOrder['source'];
   status?: SalesOrder['status'];
   payment_status?: SalesOrder['payment_status'];
@@ -107,6 +113,7 @@ export interface UpdateSalesOrderPayload {
   delivery_address?: string;
   delivery_method?: DeliveryTab;
   delivery_status?: DeliveryStatus;
+  delivery_due_at?: string;
   items?: CreateSalesOrderPayload['items'];
 }
 
