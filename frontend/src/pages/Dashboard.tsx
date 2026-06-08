@@ -234,7 +234,7 @@ export function Dashboard() {
 
   if (loading) {
     return (
-      <PageLoader text="Đang tải dữ liệu báo cáo..." minHeight="60vh" />
+      <PageLoader text="Đang tải dữ liệu báo cáo..." fullScreen />
     );
   }
 

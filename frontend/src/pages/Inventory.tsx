@@ -121,7 +121,7 @@ export function Inventory() {
   const selectedBranch = branches.find((branch) => branch.id === selectedBranchId);
 
   if (isLoading) {
-    return <PageLoader text="Đang tải dữ liệu tồn kho..." minHeight="60vh" />;
+    return <PageLoader text="Đang tải dữ liệu tồn kho..." fullScreen />;
   }
 
   return (

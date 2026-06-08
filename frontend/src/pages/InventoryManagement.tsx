@@ -15,6 +15,7 @@ import {
   type ProductCategory,
   type ProductStockSummary,
 } from '../services/productsService';
+import { PageLoader } from '../components/PageLoader';
 
 type ProductListItem = Product & {
   typeName: string;
@@ -107,6 +108,10 @@ export function InventoryManagement() {
       };
     });
   }, [products, stockMap]);
+
+  if (isListLoading) {
+    return <PageLoader text="Đang tải quản lý kho..." fullScreen />;
+  }
 
   return (
     <div className="flex flex-col gap-6">

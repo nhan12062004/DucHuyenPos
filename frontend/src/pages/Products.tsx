@@ -720,7 +720,7 @@ export function Products() {
   }
 
   if (isListLoading && !selectedProductId) {
-    return <PageLoader text="Đang tải danh sách sản phẩm..." minHeight="60vh" />;
+    return <PageLoader text="Đang tải danh sách sản phẩm..." fullScreen />;
   }
 
   return (

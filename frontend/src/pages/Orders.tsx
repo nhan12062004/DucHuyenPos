@@ -575,7 +575,7 @@ export function Orders() {
 
   if (selectedOrderId && !selectedOrder && isDetailLoading) {
     return (
-      <PageLoader text="Đang tải chi tiết đơn hàng..." minHeight="80vh" />
+      <PageLoader text="Đang tải chi tiết đơn hàng..." fullScreen />
     );
   }
 
@@ -1052,7 +1052,7 @@ export function Orders() {
   }
 
   if (isListLoading && !selectedOrderId) {
-    return <PageLoader text="Đang tải danh sách đơn hàng..." minHeight="60vh" />;
+    return <PageLoader text="Đang tải danh sách đơn hàng..." fullScreen />;
   }
 
   return (

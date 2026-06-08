@@ -183,7 +183,7 @@ export function CustomerGroups() {
   };
 
   if (isLoading) {
-    return <PageLoader text="Đang tải nhóm khách hàng..." minHeight="60vh" />;
+    return <PageLoader text="Đang tải nhóm khách hàng..." fullScreen />;
   }
 
   return (

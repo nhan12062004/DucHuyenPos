@@ -357,18 +357,18 @@ export function Sidebar({ expanded, setExpanded }: SidebarProps) {
         </ul>
       </div>
 
-      <div className="border-t border-white/10 px-0 py-3">
+      <div className="border-t border-white/10 px-0 py-2">
         <NavLink
           to="/settings"
           className={cn(
-            'flex w-full items-center py-3 text-[14.5px] transition-colors',
+            'flex w-full items-center py-2.5 text-[14.5px] transition-colors',
             expanded ? 'gap-4 px-4' : 'justify-center px-0',
             isSettingsActive ? ACTIVE_ITEM_CLASSES : DEFAULT_ITEM_CLASSES
           )}
         >
           <Settings size={20} className="shrink-0" />
           <SidebarLabel expanded={expanded}>
-            <span className="font-medium text-[15px]">Cài đặt</span>
+            <span className="font-medium text-[15px]">Cấu hình</span>
           </SidebarLabel>
         </NavLink>
       </div>

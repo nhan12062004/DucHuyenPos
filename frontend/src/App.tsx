@@ -18,7 +18,7 @@ import { Suppliers } from './pages/Suppliers';
 import { CostPrice } from './pages/CostPrice';
 import { CustomerGroups } from './pages/CustomerGroups';
 
-const Settings = () => <div className="p-8"><h2 className="text-xl font-bold">Cài đặt hệ thống (Coming Soon)</h2></div>;
+const Settings = () => <div className="p-8"><h2 className="text-xl font-bold">Cấu hình hệ thống (Coming Soon)</h2></div>;
 
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Login } from './pages/Login';

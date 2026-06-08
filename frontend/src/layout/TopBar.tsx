@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { ChevronDown, LogOut, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -19,7 +19,7 @@ const routeNames: Record<string, string> = {
   '/customer-groups': 'Nhóm khách hàng',
   '/debts': 'Công nợ',
   '/invoice': 'In hóa đơn',
-  '/settings': 'Cài đặt hệ thống'
+  '/settings': 'Cấu hình hệ thống'
 };
 
 export function TopBar() {
@@ -30,13 +30,34 @@ export function TopBar() {
   const displayName: string = user?.user_metadata?.full_name || user?.email || 'Người dùng';
   const initials = displayName.split(' ').map((w: string) => w[0]).slice(-2).join('').toUpperCase() || 'ND';
   const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!showDropdown) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      if (!dropdownRef.current?.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+    };
+  }, [showDropdown]);
 
   return (
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-slate-100 bg-white px-8">
       <h1 className="text-xl font-bold text-slate-800">{title}</h1>
 
       <div className="flex items-center gap-3">
-        <div className="relative">
+        <div ref={dropdownRef} className="relative">
           <div
             className="flex cursor-pointer items-center gap-3 pl-4 transition-opacity hover:opacity-80"
             onClick={() => setShowDropdown(!showDropdown)}
@@ -59,7 +80,7 @@ export function TopBar() {
                 }}
                 className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-50"
               >
-                <User size={16} /> Thông tin cá nhân
+                <User size={16} /> Tài khoản của tôi
               </button>
               <div className="my-1 h-px bg-slate-100"></div>
               <button

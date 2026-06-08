@@ -1147,7 +1147,7 @@ export function POS() {
     return (
       <PageLoader 
         text={hydratingOrder ? 'Đang tải đơn hàng để chỉnh sửa...' : 'Đang tải dữ liệu...'} 
-        minHeight="60vh" 
+        fullScreen
       />
     );
   }

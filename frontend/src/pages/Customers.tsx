@@ -794,7 +794,7 @@ export function Customers() {
   });
 
   if (isListLoading && !selectedCustomerId) {
-    return <PageLoader text="Đang tải danh sách khách hàng..." minHeight="60vh" />;
+    return <PageLoader text="Đang tải danh sách khách hàng..." fullScreen />;
   }
 
   return (

@@ -127,7 +127,7 @@ export function Debts() {
   const totalDebt = debtors.reduce((sum, customer) => sum + Number(customer.current_debt ?? 0), 0);
 
   if (isLoading) {
-    return <PageLoader text="Đang tải công nợ khách hàng..." minHeight="60vh" />;
+    return <PageLoader text="Đang tải công nợ khách hàng..." fullScreen />;
   }
 
   return (
