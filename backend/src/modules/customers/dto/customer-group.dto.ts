@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class CreateCustomerGroupDto {
   @IsOptional()
@@ -17,6 +17,28 @@ export class CreateCustomerGroupDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsIn(['any', 'all'])
+  condition_match_mode?: string;
+
+  @IsOptional()
+  @IsIn(['profile', 'purchase', 'points'])
+  condition_group?: string;
+
+  @IsOptional()
+  @IsIn(['retail', 'wholesale'])
+  default_price_type?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  discount_rate?: number = 0;
+
+  @IsOptional()
+  @IsIn(['cash', 'bank_transfer', 'debt'])
+  payment_method?: string;
 }
 
 export class UpdateCustomerGroupDto {
@@ -37,4 +59,26 @@ export class UpdateCustomerGroupDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsIn(['any', 'all'])
+  condition_match_mode?: string;
+
+  @IsOptional()
+  @IsIn(['profile', 'purchase', 'points'])
+  condition_group?: string;
+
+  @IsOptional()
+  @IsIn(['retail', 'wholesale'])
+  default_price_type?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  discount_rate?: number;
+
+  @IsOptional()
+  @IsIn(['cash', 'bank_transfer', 'debt'])
+  payment_method?: string;
 }

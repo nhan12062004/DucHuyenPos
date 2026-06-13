@@ -17,6 +17,7 @@ const routeNames: Record<string, string> = {
   '/cost-price': 'Giá vốn',
   '/customers': 'Danh sách khách hàng',
   '/customer-groups': 'Nhóm khách hàng',
+  '/customer-groups/create': 'Thêm nhóm khách hàng',
   '/debts': 'Công nợ',
   '/invoice': 'In hóa đơn',
   '/settings': 'Cấu hình hệ thống'

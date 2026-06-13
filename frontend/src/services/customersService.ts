@@ -41,6 +41,11 @@ export interface CustomerGroup {
   name: string;
   group_type: 'fixed' | 'dynamic';
   description?: string;
+  condition_match_mode?: 'any' | 'all';
+  condition_group?: 'profile' | 'purchase' | 'points';
+  default_price_type?: 'retail' | 'wholesale';
+  discount_rate?: number;
+  payment_method?: 'cash' | 'bank_transfer' | 'debt';
   created_at?: string;
   updated_at?: string;
 }

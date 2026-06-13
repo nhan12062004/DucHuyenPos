@@ -20,6 +20,7 @@ export function Layout() {
   const [expanded, setExpanded] = useState(true);
   const location = useLocation();
   const isPosRoute = location.pathname === '/pos';
+  const isCustomerGroupCreateRoute = location.pathname === '/customer-groups/create';
 
   return (
     <div className="flex h-screen bg-[#F8FAFC] text-slate-900 overflow-hidden font-sans">
@@ -31,8 +32,8 @@ export function Layout() {
         transition={LAYOUT_TRANSITION}
         className="flex-1 flex flex-col min-w-0"
       >
-        <TopBar />
-        <div className={`flex-1 overflow-auto ${!isPosRoute ? 'px-6 py-6 lg:px-7 xl:px-8' : 'p-0'}`}>
+        {!isCustomerGroupCreateRoute ? <TopBar /> : null}
+        <div className={`flex-1 overflow-auto ${!isPosRoute && !isCustomerGroupCreateRoute ? 'px-6 py-6 lg:px-7 xl:px-8' : 'p-0'}`}>
           <Outlet />
         </div>
       </motion.main>

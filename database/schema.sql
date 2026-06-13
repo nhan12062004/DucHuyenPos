@@ -53,6 +53,11 @@ create table if not exists public.customer_groups (
   name text not null unique,
   group_type text not null default 'fixed' check (group_type in ('fixed', 'dynamic')),
   description text,
+  condition_match_mode text check (condition_match_mode in ('any', 'all')),
+  condition_group text check (condition_group in ('profile', 'purchase', 'points')),
+  default_price_type text check (default_price_type in ('retail', 'wholesale')),
+  discount_rate numeric(5,2) not null default 0 check (discount_rate >= 0 and discount_rate <= 100),
+  payment_method text check (payment_method in ('cash', 'bank_transfer', 'debt')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

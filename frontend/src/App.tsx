@@ -17,6 +17,7 @@ import { PurchaseOrders } from './pages/PurchaseOrders';
 import { Suppliers } from './pages/Suppliers';
 import { CostPrice } from './pages/CostPrice';
 import { CustomerGroups } from './pages/CustomerGroups';
+import { CustomerGroupCreate } from './pages/CustomerGroupCreate';
 
 const Settings = () => <div className="p-8"><h2 className="text-xl font-bold">Cấu hình hệ thống (Coming Soon)</h2></div>;
 
@@ -57,6 +58,7 @@ function AppRoutes() {
           <Route path="cost-price" element={<CostPrice />} />
           <Route path="customers" element={<Customers />} />
           <Route path="customer-groups" element={<CustomerGroups />} />
+          <Route path="customer-groups/create" element={<CustomerGroupCreate />} />
           <Route path="debts" element={<Debts />} />
           <Route path="invoice" element={<Invoice />} />
           <Route path="settings" element={<Settings />} />

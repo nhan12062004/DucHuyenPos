@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import {
   customersService,
   type Customer,
   type CustomerGroup,
 } from '../services/customersService';
 import { PageLoader } from '../components/PageLoader';
+import { CustomerGroupTypeModal } from '../components/CustomerGroupTypeModal';
 
 type GroupRow = CustomerGroup & {
   count: number;
@@ -25,6 +27,7 @@ function formatDate(value?: string) {
 }
 
 export function CustomerGroups() {
+  const navigate = useNavigate();
   const [groups, setGroups] = useState<CustomerGroup[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,6 +35,7 @@ export function CustomerGroups() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -107,30 +111,6 @@ export function CustomerGroups() {
   const pageStart = pagedRows.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const pageEnd = pagedRows.length === 0 ? 0 : pageStart + pagedRows.length - 1;
 
-  const handleCreateGroup = async () => {
-    const name = window.prompt('Nhập tên nhóm khách hàng');
-    if (!name?.trim()) {
-      return;
-    }
-
-    const code = window.prompt('Nhập mã nhóm, để trống để hệ thống tự tạo', '') ?? '';
-    const type = window.prompt('Loại nhóm: fixed hoặc dynamic', 'fixed') ?? 'fixed';
-    const description = window.prompt('Mô tả', '') ?? '';
-
-    try {
-      const created = await customersService.createGroup({
-        name: name.trim(),
-        code: code.trim() || undefined,
-        group_type: type === 'dynamic' ? 'dynamic' : 'fixed',
-        description: description.trim() || undefined,
-      });
-
-      setGroups((current) => [...current, created]);
-    } catch (createError: any) {
-      setError(createError?.message ?? 'Thêm nhóm khách hàng thất bại.');
-    }
-  };
-
   const handleUpdateGroup = async (group: CustomerGroup) => {
     const name = window.prompt('Tên nhóm khách hàng', group.name);
     if (!name?.trim()) {
@@ -190,7 +170,8 @@ export function CustomerGroups() {
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
         <button
-          onClick={handleCreateGroup}
+          type="button"
+          onClick={() => setIsCreateModalOpen(true)}
           className="flex items-center gap-2 rounded bg-[#0088FF] px-4 py-2 text-[14px] font-medium text-white transition-colors hover:bg-blue-700"
         >
           <Plus size={16} /> Thêm nhóm khách hàng
@@ -198,111 +179,122 @@ export function CustomerGroups() {
       </div>
 
       <div className="ui-card overflow-hidden">
-          {error ? (
-            <div className="border-b border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
-              {error}
-            </div>
-          ) : null}
+        {error ? (
+          <div className="border-b border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+            {error}
+          </div>
+        ) : null}
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50/50 text-[13px] font-semibold text-[#182537]">
-                    <th
-                      onClick={() => setSortOrder((current) => (current === 'asc' ? 'desc' : 'asc'))}
-                      className="w-1/5 cursor-pointer px-6 py-3.5 hover:text-[#0088FF]"
-                    >
-                      <span className="flex items-center gap-1">
-                        Tên nhóm
-                        <div className="flex flex-col">
-                          <ChevronDown size={10} className={`-mb-1 ${sortOrder === 'asc' ? 'rotate-180' : ''}`} />
-                          <ChevronDown size={10} />
-                        </div>
-                      </span>
-                    </th>
-                    <th className="w-1/6 px-6 py-3.5">Mã nhóm</th>
-                    <th className="w-1/6 px-6 py-3.5">Loại nhóm</th>
-                    <th className="px-6 py-3.5">Mô tả</th>
-                    <th className="w-[150px] px-6 py-3.5 text-right">Số lượng khách hàng</th>
-                    <th className="w-[150px] px-6 py-3.5 text-right">Ngày tạo</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-[13.5px] text-[#182537]">
-                  {pagedRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="px-6 py-10 text-center text-slate-500">
-                        Chưa có nhóm khách hàng.
-                      </td>
-                    </tr>
-                  ) : (
-                    pagedRows.map((group) => (
-                      <tr key={group.id} className="transition-colors hover:bg-slate-50">
-                        <td
-                          onClick={() => handleUpdateGroup(group)}
-                          onContextMenu={(event) => {
-                            event.preventDefault();
-                            void handleDeleteGroup(group);
-                          }}
-                          className="cursor-pointer px-6 py-4 text-[#0088FF] hover:underline"
-                        >
-                          {group.name}
-                        </td>
-                        <td className="px-6 py-4 uppercase">{group.code}</td>
-                        <td className="px-6 py-4">{group.group_type === 'fixed' ? 'Cố định' : 'Động'}</td>
-                        <td className="px-6 py-4 text-slate-500">{group.description || ''}</td>
-                        <td className="px-6 py-4 text-right">{group.count}</td>
-                        <td className="px-6 py-4 text-right">{formatDate(group.created_at)}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-          <div className="flex items-center justify-end border-t border-slate-200 px-5 py-4 text-[13px] text-[#182537]">
-            <div className="mr-6 flex items-center gap-2">
-              <span className="text-slate-600">Hiển thị</span>
-              <div className="relative">
-                <select
-                  value={pageSize}
-                  onChange={(event) => {
-                    setPageSize(Number(event.target.value));
-                    setPage(1);
-                  }}
-                  className="appearance-none rounded border border-slate-300 bg-white px-3 py-1 pr-8 text-[#182537] focus:border-[#0088FF] focus:outline-none"
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50/50 text-[13px] font-semibold text-[#182537]">
+                <th
+                  onClick={() => setSortOrder((current) => (current === 'asc' ? 'desc' : 'asc'))}
+                  className="w-1/5 cursor-pointer px-6 py-3.5 hover:text-[#0088FF]"
                 >
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-                <ChevronDown size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-500" />
-              </div>
-              <span className="text-slate-600">kết quả</span>
-            </div>
-            <div className="mr-6 text-slate-600">
-              Từ {pageStart} đến {pageEnd} trên tổng {rows.length}
-            </div>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setPage((current) => Math.max(1, current - 1))}
-                disabled={safePage === 1}
-                className="flex h-7 w-7 items-center justify-center rounded text-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+                  <span className="flex items-center gap-1">
+                    Tên nhóm
+                    <div className="flex flex-col">
+                      <ChevronDown size={10} className={`-mb-1 ${sortOrder === 'asc' ? 'rotate-180' : ''}`} />
+                      <ChevronDown size={10} />
+                    </div>
+                  </span>
+                </th>
+                <th className="w-1/6 px-6 py-3.5">Mã nhóm</th>
+                <th className="w-1/6 px-6 py-3.5">Loại nhóm</th>
+                <th className="px-6 py-3.5">Mô tả</th>
+                <th className="w-[150px] px-6 py-3.5 text-right">Số lượng khách hàng</th>
+                <th className="w-[150px] px-6 py-3.5 text-right">Ngày tạo</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-[13.5px] text-[#182537]">
+              {pagedRows.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-10 text-center text-slate-500">
+                    Chưa có nhóm khách hàng.
+                  </td>
+                </tr>
+              ) : (
+                pagedRows.map((group) => (
+                  <tr key={group.id} className="transition-colors hover:bg-slate-50">
+                    <td
+                      onClick={() => handleUpdateGroup(group)}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        void handleDeleteGroup(group);
+                      }}
+                      className="cursor-pointer px-6 py-4 text-[#0088FF] hover:underline"
+                    >
+                      {group.name}
+                    </td>
+                    <td className="px-6 py-4 uppercase">{group.code}</td>
+                    <td className="px-6 py-4">{group.group_type === 'fixed' ? 'Cố định' : 'Động'}</td>
+                    <td className="px-6 py-4 text-slate-500">{group.description || ''}</td>
+                    <td className="px-6 py-4 text-right">{group.count}</td>
+                    <td className="px-6 py-4 text-right">{formatDate(group.created_at)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="flex items-center justify-end border-t border-slate-200 px-5 py-4 text-[13px] text-[#182537]">
+          <div className="mr-6 flex items-center gap-2">
+            <span className="text-slate-600">Hiển thị</span>
+            <div className="relative">
+              <select
+                value={pageSize}
+                onChange={(event) => {
+                  setPageSize(Number(event.target.value));
+                  setPage(1);
+                }}
+                className="appearance-none rounded border border-slate-300 bg-white px-3 py-1 pr-8 text-[#182537] focus:border-[#0088FF] focus:outline-none"
               >
-                <ChevronLeft size={16} />
-              </button>
-              <button className="flex h-7 w-7 items-center justify-center rounded bg-[#0088FF] font-medium text-white">
-                {safePage}
-              </button>
-              <button
-                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                disabled={safePage === totalPages}
-                className="flex h-7 w-7 items-center justify-center rounded text-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <ChevronRight size={16} />
-              </button>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <ChevronDown size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-500" />
             </div>
+            <span className="text-slate-600">kết quả</span>
+          </div>
+          <div className="mr-6 text-slate-600">
+            Từ {pageStart} đến {pageEnd} trên tổng {rows.length}
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={safePage === 1}
+              className="flex h-7 w-7 items-center justify-center rounded text-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button type="button" className="flex h-7 w-7 items-center justify-center rounded bg-[#0088FF] font-medium text-white">
+              {safePage}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              disabled={safePage === totalPages}
+              className="flex h-7 w-7 items-center justify-center rounded text-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <ChevronRight size={16} />
+            </button>
           </div>
         </div>
+      </div>
+
+      <CustomerGroupTypeModal
+        open={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSelect={(type) => {
+          setIsCreateModalOpen(false);
+          navigate(`/customer-groups/create?type=${type}`);
+        }}
+      />
     </div>
   );
 }
