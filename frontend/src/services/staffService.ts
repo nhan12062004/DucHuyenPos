@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { api } from './apiClient';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -19,13 +20,7 @@ export const staffService = {
    * profiles la bang public map voi auth.users trong schema hien tai.
    */
   getAllUsers: async (): Promise<StaffProfile[]> => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, full_name, phone, role, is_active, branch_id')
-      .order('full_name', { ascending: true });
-
-    if (error) throw new Error(error.message);
-    return (data ?? []) as StaffProfile[];
+    return api.get<StaffProfile[]>('/staff/users');
   },
 
   getActive: async (): Promise<StaffProfile[]> => {

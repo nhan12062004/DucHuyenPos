@@ -94,6 +94,7 @@ function DropdownSelect({
   placeholder,
   disabled,
   loading,
+  searchable = true,
   onChange,
 }: {
   value: string;
@@ -101,6 +102,7 @@ function DropdownSelect({
   placeholder: string;
   disabled?: boolean;
   loading?: boolean;
+  searchable?: boolean;
   onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -148,15 +150,17 @@ function DropdownSelect({
 
       {open && !disabled ? (
         <div className="absolute left-0 right-0 top-[34px] z-50 border border-slate-300 bg-white shadow-lg">
-          <div className="border-b border-slate-100 p-2">
-            <input
-              autoFocus
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Tìm nhanh"
-              className="h-8 w-full border border-slate-300 px-2 text-[13px] outline-none focus:border-[#0088FF]"
-            />
-          </div>
+          {searchable ? (
+            <div className="border-b border-slate-100 p-2">
+              <input
+                autoFocus
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Tìm nhanh"
+                className="h-8 w-full border border-slate-300 px-2 text-[13px] outline-none focus:border-[#0088FF]"
+              />
+            </div>
+          ) : null}
           <div className="max-h-[240px] overflow-y-auto py-1">
             {filteredOptions.length ? (
               filteredOptions.map((option) => (
@@ -626,6 +630,7 @@ export function CustomerCreate() {
                   placeholder="Chọn nhân viên phụ trách"
                   loading={loadingLookups}
                   disabled={loadingLookups || staffOptions.length === 0}
+                  searchable={false}
                   onChange={setOwnerId}
                 />
               </div>
