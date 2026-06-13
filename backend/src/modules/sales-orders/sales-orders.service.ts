@@ -3,7 +3,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../supabase/supabase.constants.js';
 import { CreateSalesOrderDto, UpdateSalesOrderDto } from './dto/sales-order.dto.js';
 import { PaginationDto, PaginatedResult } from '../../common/dto/pagination.dto.js';
-import { generateNextCode, normalizeManualCode } from '../../common/code-generator.js';
+import { CODE_PREFIXES, generateNextCode, normalizeManualCode } from '../../common/code-generator.js';
 import { ActivityActor, ActivityLogsService } from '../../common/activity-logs.service.js';
 import { resolveDeliveryFields } from './delivery-fields.js';
 
@@ -79,7 +79,7 @@ export class SalesOrdersService {
       await generateNextCode(this.supabase, {
         table: 'sales_orders',
         column: 'order_no',
-        prefix: 'HD',
+        prefix: CODE_PREFIXES.salesOrder,
       });
 
     const subtotal = items.reduce((sum, item) => {

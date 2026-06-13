@@ -126,28 +126,28 @@ export function InventoryManagement() {
     <div className="flex flex-col gap-4">
 
 
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4 text-[14px] font-medium text-slate-600">
-          <button className="flex items-center gap-1.5 transition-colors hover:text-[#0088FF]">
+      <div className="list-toolbar">
+        <div className="list-toolbar-actions">
+          <button className="list-action-button">
             <Printer size={16} /> In tem mã
           </button>
           <div className="h-4 w-px bg-slate-300"></div>
-          <button className="transition-colors hover:text-[#0088FF]">
+          <button className="list-action-button">
             Loại sản phẩm
           </button>
           <div className="h-4 w-px bg-slate-300"></div>
-          <button className="transition-colors hover:text-[#0088FF]">
+          <button className="list-action-button">
             Combo
           </button>
           <div className="h-4 w-px bg-slate-300"></div>
-          <button className="transition-colors hover:text-[#0088FF]">
+          <button className="list-action-button">
             Sản phẩm quy đổi
           </button>
         </div>
         <div>
           <button
             onClick={() => navigate('/products')}
-            className="rounded bg-[#0088FF] px-4 py-2 text-[14px] font-medium text-white transition-colors hover:bg-blue-700"
+            className="list-primary-button"
           >
             Xem danh sách sản phẩm
           </button>

@@ -7,7 +7,7 @@ export function CostPrice() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <h1 className="text-2xl font-bold text-slate-800">Giá vốn</h1>
-        <button className="flex items-center gap-2 rounded bg-[#0088FF] px-4 py-2 text-[14px] font-medium text-white transition-colors hover:bg-blue-700">
+        <button className="list-primary-button">
           <Save size={16} /> Lưu thay đổi
         </button>
       </div>

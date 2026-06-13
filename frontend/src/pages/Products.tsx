@@ -21,6 +21,7 @@ import {
   type ProductStockSummary,
 } from '../services/productsService';
 import { inventoryService, type Branch } from '../services/inventoryService';
+import { AddProductModal } from '../components/AddProductModal';
 import { PageLoader } from '../components/PageLoader';
 
 type ProductDetailTab = 'stock' | 'history';
@@ -105,6 +106,7 @@ export function Products() {
   const [isListLoading, setIsListLoading] = useState(true);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
+  const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
@@ -373,34 +375,31 @@ export function Products() {
     setInfoMessage(`Đã xuất ${visibleProducts.length} sản phẩm.`);
   };
 
-  const handleCreateProduct = async () => {
-    const name = window.prompt('Nhập tên sản phẩm');
-    if (!name?.trim()) {
-      return;
-    }
+  const handleOpenAddProductModal = () => {
+    setListError(null);
+    setInfoMessage(null);
+    setIsAddProductModalOpen(true);
+  };
 
-    const sku = window.prompt('Nhập mã SKU, để trống để hệ thống tự sinh', '') ?? '';
-    const unitName = window.prompt('Đơn vị tính', 'cái') ?? 'cái';
-    const salePrice = Number(window.prompt('Giá bán lẻ', '0') ?? '0');
-    const costPrice = Number(window.prompt('Giá nhập', '0') ?? '0');
-
-    try {
-      const created = await productsService.create({
-        name: name.trim(),
-        sku: sku.trim() || undefined,
-        unit_name: unitName.trim() || 'cái',
-        sale_price: Number.isFinite(salePrice) ? salePrice : 0,
-        cost_price: Number.isFinite(costPrice) ? costPrice : 0,
-        default_branch_id: systemDefaultBranch?.id,
-        status: 'active',
-      });
-
-      setProducts((current) => [created, ...current]);
-      setSelectedProductId(created.id);
-      setInfoMessage(`Đã thêm sản phẩm ${created.name}.`);
-    } catch (error: any) {
-      setListError(error?.message ?? 'Thêm sản phẩm thất bại.');
-    }
+  const handleProductCreated = (created: Product) => {
+    setProducts((current) => [created, ...current.filter((product) => product.id !== created.id)]);
+    setStockMap((current) => ({
+      ...current,
+      [created.id]: {
+        product_id: created.id,
+        sku: created.sku,
+        name: created.name,
+        sale_price: Number(created.sale_price ?? 0),
+        cost_price: Number(created.cost_price ?? 0),
+        reorder_level: Number(created.reorder_level ?? 0),
+        total_on_hand_qty: 0,
+        total_available_qty: 0,
+      },
+    }));
+    setSelectedProductId(created.id);
+    setSelectedProductDetail(created);
+    setIsAddProductModalOpen(false);
+    setInfoMessage(`Đã thêm sản phẩm ${created.name}.`);
   };
 
   const handleDeleteProduct = async () => {
@@ -855,17 +854,23 @@ export function Products() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4 text-sm font-medium">
+      <AddProductModal
+        open={isAddProductModalOpen}
+        onClose={() => setIsAddProductModalOpen(false)}
+        onCreated={handleProductCreated}
+      />
+
+      <div className="list-toolbar">
+        <div className="list-toolbar-actions">
           <button
             onClick={handleExportProducts}
-            className="flex items-center gap-1.5 text-slate-600 transition-colors hover:text-[#0088FF]"
+            className="list-action-button"
           >
             <Download size={16} /> Xuất file
           </button>
           <button
             onClick={() => setInfoMessage('Nhập file sản phẩm chưa có luồng backend riêng. Bạn có thể thêm trực tiếp bằng nút Thêm sản phẩm.')}
-            className="flex items-center gap-1.5 text-slate-600 transition-colors hover:text-[#0088FF]"
+            className="list-action-button"
           >
             <Upload size={16} /> Nhập file
           </button>
@@ -889,16 +894,16 @@ export function Products() {
             Sản phẩm quy đổi
           </button>
         </div>
-        <div className="flex rounded border border-blue-600">
+        <div className="list-primary-split">
           <button
-            onClick={handleCreateProduct}
-            className="flex items-center gap-2 border-r border-blue-700 bg-[#0088FF] px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+            onClick={handleOpenAddProductModal}
+            className="list-primary-split-main"
           >
             <Plus size={16} /> Thêm sản phẩm
           </button>
           <button
-            onClick={handleCreateProduct}
-            className="flex items-center bg-[#0088FF] px-2 text-white transition-colors hover:bg-blue-700"
+            onClick={handleOpenAddProductModal}
+            className="list-primary-split-toggle"
           >
             <ChevronDown size={16} />
           </button>

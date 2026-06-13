@@ -3,7 +3,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../supabase/supabase.constants.js';
 import { CreateProductDto, UpdateProductDto } from './dto/product.dto.js';
 import { PaginationDto, PaginatedResult } from '../../common/dto/pagination.dto.js';
-import { generateNextCode, normalizeManualCode } from '../../common/code-generator.js';
+import { CODE_PREFIXES, generateNextCode, normalizeManualCode } from '../../common/code-generator.js';
 import { ActivityActor, ActivityLogsService } from '../../common/activity-logs.service.js';
 
 const PRODUCT_SELECT = `*, 
@@ -69,7 +69,7 @@ export class ProductsService {
       await generateNextCode(this.supabase, {
         table: 'products',
         column: 'sku',
-        prefix: 'SP',
+        prefix: CODE_PREFIXES.product,
       });
 
     let defaultBranchId = dto.default_branch_id;

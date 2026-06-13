@@ -47,7 +47,7 @@ export class CreateSalesOrderDto {
 
   @IsOptional()
   @IsUUID()
-  cashier_id?: string;
+  cashier_id?: string | null;
 
   @IsOptional()
   @IsString()
@@ -103,7 +103,7 @@ export class CreateSalesOrderDto {
 
   @IsOptional()
   @IsDateString()
-  delivery_due_at?: string;
+  delivery_due_at?: string | null;
 
   @IsArray()
   @ValidateNested({ each: true })
@@ -122,7 +122,7 @@ export class UpdateSalesOrderDto {
 
   @IsOptional()
   @IsUUID()
-  cashier_id?: string;
+  cashier_id?: string | null;
 
   @IsOptional()
   @IsString()
@@ -178,7 +178,7 @@ export class UpdateSalesOrderDto {
 
   @IsOptional()
   @IsDateString()
-  delivery_due_at?: string;
+  delivery_due_at?: string | null;
 
   @IsOptional()
   @IsArray()

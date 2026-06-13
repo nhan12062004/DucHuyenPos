@@ -1149,7 +1149,7 @@ export function POS() {
       const payload = {
         branch_id: branchId,
         customer_id: customerId || undefined,
-        cashier_id: cashierId || undefined,
+        cashier_id: cashierId || null,
         order_no: orderNo.trim() || undefined,
         source,
         status: orderStatus,
@@ -1161,7 +1161,7 @@ export function POS() {
         delivery_address: selectedCustomer?.address || undefined,
         delivery_method: activeDeliveryTab,
         delivery_status: getDeliveryStatusFromTab(activeDeliveryTab),
-        delivery_due_at: deliveryDueAt,
+        delivery_due_at: deliveryDueAt ?? null,
         items: cartProducts.map((item) => ({
           product_id: item.id,
           product_name: item.name,

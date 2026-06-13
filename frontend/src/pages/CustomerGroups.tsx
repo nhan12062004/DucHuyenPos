@@ -172,7 +172,7 @@ export function CustomerGroups() {
         <button
           type="button"
           onClick={() => setIsCreateModalOpen(true)}
-          className="flex items-center gap-2 rounded bg-[#0088FF] px-4 py-2 text-[14px] font-medium text-white transition-colors hover:bg-blue-700"
+          className="list-primary-button"
         >
           <Plus size={16} /> Thêm nhóm khách hàng
         </button>

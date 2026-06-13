@@ -4,7 +4,7 @@ import { SUPABASE_CLIENT } from '../supabase/supabase.constants.js';
 import { CreateCustomerDto, UpdateCustomerDto } from './dto/customer.dto.js';
 import { CreateCustomerGroupDto, UpdateCustomerGroupDto } from './dto/customer-group.dto.js';
 import { PaginationDto, PaginatedResult } from '../../common/dto/pagination.dto.js';
-import { generateNextCode, normalizeManualCode } from '../../common/code-generator.js';
+import { CODE_PREFIXES, generateNextCode, normalizeManualCode } from '../../common/code-generator.js';
 import { ActivityActor, ActivityLogsService } from '../../common/activity-logs.service.js';
 
 @Injectable()
@@ -61,7 +61,7 @@ export class CustomersService {
       await generateNextCode(this.supabase, {
         table: 'customers',
         column: 'code',
-        prefix: 'KH',
+        prefix: CODE_PREFIXES.customer,
       });
 
     const { data, error } = await this.supabase
@@ -169,7 +169,7 @@ export class CustomersService {
     const generatedCode = await generateNextCode(this.supabase, {
       table: 'customer_groups',
       column: 'code',
-      prefix: 'NHOM',
+      prefix: CODE_PREFIXES.customerGroup,
     });
     const code = normalizedCode ?? (derivedCode || generatedCode);
 

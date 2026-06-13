@@ -3,6 +3,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../supabase/supabase.constants.js';
 import { CreatePurchaseOrderDto, UpdatePurchaseOrderDto } from './dto/purchase-order.dto.js';
 import { PaginationDto, PaginatedResult } from '../../common/dto/pagination.dto.js';
+import { CODE_PREFIXES, generateNextCode, normalizeManualCode } from '../../common/code-generator.js';
 
 @Injectable()
 export class PurchaseOrdersService {
@@ -64,9 +65,13 @@ export class PurchaseOrdersService {
   async create(dto: CreatePurchaseOrderDto) {
     const { items, ...orderData } = dto;
 
-    if (!orderData.order_no) {
-      orderData.order_no = `DN${Date.now()}`;
-    }
+    orderData.order_no =
+      normalizeManualCode(orderData.order_no) ??
+      await generateNextCode(this.supabase, {
+        table: 'purchase_orders',
+        column: 'order_no',
+        prefix: CODE_PREFIXES.purchaseOrder,
+      });
 
     const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unit_cost, 0);
     const totalAmount = subtotal - (orderData.discount_amount ?? 0);

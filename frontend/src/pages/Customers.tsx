@@ -7,6 +7,9 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  Download,
+  Upload,
+  Plus,
 } from 'lucide-react';
 import {
   customersService,
@@ -438,6 +441,32 @@ export function Customers() {
     });
   };
 
+  const handleCreateCustomer = async () => {
+    const fullName = window.prompt('Tên khách hàng');
+    if (!fullName?.trim()) {
+      return;
+    }
+
+    const phone = window.prompt('Số điện thoại', '');
+    if (phone === null) {
+      return;
+    }
+
+    try {
+      const created = await customersService.create({
+        full_name: fullName.trim(),
+        phone: phone.trim() || undefined,
+        status: 'active',
+      });
+
+      setCustomers((current) => [created, ...current]);
+      setTotalCustomers((current) => current + 1);
+      setInfoMessage(`Đã thêm khách hàng ${created.full_name}.`);
+    } catch (error: any) {
+      setListError(error?.message ?? 'Thêm khách hàng thất bại.');
+    }
+  };
+
   if (selectedCustomer) {
     const historyRows = selectedCustomerOrders;
 
@@ -791,23 +820,51 @@ export function Customers() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="customer-list-page -mx-2 -my-2 flex min-h-[calc(100vh-64px)] flex-col bg-[#f3f5f7] text-[13px]">
+      <div className="flex min-h-10 items-center justify-between bg-[#f5f7f9] px-3 py-1">
+        <div className="list-toolbar-actions">
+          <button
+            type="button"
+            className="list-action-button"
+          >
+            <Download size={16} className="text-[#8a99a8]" />
+            Xuất file
+          </button>
+          <button
+            type="button"
+            className="list-action-button"
+          >
+            <Upload size={16} className="text-[#8a99a8]" />
+            Nhập file
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={handleCreateCustomer}
+          className="list-primary-button"
+        >
+          <Plus size={16} />
+          Thêm khách hàng
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-3 px-3 py-2">
       {infoMessage ? (
-        <div className="rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+        <div className="rounded-[3px] border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-700">
           {infoMessage}
         </div>
       ) : null}
 
       {listError ? (
-        <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+        <div className="rounded-[3px] border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600">
           {listError}
         </div>
       ) : null}
 
-      <div className="ui-card overflow-hidden">
-          <div className="flex border-b border-slate-200 px-4 pt-1">
+      <div className="overflow-hidden rounded-[2px] border border-[#d8dde3] bg-white shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
+          <div className="flex border-b border-[#d8dde3] pr-5 pt-2">
             <button
-              className={`mr-4 border-b-2 px-4 py-3 text-[14px] font-medium transition-colors ${activeTab === 'all' ? 'border-[#0088FF] text-[#0088FF]' : 'border-transparent text-slate-600 hover:text-[#0088FF]'}`}
+              className={`border-b-2 px-4 py-3 text-[13px] font-medium transition-colors ${activeTab === 'all' ? 'border-[#0088FF] text-[#0088FF]' : 'border-transparent text-slate-600 hover:text-[#0088FF]'}`}
               onClick={() => {
                 setActiveTab('all');
                 setPage(1);
@@ -816,7 +873,7 @@ export function Customers() {
               Tất cả khách hàng
             </button>
             <button
-              className={`border-b-2 px-4 py-3 text-[14px] font-medium transition-colors ${activeTab === 'trading' ? 'border-[#0088FF] text-[#0088FF]' : 'border-transparent text-slate-600 hover:text-[#0088FF]'}`}
+              className={`border-b-2 px-4 py-3 text-[13px] font-medium transition-colors ${activeTab === 'trading' ? 'border-[#0088FF] text-[#0088FF]' : 'border-transparent text-slate-600 hover:text-[#0088FF]'}`}
               onClick={() => {
                 setActiveTab('trading');
                 setPage(1);
@@ -826,7 +883,7 @@ export function Customers() {
             </button>
           </div>
 
-          <div className="flex items-center gap-3 border-b border-slate-100 p-4">
+          <div className="flex flex-col gap-3 border-b border-[#e5e9ee] p-3 md:flex-row md:items-center">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
               <input
@@ -837,45 +894,60 @@ export function Customers() {
                   setPage(1);
                 }}
                 placeholder="Tìm kiếm theo mã khách hàng, tên, SĐT khách hàng"
-                className="w-full rounded border border-slate-300 bg-white py-2 pl-9 pr-4 text-[13px] transition-colors focus:border-[#0088FF] focus:outline-none"
+                className="h-8 w-full rounded-[2px] border border-[#ccd3da] bg-white pl-9 pr-4 text-[13px] transition-colors placeholder:text-[#8b98a6] focus:border-[#0088FF] focus:outline-none"
               />
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
               <button
                 onClick={handleToggleStatusFilter}
-                className="flex w-32 items-center justify-between rounded border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
+                className="flex h-8 w-24 items-center justify-between rounded-[2px] border border-[#ccd3da] bg-white px-3 text-[13px] text-[#1d2939] transition-colors hover:bg-slate-50"
               >
                 <span>Bộ lọc</span>
                 <Filter size={14} className="text-slate-400" />
               </button>
               <button
                 onClick={handleSaveFilters}
-                className="ml-2 rounded bg-slate-100 px-5 py-2 text-[13px] font-medium text-slate-600 transition-colors hover:bg-slate-200"
+                className="ml-2 h-8 rounded-[2px] bg-[#f2f4f6] px-4 text-[13px] font-medium text-[#7b8794] transition-colors hover:bg-slate-200"
               >
                 Lưu bộ lọc
               </button>
             </div>
           </div>
 
-          <div className="min-h-[500px] w-full overflow-x-auto">
-              <table className="w-full text-left">
+          <div className="min-h-[520px] w-full overflow-x-hidden">
+              <table className="w-full table-fixed text-left">
+                <colgroup>
+                  <col className="w-[3%]" />
+                  <col className="w-[4%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[17%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[15%]" />
+                  <col className="w-[13%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[12%]" />
+                </colgroup>
                 <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50/50 text-[13px] font-semibold text-[#182537]">
-                    <th className="w-12 border-r border-slate-100 px-4 py-3 text-center">
+                  <tr className="h-10 border-b border-[#dfe4ea] bg-[#f6f7fb] text-[12px] font-semibold text-[#111827]">
+                    <th className="border-r border-[#dfe4ea] px-1 text-center">
                       <Settings size={16} className="mx-auto cursor-pointer text-slate-400 hover:text-slate-600" />
                     </th>
-                    <th className="w-10 px-2 py-3 text-center"><input type="checkbox" className="rounded border-slate-300 text-[#0088FF]" /></th>
-                    <th className="px-4 py-3 font-semibold">Mã khách hàng</th>
-                    <th className="flex items-center gap-1 px-4 py-3 font-semibold">Tên khách hàng <div className="flex flex-col"><ChevronDown size={10} className="-mb-1 rotate-180" /><ChevronDown size={10} /></div></th>
-                    <th className="px-4 py-3 font-semibold">Số điện thoại</th>
-                    <th className="px-4 py-3 font-semibold">Nhóm khách hàng</th>
-                    <th className="flex items-center justify-end gap-1 px-4 py-3 text-right font-semibold">Công nợ hiện tại <div className="flex flex-col"><ChevronDown size={10} className="-mb-1 rotate-180" /><ChevronDown size={10} /></div></th>
-                    <th className="px-4 py-3 text-right font-semibold">Tổng chi tiêu <ChevronDown size={10} className="ml-1 inline" /></th>
-                    <th className="px-5 py-3 text-center font-semibold">Tổng SL đơn hàng</th>
+                    <th className="px-1 text-center"><input type="checkbox" className="rounded-[2px] border-slate-300 text-[#0088FF]" /></th>
+                    <th className="truncate px-2 font-semibold">Mã khách hàng</th>
+                    <th className="truncate px-2 font-semibold">
+                      <span className="inline-flex items-center gap-1">Tên khách hàng <span className="flex flex-col"><ChevronDown size={10} className="-mb-1 rotate-180" /><ChevronDown size={10} /></span></span>
+                    </th>
+                    <th className="truncate px-2 font-semibold">Số điện thoại</th>
+                    <th className="truncate px-2 font-semibold">Nhóm khách hàng</th>
+                    <th className="truncate px-2 text-right font-semibold">
+                      <span className="inline-flex items-center justify-end gap-1">Công nợ hiện tại <span className="flex flex-col"><ChevronDown size={10} className="-mb-1 rotate-180" /><ChevronDown size={10} /></span></span>
+                    </th>
+                    <th className="truncate px-2 text-right font-semibold">Tổng chi tiêu <ChevronDown size={10} className="ml-1 inline" /></th>
+                    <th className="truncate px-2 text-right font-semibold">Tổng SL đơn hàng</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-[13.5px] text-[#182537]">
+                <tbody className="divide-y divide-[#e8edf2] text-[12px] text-[#111827]">
                   {visibleCustomers.length === 0 ? (
                     <tr>
                       <td colSpan={9} className="px-4 py-10 text-center text-slate-500">
@@ -884,11 +956,11 @@ export function Customers() {
                     </tr>
                   ) : (
                     visibleCustomers.map((customer) => (
-                      <tr key={customer.id} className="group transition-colors hover:bg-slate-50">
-                        <td className="border-r border-slate-100 px-4 py-3.5 text-center text-slate-400"></td>
-                        <td className="px-2 py-3.5 text-center"><input type="checkbox" className="rounded border-slate-300 text-[#0088FF]" /></td>
+                      <tr key={customer.id} className="group h-[42px] transition-colors hover:bg-[#f7fbff]">
+                        <td className="border-r border-[#eef2f6] px-1 text-center text-slate-400"></td>
+                        <td className="px-1 text-center"><input type="checkbox" className="rounded-[2px] border-slate-300 text-[#0088FF]" /></td>
                         <td
-                          className="cursor-pointer px-4 py-3.5 text-[#0088FF] hover:underline"
+                          className="cursor-pointer truncate px-2 text-[#0088FF] hover:underline"
                           onClick={() => {
                             setSelectedCustomerId(customer.id);
                             setDetailTab('history');
@@ -896,12 +968,12 @@ export function Customers() {
                         >
                           {customer.code}
                         </td>
-                        <td className="px-4 py-3.5">{customer.full_name}</td>
-                        <td className="px-4 py-3.5">{customer.phone || '---'}</td>
-                        <td className="px-4 py-3.5">{customer.groupName}</td>
-                        <td className="px-4 py-3.5 text-right">{formatCurrency(customer.debt)}</td>
-                        <td className="px-4 py-3.5 text-right">{customer.totalSpent > 0 ? formatCurrency(customer.totalSpent) : '0'}</td>
-                        <td className="px-5 py-3.5 text-center">{customer.ordersCount}</td>
+                        <td className="truncate px-2">{customer.full_name}</td>
+                        <td className="truncate px-2">{customer.phone || ''}</td>
+                        <td className="truncate px-2">{customer.groupName}</td>
+                        <td className="truncate px-2 text-right">{formatCurrency(customer.debt)}</td>
+                        <td className="truncate px-2 text-right">{customer.totalSpent > 0 ? formatCurrency(customer.totalSpent) : '0'}</td>
+                        <td className="truncate px-2 text-right">{customer.ordersCount}</td>
                       </tr>
                     ))
                   )}
@@ -909,7 +981,7 @@ export function Customers() {
               </table>
             </div>
 
-          <div className="flex items-center justify-end border-t border-slate-200 px-5 py-4 text-[13px] text-[#182537]">
+          <div className="flex items-center justify-end border-t border-[#dfe4ea] bg-white px-4 py-3 text-[13px] text-[#182537]">
             <div className="mr-6 flex items-center gap-2">
               <span className="text-slate-600">Hiển thị</span>
               <div className="relative">
@@ -919,7 +991,7 @@ export function Customers() {
                     setLimit(Number(event.target.value));
                     setPage(1);
                   }}
-                  className="appearance-none rounded border border-slate-300 bg-white px-3 py-1 pr-8 text-[#182537] focus:border-[#0088FF] focus:outline-none"
+                  className="h-7 appearance-none rounded-[2px] border border-slate-300 bg-white px-2 pr-7 text-[#182537] focus:border-[#0088FF] focus:outline-none"
                 >
                   <option value={20}>20</option>
                   <option value={50}>50</option>
@@ -936,22 +1008,23 @@ export function Customers() {
               <button
                 onClick={() => setPage((current) => Math.max(1, current - 1))}
                 disabled={page === 1}
-                className="flex h-7 w-7 items-center justify-center rounded text-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-7 w-7 items-center justify-center rounded-[2px] text-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <ChevronLeft size={16} />
               </button>
-              <button className="flex h-7 w-7 items-center justify-center rounded bg-[#0088FF] font-medium text-white">
+              <button className="flex h-7 w-7 items-center justify-center rounded-[2px] bg-[#0088FF] font-medium text-white">
                 {page}
               </button>
               <button
                 onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
                 disabled={page === totalPages}
-                className="flex h-7 w-7 items-center justify-center rounded text-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-7 w-7 items-center justify-center rounded-[2px] text-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <ChevronRight size={16} />
               </button>
             </div>
           </div>
+      </div>
       </div>
     </div>
   );

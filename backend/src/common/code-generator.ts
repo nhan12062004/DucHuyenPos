@@ -8,6 +8,20 @@ interface CodeGeneratorOptions {
   sampleSize?: number;
 }
 
+export const CODE_PREFIXES = {
+  branch: 'CN',
+  customer: 'KH',
+  customerGroup: 'NHOM',
+  product: 'SP',
+  supplier: 'NCC',
+  salesOrder: 'HD',
+  purchaseOrder: 'DN',
+  receipt: 'PT',
+  payment: 'PC',
+  salesReturn: 'TH',
+  invoice: 'HD',
+} as const;
+
 export async function generateNextCode(
   supabase: SupabaseClient,
   options: CodeGeneratorOptions,

@@ -1097,17 +1097,17 @@ export function Orders() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4 text-sm font-medium">
+      <div className="list-toolbar">
+        <div className="list-toolbar-actions">
           <button
             onClick={handleExportOrders}
-            className="flex items-center gap-1.5 text-slate-600 transition-colors hover:text-[#0088FF]"
+            className="list-action-button"
           >
             <Download size={16} /> Xuất file
           </button>
           <button
             onClick={() => setInfoMessage('Luồng nhập file đơn hàng chưa được cấu hình riêng, vui lòng tạo trực tiếp từ POS.')}
-            className="flex items-center gap-1.5 text-slate-600 transition-colors hover:text-[#0088FF]"
+            className="list-action-button"
           >
             <Upload size={16} /> Nhập file
           </button>
@@ -1123,7 +1123,7 @@ export function Orders() {
           ) : null}
           <button
             onClick={() => navigate('/pos')}
-            className="flex items-center gap-2 rounded bg-[#0088FF] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+            className="list-primary-button"
           >
             <Plus size={16} /> Tạo đơn hàng
           </button>

@@ -24,7 +24,7 @@ export interface SalesOrder {
   order_no: string;
   invoice_no?: string;
   customer_id?: string;
-  cashier_id?: string;
+  cashier_id?: string | null;
   sold_at: string;
   source: 'pos' | 'web' | 'phone' | 'manual';
   status: 'draft' | 'pending' | 'completed' | 'cancelled';
@@ -39,7 +39,7 @@ export interface SalesOrder {
   delivery_address?: string;
   delivery_method?: DeliveryTab;
   delivery_status?: DeliveryStatus;
-  delivery_due_at?: string;
+  delivery_due_at?: string | null;
   created_at: string;
   // Relations
   customers?: { id: string; full_name: string; phone?: string; address?: string } | null;
@@ -72,7 +72,7 @@ export interface SalesOrdersQuery {
 export interface CreateSalesOrderPayload {
   branch_id: string;
   customer_id?: string;
-  cashier_id?: string;
+  cashier_id?: string | null;
   order_no?: string;
   source?: string;
   status?: string;
@@ -85,7 +85,7 @@ export interface CreateSalesOrderPayload {
   delivery_address?: string;
   delivery_method?: DeliveryTab;
   delivery_status?: DeliveryStatus;
-  delivery_due_at?: string;
+  delivery_due_at?: string | null;
   items: {
     product_id: string;
     product_name: string;
