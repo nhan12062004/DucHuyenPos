@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, CalendarDays, ChevronDown, Info, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -6,7 +6,55 @@ import {
   type Customer,
   type CustomerGroup,
 } from '../services/customersService';
+import { useAuth } from '../context/AuthContext';
 import { staffService, type StaffProfile } from '../services/staffService';
+
+interface VNProvince {
+  code: number;
+  name: string;
+  districts?: VNDistrict[];
+}
+
+interface VNDistrict {
+  code: number;
+  name: string;
+}
+
+interface VNWard {
+  code: number;
+  name: string;
+}
+
+type AreaOption = {
+  code: number;
+  provinceName: string;
+  districtName: string;
+  label: string;
+};
+
+type DropdownOption = {
+  value: string;
+  label: string;
+};
+
+const VN_API = 'https://provinces.open-api.vn/api';
+
+async function fetchProvinceDistricts(): Promise<VNProvince[]> {
+  const response = await fetch(`${VN_API}/?depth=2`);
+  if (!response.ok) {
+    throw new Error('Không tải được dữ liệu địa chỉ.');
+  }
+  return response.json();
+}
+
+async function fetchWards(districtCode: number): Promise<VNWard[]> {
+  const response = await fetch(`${VN_API}/d/${districtCode}?depth=2`);
+  if (!response.ok) {
+    throw new Error('Không tải được dữ liệu phường/xã.');
+  }
+  const data = await response.json();
+  return data.wards ?? [];
+}
 
 function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
   return (
@@ -40,6 +88,102 @@ function SelectChevron() {
   return <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />;
 }
 
+function DropdownSelect({
+  value,
+  options,
+  placeholder,
+  disabled,
+  loading,
+  onChange,
+}: {
+  value: string;
+  options: DropdownOption[];
+  placeholder: string;
+  disabled?: boolean;
+  loading?: boolean;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const selectedLabel = options.find((option) => option.value === value)?.label ?? '';
+  const filteredOptions = query.trim()
+    ? options.filter((option) => option.label.toLowerCase().includes(query.trim().toLowerCase()))
+    : options;
+
+  useEffect(() => {
+    if (!open) {
+      setQuery('');
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      if (!wrapperRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+        className={`${selectClass} flex items-center justify-between text-left disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400`}
+      >
+        <span className={`truncate ${selectedLabel ? 'text-[#182537]' : 'text-slate-400'}`}>
+          {selectedLabel || (loading ? 'Đang tải...' : placeholder)}
+        </span>
+        <ChevronDown size={14} className="ml-2 shrink-0 text-slate-400" />
+      </button>
+
+      {open && !disabled ? (
+        <div className="absolute left-0 right-0 top-[34px] z-50 border border-slate-300 bg-white shadow-lg">
+          <div className="border-b border-slate-100 p-2">
+            <input
+              autoFocus
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Tìm nhanh"
+              className="h-8 w-full border border-slate-300 px-2 text-[13px] outline-none focus:border-[#0088FF]"
+            />
+          </div>
+          <div className="max-h-[240px] overflow-y-auto py-1">
+            {filteredOptions.length ? (
+              filteredOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    onChange(option.value);
+                    setOpen(false);
+                  }}
+                  className={`block w-full px-3 py-2 text-left text-[13px] transition-colors hover:bg-blue-50 hover:text-[#0088FF] ${
+                    option.value === value ? 'bg-blue-50 text-[#0088FF]' : 'text-[#182537]'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))
+            ) : (
+              <div className="px-3 py-3 text-[13px] text-slate-500">Không có dữ liệu phù hợp</div>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 const inputClass =
   'h-8 w-full border border-slate-300 bg-white px-3 text-[13px] text-[#182537] outline-none transition-colors placeholder:text-slate-400 focus:border-[#0088FF]';
 const selectClass =
@@ -47,14 +191,19 @@ const selectClass =
 
 export function CustomerCreate() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const birthdateInputRef = useRef<HTMLInputElement | null>(null);
 
   const [fullName, setFullName] = useState('');
   const [code, setCode] = useState('');
   const [groupId, setGroupId] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [provinceDistrict, setProvinceDistrict] = useState('');
-  const [ward, setWard] = useState('');
+  const [areaCode, setAreaCode] = useState('');
+  const [provinceName, setProvinceName] = useState('');
+  const [districtName, setDistrictName] = useState('');
+  const [wardCode, setWardCode] = useState('');
+  const [wardName, setWardName] = useState('');
   const [addressLine, setAddressLine] = useState('');
   const [birthdate, setBirthdate] = useState('');
   const [gender, setGender] = useState('Khác');
@@ -69,14 +218,55 @@ export function CustomerCreate() {
   const [promotionMode, setPromotionMode] = useState<'group' | 'customer'>('group');
 
   const [groups, setGroups] = useState<CustomerGroup[]>([]);
+  const [provinces, setProvinces] = useState<VNProvince[]>([]);
+  const [wards, setWards] = useState<VNWard[]>([]);
   const [staff, setStaff] = useState<StaffProfile[]>([]);
   const [loadingLookups, setLoadingLookups] = useState(true);
+  const [loadingWards, setLoadingWards] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const selectedOwner = useMemo(
-    () => staff.find((member) => member.id === ownerId) ?? staff[0] ?? null,
-    [ownerId, staff],
+  const currentUserName = user?.user_metadata?.full_name || user?.email || 'Người dùng';
+  const selectedOwner = staff.find((member) => member.id === ownerId);
+  const ownerName = selectedOwner?.full_name || currentUserName;
+
+  const areaOptions = useMemo(
+    () =>
+      provinces.flatMap((province) =>
+        (province.districts ?? []).map((district) => ({
+          code: district.code,
+          provinceName: province.name,
+          districtName: district.name,
+          label: `${province.name} - ${district.name}`,
+        })),
+      ),
+    [provinces],
+  );
+
+  const staffOptions = useMemo(
+    () => {
+      const options = staff.map((member) => ({
+        value: member.id,
+        label: member.full_name,
+      }));
+
+      if (options.length || !user?.id) {
+        return options;
+      }
+
+      return [{ value: user.id, label: currentUserName }];
+    },
+    [currentUserName, staff, user?.id],
+  );
+
+  const areaDropdownOptions = useMemo(
+    () => areaOptions.map((area) => ({ value: String(area.code), label: area.label })),
+    [areaOptions],
+  );
+
+  const wardDropdownOptions = useMemo(
+    () => wards.map((ward) => ({ value: String(ward.code), label: ward.name })),
+    [wards],
   );
 
   useEffect(() => {
@@ -84,21 +274,31 @@ export function CustomerCreate() {
 
     Promise.all([
       customersService.getGroups(),
-      staffService.getActive().catch(() => [] as StaffProfile[]),
+      fetchProvinceDistricts(),
+      staffService.getAllUsers().catch(() => [] as StaffProfile[]),
     ])
-      .then(([groupList, staffList]) => {
+      .then(([groupList, provinceList, staffList]) => {
         if (!mounted) {
           return;
         }
         setGroups(groupList);
+        setProvinces(provinceList);
         setStaff(staffList);
-        if (staffList[0]) {
-          setOwnerId(staffList[0].id);
+
+        const matchedCurrentUser =
+          staffList.find((member) => member.id === user?.id) ??
+          staffList.find((member) => member.full_name === currentUserName) ??
+          staffList[0];
+
+        if (matchedCurrentUser) {
+          setOwnerId(matchedCurrentUser.id);
+        } else if (user?.id) {
+          setOwnerId(user.id);
         }
       })
       .catch(() => {
         if (mounted) {
-          setError('Không tải được dữ liệu nhóm khách hàng.');
+          setError('Không tải được dữ liệu nhóm khách hàng, địa chỉ hoặc nhân viên.');
         }
       })
       .finally(() => {
@@ -110,11 +310,37 @@ export function CustomerCreate() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [currentUserName, user?.id]);
 
-  const combinedAddress = [addressLine.trim(), ward.trim(), provinceDistrict.trim()]
+  const combinedAddress = [addressLine.trim(), wardName, districtName, provinceName]
     .filter(Boolean)
     .join(', ');
+
+  const handleAreaChange = (nextAreaCode: string) => {
+    setAreaCode(nextAreaCode);
+    setWardCode('');
+    setWardName('');
+    setWards([]);
+
+    const selectedArea = areaOptions.find((area) => String(area.code) === nextAreaCode);
+    setProvinceName(selectedArea?.provinceName ?? '');
+    setDistrictName(selectedArea?.districtName ?? '');
+
+    if (!selectedArea) {
+      return;
+    }
+
+    setLoadingWards(true);
+    fetchWards(selectedArea.code)
+      .then(setWards)
+      .catch(() => setError('Không tải được dữ liệu phường/xã.'))
+      .finally(() => setLoadingWards(false));
+  };
+
+  const handleWardChange = (nextWardCode: string) => {
+    setWardCode(nextWardCode);
+    setWardName(wards.find((ward) => String(ward.code) === nextWardCode)?.name ?? '');
+  };
 
   const handleSave = async () => {
     if (!fullName.trim()) {
@@ -128,7 +354,7 @@ export function CustomerCreate() {
     try {
       const noteParts = [
         description.trim(),
-        selectedOwner ? `Nhân viên phụ trách: ${selectedOwner.full_name}` : '',
+        ownerName ? `Nhân viên phụ trách: ${ownerName}` : '',
         gender ? `Giới tính: ${gender}` : '',
         fax.trim() ? `Số fax: ${fax.trim()}` : '',
         website.trim() ? `Website: ${website.trim()}` : '',
@@ -274,35 +500,25 @@ export function CustomerCreate() {
               <div className="grid gap-4 p-3 md:grid-cols-2">
                 <div>
                   <FieldLabel required>Khu vực</FieldLabel>
-                  <div className="relative">
-                    <select
-                      value={provinceDistrict}
-                      onChange={(event) => setProvinceDistrict(event.target.value)}
-                      className={selectClass}
-                    >
-                      <option value="">Chọn Tỉnh/Thành phố - Quận/Huyện</option>
-                      <option value="Hà Nội">Hà Nội</option>
-                      <option value="TP. Hồ Chí Minh">TP. Hồ Chí Minh</option>
-                      <option value="Đà Nẵng">Đà Nẵng</option>
-                      <option value="Hải Phòng">Hải Phòng</option>
-                    </select>
-                    <SelectChevron />
-                  </div>
+                  <DropdownSelect
+                    value={areaCode}
+                    options={areaDropdownOptions}
+                    placeholder="Chọn Tỉnh/Thành phố - Quận/Huyện"
+                    loading={loadingLookups}
+                    disabled={loadingLookups}
+                    onChange={handleAreaChange}
+                  />
                 </div>
                 <div>
                   <FieldLabel required>Phường xã</FieldLabel>
-                  <div className="relative">
-                    <select
-                      value={ward}
-                      onChange={(event) => setWard(event.target.value)}
-                      className={selectClass}
-                    >
-                      <option value="">Chọn Phường/Xã</option>
-                      <option value="Phường trung tâm">Phường trung tâm</option>
-                      <option value="Xã lân cận">Xã lân cận</option>
-                    </select>
-                    <SelectChevron />
-                  </div>
+                  <DropdownSelect
+                    value={wardCode}
+                    options={wardDropdownOptions}
+                    placeholder="Chọn Phường/Xã"
+                    loading={loadingWards}
+                    disabled={!areaCode || loadingWards}
+                    onChange={handleWardChange}
+                  />
                 </div>
                 <div className="md:col-span-2">
                   <FieldLabel required>Địa chỉ cụ thể</FieldLabel>
@@ -323,12 +539,20 @@ export function CustomerCreate() {
                 <FieldLabel>Ngày sinh</FieldLabel>
                 <div className="relative">
                   <input
+                    ref={birthdateInputRef}
                     type="date"
                     value={birthdate}
                     onChange={(event) => setBirthdate(event.target.value)}
-                    className={`${inputClass} pr-9 text-slate-500`}
+                    className={`${inputClass} pr-9 text-slate-500 [&::-webkit-calendar-picker-indicator]:opacity-0`}
                   />
-                  <CalendarDays size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <button
+                    type="button"
+                    onClick={() => birthdateInputRef.current?.showPicker?.()}
+                    className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-slate-400 transition-colors hover:text-[#0088FF]"
+                    aria-label="Chọn ngày sinh"
+                  >
+                    <CalendarDays size={15} />
+                  </button>
                 </div>
               </div>
               <div>
@@ -396,22 +620,14 @@ export function CustomerCreate() {
             <div className="space-y-4">
               <div>
                 <FieldLabel>Nhân viên phụ trách</FieldLabel>
-                <div className="relative">
-                  <select
-                    value={ownerId}
-                    onChange={(event) => setOwnerId(event.target.value)}
-                    disabled={loadingLookups || staff.length === 0}
-                    className={selectClass}
-                  >
-                    {staff.length === 0 ? <option value="">Chưa có nhân viên</option> : null}
-                    {staff.map((member) => (
-                      <option key={member.id} value={member.id}>
-                        {member.full_name}
-                      </option>
-                    ))}
-                  </select>
-                  <SelectChevron />
-                </div>
+                <DropdownSelect
+                  value={ownerId}
+                  options={staffOptions}
+                  placeholder="Chọn nhân viên phụ trách"
+                  loading={loadingLookups}
+                  disabled={loadingLookups || staffOptions.length === 0}
+                  onChange={setOwnerId}
+                />
               </div>
 
               <div>

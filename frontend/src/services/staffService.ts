@@ -15,9 +15,19 @@ export interface StaffProfile {
 
 export const staffService = {
   /**
-   * Lấy danh sách nhân viên đang hoạt động từ bảng profiles.
-   * Truy vấn trực tiếp Supabase vì backend chưa có module staff.
+   * Lay toan bo user/nhan vien tu bang profiles.
+   * profiles la bang public map voi auth.users trong schema hien tai.
    */
+  getAllUsers: async (): Promise<StaffProfile[]> => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, full_name, phone, role, is_active, branch_id')
+      .order('full_name', { ascending: true });
+
+    if (error) throw new Error(error.message);
+    return (data ?? []) as StaffProfile[];
+  },
+
   getActive: async (): Promise<StaffProfile[]> => {
     const { data, error } = await supabase
       .from('profiles')
