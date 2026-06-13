@@ -2,6 +2,7 @@ import { Injectable, Inject } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../supabase/supabase.constants.js';
 import { PaginationDto, PaginatedResult } from '../../common/dto/pagination.dto.js';
+import { CODE_PREFIXES, generateNextCode } from '../../common/code-generator.js';
 
 @Injectable()
 export class InventoryService {
@@ -88,6 +89,29 @@ export class InventoryService {
       .eq('status', 'active')
       .order('name');
     if (error) throw new Error(error.message);
-    return data ?? [];
+
+    if (data?.length) {
+      return data;
+    }
+
+    const code = await generateNextCode(this.supabase, {
+      table: 'branches',
+      column: 'code',
+      prefix: CODE_PREFIXES.branch,
+    });
+
+    const { data: defaultBranch, error: createError } = await this.supabase
+      .from('branches')
+      .insert({
+        code,
+        name: 'Chi nhánh mặc định',
+        is_default: true,
+        status: 'active',
+      })
+      .select('*')
+      .single();
+
+    if (createError) throw new Error(createError.message);
+    return defaultBranch ? [defaultBranch] : [];
   }
 }

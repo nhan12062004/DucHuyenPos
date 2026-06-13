@@ -6,7 +6,6 @@ import {
   Box,
   Calendar,
   ChevronDown,
-  Clock,
   Gift,
   ImageIcon,
   Info,
@@ -130,12 +129,12 @@ function parseNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function toDateTimeLocalValue(value?: string | null) {
+function toDateInputValue(value?: string | null) {
   if (!value) {
     return '';
   }
 
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return value;
   }
 
@@ -145,7 +144,7 @@ function toDateTimeLocalValue(value?: string | null) {
   }
 
   const pad = (input: number) => String(input).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 function toIsoDateTimeValue(value?: string) {
@@ -973,7 +972,7 @@ export function POS() {
         const parsedNote = parseOrderNote(order.note);
         setOrderNote(parsedNote.note);
         setTags(parsedNote.tags);
-        setDeliveryDue(toDateTimeLocalValue(order.delivery_due_at ?? parsedNote.deliveryDue));
+        setDeliveryDue(toDateInputValue(order.delivery_due_at ?? parsedNote.deliveryDue));
         setIssueInvoice(parsedNote.issueInvoice);
         setOrderDiscount(Number(order.discount_amount ?? 0));
         setShippingFee(Number(order.shipping_fee ?? 0));
@@ -1534,12 +1533,12 @@ export function POS() {
                   <label className="w-20 text-[13px] text-slate-600">Hẹn giao</label>
                   <div className="relative flex-1">
                     <input
-                      type="datetime-local"
+                      type="date"
                       value={deliveryDue}
                       onChange={(event) => setDeliveryDue(event.target.value)}
-                      className="w-full rounded border border-slate-300 px-3 py-1.5 text-[13px] focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded border border-slate-300 px-3 py-1.5 pr-9 text-[13px] focus:border-blue-500 focus:outline-none [&::-webkit-calendar-picker-indicator]:opacity-0"
                     />
-                    <Clock size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Calendar size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
