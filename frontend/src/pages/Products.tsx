@@ -21,7 +21,6 @@ import {
   type ProductStockSummary,
 } from '../services/productsService';
 import { inventoryService, type Branch } from '../services/inventoryService';
-import { AddProductModal } from '../components/AddProductModal';
 import { PageLoader } from '../components/PageLoader';
 
 type ProductDetailTab = 'stock' | 'history';
@@ -106,7 +105,6 @@ export function Products() {
   const [isListLoading, setIsListLoading] = useState(true);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
-  const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
@@ -373,33 +371,6 @@ export function Products() {
     link.click();
     URL.revokeObjectURL(url);
     setInfoMessage(`Đã xuất ${visibleProducts.length} sản phẩm.`);
-  };
-
-  const handleOpenAddProductModal = () => {
-    setListError(null);
-    setInfoMessage(null);
-    setIsAddProductModalOpen(true);
-  };
-
-  const handleProductCreated = (created: Product) => {
-    setProducts((current) => [created, ...current.filter((product) => product.id !== created.id)]);
-    setStockMap((current) => ({
-      ...current,
-      [created.id]: {
-        product_id: created.id,
-        sku: created.sku,
-        name: created.name,
-        sale_price: Number(created.sale_price ?? 0),
-        cost_price: Number(created.cost_price ?? 0),
-        reorder_level: Number(created.reorder_level ?? 0),
-        total_on_hand_qty: 0,
-        total_available_qty: 0,
-      },
-    }));
-    setSelectedProductId(created.id);
-    setSelectedProductDetail(created);
-    setIsAddProductModalOpen(false);
-    setInfoMessage(`Đã thêm sản phẩm ${created.name}.`);
   };
 
   const handleDeleteProduct = async () => {
@@ -854,12 +825,6 @@ export function Products() {
 
   return (
     <div className="flex flex-col gap-4">
-      <AddProductModal
-        open={isAddProductModalOpen}
-        onClose={() => setIsAddProductModalOpen(false)}
-        onCreated={handleProductCreated}
-      />
-
       <div className="list-toolbar">
         <div className="list-toolbar-actions">
           <button
@@ -896,13 +861,13 @@ export function Products() {
         </div>
         <div className="list-primary-split">
           <button
-            onClick={handleOpenAddProductModal}
+            onClick={() => navigate('/products/create')}
             className="list-primary-split-main"
           >
             <Plus size={16} /> Thêm sản phẩm
           </button>
           <button
-            onClick={handleOpenAddProductModal}
+            onClick={() => navigate('/products/create')}
             className="list-primary-split-toggle"
           >
             <ChevronDown size={16} />

@@ -441,32 +441,6 @@ export function Customers() {
     });
   };
 
-  const handleCreateCustomer = async () => {
-    const fullName = window.prompt('Tên khách hàng');
-    if (!fullName?.trim()) {
-      return;
-    }
-
-    const phone = window.prompt('Số điện thoại', '');
-    if (phone === null) {
-      return;
-    }
-
-    try {
-      const created = await customersService.create({
-        full_name: fullName.trim(),
-        phone: phone.trim() || undefined,
-        status: 'active',
-      });
-
-      setCustomers((current) => [created, ...current]);
-      setTotalCustomers((current) => current + 1);
-      setInfoMessage(`Đã thêm khách hàng ${created.full_name}.`);
-    } catch (error: any) {
-      setListError(error?.message ?? 'Thêm khách hàng thất bại.');
-    }
-  };
-
   if (selectedCustomer) {
     const historyRows = selectedCustomerOrders;
 
@@ -840,7 +814,7 @@ export function Customers() {
         </div>
         <button
           type="button"
-          onClick={handleCreateCustomer}
+          onClick={() => navigate('/customers/create')}
           className="list-primary-button"
         >
           <Plus size={16} />

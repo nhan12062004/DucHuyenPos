@@ -5,10 +5,12 @@ import { Dashboard } from './pages/Dashboard';
 import { POS } from './pages/POS';
 import { Orders } from './pages/Orders';
 import { Products } from './pages/Products';
+import { ProductCreate } from './pages/ProductCreate';
 import { Inventory } from './pages/Inventory';
 import { InventoryManagement } from './pages/InventoryManagement';
 import { PurchaseImport as Purchase } from './pages/PurchaseImport';
 import { Customers } from './pages/Customers';
+import { CustomerCreate } from './pages/CustomerCreate';
 import { Debts } from './pages/Debts';
 import { Invoice } from './pages/Invoice';
 
@@ -50,6 +52,7 @@ function AppRoutes() {
           <Route path="orders" element={<Orders />} />
           <Route path="returns" element={<Returns />} />
           <Route path="products" element={<Products />} />
+          <Route path="products/create" element={<ProductCreate />} />
           <Route path="purchase-orders" element={<PurchaseOrders />} />
           <Route path="purchase" element={<Purchase />} />
           <Route path="inventory" element={<Inventory />} />
@@ -57,6 +60,7 @@ function AppRoutes() {
           <Route path="suppliers" element={<Suppliers />} />
           <Route path="cost-price" element={<CostPrice />} />
           <Route path="customers" element={<Customers />} />
+          <Route path="customers/create" element={<CustomerCreate />} />
           <Route path="customer-groups" element={<CustomerGroups />} />
           <Route path="customer-groups/create" element={<CustomerGroupCreate />} />
           <Route path="debts" element={<Debts />} />
