@@ -131,18 +131,20 @@ export function InventoryManagement() {
           <button className="list-action-button">
             <Printer size={16} /> In tem mã
           </button>
-          <div className="h-4 w-px bg-slate-300"></div>
-          <button className="list-action-button">
-            Loại sản phẩm
-          </button>
-          <div className="h-4 w-px bg-slate-300"></div>
-          <button className="list-action-button">
-            Combo
-          </button>
-          <div className="h-4 w-px bg-slate-300"></div>
-          <button className="list-action-button">
-            Sản phẩm quy đổi
-          </button>
+          <div className="list-toolbar-divider"></div>
+          <div className="list-link-group">
+            <button className="list-link-button">
+              Loại sản phẩm
+            </button>
+            <div className="list-link-separator"></div>
+            <button className="list-link-button">
+              Combo
+            </button>
+            <div className="list-link-separator"></div>
+            <button className="list-link-button">
+              Sản phẩm quy đổi
+            </button>
+          </div>
         </div>
         <div>
           <button

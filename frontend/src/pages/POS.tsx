@@ -830,10 +830,12 @@ export function POS() {
   const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
   const [isCustomerDetailsExpanded, setIsCustomerDetailsExpanded] = useState(false);
   const customerSearchRef = useRef<HTMLDivElement>(null);
+  const productSearchRef = useRef<HTMLDivElement>(null);
   
   // Modals
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
   const [cartProducts, setCartProducts] = useState<CartProduct[]>([]);
+  const [activeCartProductId, setActiveCartProductId] = useState('');
   const [branches, setBranches] = useState<Branch[]>([]);
   const [staffList, setStaffList] = useState<StaffProfile[]>([]);
   const [branchId, setBranchId] = useState('');
@@ -864,6 +866,9 @@ export function POS() {
     function handleClickOutside(e: MouseEvent) {
       if (customerSearchRef.current && !customerSearchRef.current.contains(e.target as Node)) {
         setIsCustomerDropdownOpen(false);
+      }
+      if (productSearchRef.current && !productSearchRef.current.contains(e.target as Node)) {
+        setIsDropdownOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -994,6 +999,7 @@ export function POS() {
             unitName: item.unit_name || 'cái',
           })),
         );
+        setActiveCartProductId(order.sales_order_items?.[0]?.product_id ?? '');
       } catch (loadError: any) {
         if (!active) {
           return;
@@ -1034,7 +1040,7 @@ export function POS() {
   const filteredProducts = products.filter((product) => {
     const query = productQuery.trim().toLowerCase();
     if (!query) {
-      return false;
+      return true;
     }
 
     return (
@@ -1051,6 +1057,7 @@ export function POS() {
   };
 
   const handleProductSelect = (product: Product) => {
+    setActiveCartProductId(product.id);
     setCartProducts((current) => {
       const existing = current.find((item) => item.id === product.id);
       if (existing) {
@@ -1097,6 +1104,7 @@ export function POS() {
         return { ...item, [field]: Math.max(0, value) };
       }),
     );
+    setActiveCartProductId(productId);
   };
 
   const subtotal = cartProducts.reduce((sum, item) => sum + item.price * item.qty - item.discount, 0);
@@ -1188,6 +1196,7 @@ export function POS() {
 
       setSuccessMessage(`Đã tạo đơn hàng ${savedOrder.order_no}.`);
       setCartProducts([]);
+      setActiveCartProductId('');
       setOrderNo('');
       setOrderNote('');
       setTags('');
@@ -1342,10 +1351,7 @@ export function POS() {
                   </div>
 
                   <div
-                    aria-hidden={isCustomerDropdownOpen || !!customerQuery.trim()}
-                    className={`mt-8 flex flex-1 flex-col items-center justify-center rounded border border-dashed border-slate-200 bg-slate-50/50 py-8 text-slate-400 transition-opacity ${
-                      isCustomerDropdownOpen || customerQuery.trim() ? 'pointer-events-none opacity-0' : 'opacity-100'
-                    }`}
+                    className="mt-8 flex flex-1 flex-col items-center justify-center rounded border border-dashed border-slate-200 bg-slate-50/50 py-8 text-slate-400"
                   >
                       <div className="mb-3 flex h-16 w-16 items-center justify-center rounded bg-slate-100">
                         <svg
@@ -1485,12 +1491,12 @@ export function POS() {
               </div>
 
               <div className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <label className="w-20 text-[13px] text-slate-600">Bán tại</label>
+                <div className="grid grid-cols-[76px_minmax(0,1fr)] items-center gap-4">
+                  <label className="text-[13px] text-slate-600">Bán tại</label>
                   <select
                     value={branchId}
                     onChange={(event) => setBranchId(event.target.value)}
-                    className="flex-1 rounded border border-slate-300 bg-white px-3 py-1.5 text-[13px] focus:border-blue-500 focus:outline-none"
+                    className="h-8 w-full rounded border border-slate-300 bg-white px-3 text-[13px] focus:border-blue-500 focus:outline-none"
                   >
                     {branches.map((branch) => (
                       <option key={branch.id} value={branch.id}>
@@ -1499,12 +1505,12 @@ export function POS() {
                     ))}
                   </select>
                 </div>
-                <div className="flex items-center gap-4">
-                  <label className="w-20 text-[13px] text-slate-600">Bán bởi</label>
+                <div className="grid grid-cols-[76px_minmax(0,1fr)] items-center gap-4">
+                  <label className="text-[13px] text-slate-600">Bán bởi</label>
                   <select
                     value={cashierId}
                     onChange={(event) => setCashierId(event.target.value)}
-                    className="flex-1 rounded border border-slate-300 bg-white px-3 py-1.5 text-[13px] focus:border-blue-500 focus:outline-none"
+                    className="h-8 w-full rounded border border-slate-300 bg-white px-3 text-[13px] focus:border-blue-500 focus:outline-none"
                   >
                     <option value="">{loadingStaff ? 'Đang tải nhân viên...' : 'Chọn người bán'}</option>
                     {staffList.map((staff) => (
@@ -1514,14 +1520,14 @@ export function POS() {
                     ))}
                   </select>
                 </div>
-                <div className="flex items-center gap-4">
-                  <label className="w-20 text-[13px] text-slate-600">Nguồn</label>
+                <div className="grid grid-cols-[76px_minmax(0,1fr)] items-center gap-4">
+                  <label className="text-[13px] text-slate-600">Nguồn</label>
                   <select
                     value={source}
                     onChange={(event) =>
                       setSource(event.target.value as 'pos' | 'web' | 'phone' | 'manual')
                     }
-                    className="flex-1 rounded border border-slate-300 bg-white px-3 py-1.5 text-[13px] focus:border-blue-500 focus:outline-none"
+                    className="h-8 w-full rounded border border-slate-300 bg-white px-3 text-[13px] focus:border-blue-500 focus:outline-none"
                   >
                     <option value="web">Web</option>
                     <option value="pos">POS</option>
@@ -1529,25 +1535,25 @@ export function POS() {
                     <option value="manual">Thủ công</option>
                   </select>
                 </div>
-                <div className="flex items-center gap-4">
-                  <label className="w-20 text-[13px] text-slate-600">Hẹn giao</label>
-                  <div className="relative flex-1">
+                <div className="grid grid-cols-[76px_minmax(0,1fr)] items-center gap-4">
+                  <label className="text-[13px] text-slate-600">Hẹn giao</label>
+                  <div className="relative">
                     <input
                       type="date"
                       value={deliveryDue}
                       onChange={(event) => setDeliveryDue(event.target.value)}
-                      className="w-full rounded border border-slate-300 px-3 py-1.5 pr-9 text-[13px] focus:border-blue-500 focus:outline-none [&::-webkit-calendar-picker-indicator]:opacity-0"
+                      className="h-8 w-full rounded border border-slate-300 px-3 pr-9 text-[13px] focus:border-blue-500 focus:outline-none [&::-webkit-calendar-picker-indicator]:opacity-0"
                     />
                     <Calendar size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
-                  <label className="w-20 text-[13px] text-slate-600">Mã đơn</label>
+                <div className="grid grid-cols-[76px_minmax(0,1fr)] items-center gap-4">
+                  <label className="text-[13px] text-slate-600">Mã đơn</label>
                   <input
                     type="text"
                     value={orderNo}
                     onChange={(event) => setOrderNo(event.target.value)}
-                    className="flex-1 rounded border border-slate-300 px-3 py-1.5 text-[13px] focus:border-blue-500 focus:outline-none"
+                    className="h-8 w-full rounded border border-slate-300 px-3 text-[13px] focus:border-blue-500 focus:outline-none"
                   />
                 </div>
               </div>
@@ -1576,26 +1582,29 @@ export function POS() {
           </div>
 
           <div className="relative z-20 flex items-center gap-2 border-b border-slate-100 bg-white p-5">
-            <div className="relative flex-1">
+            <div className="relative flex-1" ref={productSearchRef}>
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
               <input
+                id="pos-product-search"
                 type="text"
                 placeholder="Tìm theo tên, mã SKU, hoặc quét mã Barcode...(F3)"
                 className={cn(
                   'w-full rounded border py-2 pl-9 pr-8 text-[13px] transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500',
-                  isDropdownOpen && productQuery ? 'border-blue-500 ring-1 ring-blue-500' : 'border-slate-300',
+                  isDropdownOpen ? 'border-blue-500 ring-1 ring-blue-500' : 'border-slate-300',
                 )}
                 value={productQuery}
+                onFocus={() => setIsDropdownOpen(true)}
+                onClick={() => setIsDropdownOpen(true)}
                 onChange={(event) => {
                   setProductQuery(event.target.value);
-                  setIsDropdownOpen(!!event.target.value);
+                  setIsDropdownOpen(true);
                 }}
               />
               {productQuery && (
                 <button
                   onClick={() => {
                     setProductQuery('');
-                    setIsDropdownOpen(false);
+                    setIsDropdownOpen(true);
                   }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-slate-200 p-0.5 text-slate-400 hover:text-slate-600"
                 >
@@ -1603,7 +1612,7 @@ export function POS() {
                 </button>
               )}
 
-              {isDropdownOpen && productQuery && (
+              {isDropdownOpen && (
                 <div className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded border border-slate-200 bg-white shadow-lg">
                   <button
                     type="button"
@@ -1621,7 +1630,7 @@ export function POS() {
                       Không tìm thấy sản phẩm phù hợp
                     </div>
                   ) : (
-                    filteredProducts.slice(0, 8).map((product) => {
+                    filteredProducts.slice(0, 10).map((product) => {
                       const stock = stockSummary[product.id];
 
                       return (
@@ -1658,7 +1667,10 @@ export function POS() {
             </div>
 
             <button
-              onClick={() => setIsDropdownOpen(true)}
+              onClick={() => {
+                setIsDropdownOpen(true);
+                document.getElementById('pos-product-search')?.focus();
+              }}
               className="shrink-0 rounded border border-slate-300 bg-white px-4 py-2 text-[13px] font-medium text-slate-700 transition-colors hover:bg-slate-50"
             >
               Chọn nhanh
@@ -1720,7 +1732,10 @@ export function POS() {
               </div>
               <p className="mb-4 text-[13px] font-medium">Chưa có thông tin sản phẩm</p>
               <button
-                onClick={() => setIsDropdownOpen(true)}
+                onClick={() => {
+                  setIsDropdownOpen(true);
+                  document.getElementById('pos-product-search')?.focus();
+                }}
                 className="rounded border border-blue-400 bg-white px-6 py-2 text-[13px] font-medium text-blue-600 transition-colors hover:bg-blue-50"
               >
                 Thêm sản phẩm
@@ -1741,71 +1756,102 @@ export function POS() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {cartProducts.map((product, index) => (
-                    <tr
-                      key={product.id}
-                      className="border border-blue-400 bg-blue-50/30 shadow-[inset_0_0_0_1px_#60A5FA]"
-                    >
-                      <td className="px-5 py-4 text-center font-medium text-slate-600">{index + 1}</td>
-                      <td className="px-2 py-4">
-                        <div className="flex h-10 w-10 items-center justify-center rounded border border-slate-200 bg-white text-slate-300">
-                          <ImageIcon size={20} />
-                        </div>
-                      </td>
-                      <td className="px-2 py-4">
-                        <div className="flex items-center gap-1 text-[13px] font-medium text-[#0A1629]">
-                          {product.name}
-                          <Info size={12} className="mt-0.5 text-yellow-500" />
-                        </div>
-                        <div className="mt-0.5 text-[12px] text-slate-500">{product.subName}</div>
-                        <div className="text-[12px] text-blue-500">{product.code}</div>
-                      </td>
-                      <td className="px-2 py-4 text-center">
-                        <input
-                          type="number"
-                          min={1}
-                          value={product.qty}
-                          onChange={(event) =>
-                            updateCartProduct(product.id, 'qty', parseNumber(event.target.value))
-                          }
-                          className="w-14 border-b-[1.5px] border-blue-500 bg-transparent py-1 text-center font-semibold text-blue-600 focus:outline-none"
-                        />
-                      </td>
-                      <td className="px-2 py-4 text-right">
-                        <input
-                          type="number"
-                          min={0}
-                          value={product.price}
-                          onChange={(event) =>
-                            updateCartProduct(product.id, 'price', parseNumber(event.target.value))
-                          }
-                          className="w-full border-b border-slate-200 bg-transparent py-1 text-right text-slate-800 transition-colors focus:border-blue-500 focus:outline-none hover:border-slate-300"
-                        />
-                      </td>
-                      <td className="px-2 py-4 text-right">
-                        <input
-                          type="number"
-                          min={0}
-                          value={product.discount}
-                          onChange={(event) =>
-                            updateCartProduct(product.id, 'discount', parseNumber(event.target.value))
-                          }
-                          className="w-full border-b border-slate-200 bg-transparent py-1 text-right text-slate-800 transition-colors focus:border-blue-500 focus:outline-none hover:border-slate-300"
-                        />
-                      </td>
-                      <td className="flex h-full items-center justify-end gap-3 px-5 py-4 text-right font-medium text-slate-800">
-                        {formatNumber(product.price * product.qty - product.discount)}
-                        <button
-                          onClick={() =>
-                            setCartProducts((current) => current.filter((item) => item.id !== product.id))
-                          }
-                          className="ml-2 text-slate-400 transition-colors hover:text-red-500"
-                        >
-                          <X size={16} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {cartProducts.map((product, index) => {
+                    const isActive = activeCartProductId === product.id;
+
+                    return (
+                      <tr
+                        key={product.id}
+                        onClick={() => setActiveCartProductId(product.id)}
+                        className={cn(
+                          'relative bg-white transition-colors',
+                          isActive
+                            ? 'z-[1] bg-blue-50/30'
+                            : 'hover:bg-slate-50',
+                        )}
+                      >
+                        <td className={cn(
+                          'px-5 py-4 text-center font-medium text-slate-600',
+                          isActive && 'border-y border-l border-blue-400',
+                        )}>
+                          {index + 1}
+                        </td>
+                        <td className={cn('px-2 py-4', isActive && 'border-y border-blue-400')}>
+                          <div className="flex h-10 w-10 items-center justify-center rounded border border-slate-200 bg-white text-slate-300">
+                            <ImageIcon size={20} />
+                          </div>
+                        </td>
+                        <td className={cn('px-2 py-4', isActive && 'border-y border-blue-400')}>
+                          <div className="flex items-center gap-1 text-[13px] font-medium text-[#0A1629]">
+                            {product.name}
+                            <Info size={12} className="mt-0.5 text-yellow-500" />
+                          </div>
+                          <div className="mt-0.5 text-[12px] text-slate-500">{product.subName}</div>
+                          <div className="text-[12px] text-blue-500">{product.code}</div>
+                        </td>
+                        <td className={cn('px-2 py-4 text-center', isActive && 'border-y border-blue-400')}>
+                          <input
+                            type="number"
+                            min={1}
+                            value={product.qty}
+                            onFocus={() => setActiveCartProductId(product.id)}
+                            onChange={(event) =>
+                              updateCartProduct(product.id, 'qty', parseNumber(event.target.value))
+                            }
+                            className={cn(
+                              'w-14 border-b-[1.5px] bg-transparent py-1 text-center font-semibold focus:outline-none',
+                              isActive ? 'border-blue-500 text-blue-600' : 'border-slate-200 text-slate-800',
+                            )}
+                          />
+                        </td>
+                        <td className={cn('px-2 py-4 text-right', isActive && 'border-y border-blue-400')}>
+                          <input
+                            type="number"
+                            min={0}
+                            value={product.price}
+                            onFocus={() => setActiveCartProductId(product.id)}
+                            onChange={(event) =>
+                              updateCartProduct(product.id, 'price', parseNumber(event.target.value))
+                            }
+                            className="w-full border-b border-slate-200 bg-transparent py-1 text-right text-slate-800 transition-colors focus:border-blue-500 focus:outline-none hover:border-slate-300"
+                          />
+                        </td>
+                        <td className={cn('px-2 py-4 text-right', isActive && 'border-y border-blue-400')}>
+                          <input
+                            type="number"
+                            min={0}
+                            value={product.discount}
+                            onFocus={() => setActiveCartProductId(product.id)}
+                            onChange={(event) =>
+                              updateCartProduct(product.id, 'discount', parseNumber(event.target.value))
+                            }
+                            className="w-full border-b border-slate-200 bg-transparent py-1 text-right text-slate-800 transition-colors focus:border-blue-500 focus:outline-none hover:border-slate-300"
+                          />
+                        </td>
+                        <td className={cn(
+                          'h-full px-5 py-4 text-right font-medium text-slate-800',
+                          isActive && 'border-y border-r border-blue-400',
+                        )}>
+                          <div className="flex items-center justify-end gap-3">
+                          {formatNumber(product.price * product.qty - product.discount)}
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              const nextProducts = cartProducts.filter((item) => item.id !== product.id);
+                              setCartProducts(nextProducts);
+                              if (activeCartProductId === product.id) {
+                                setActiveCartProductId(nextProducts[0]?.id ?? '');
+                              }
+                            }}
+                            className="ml-2 text-slate-400 transition-colors hover:text-red-500"
+                          >
+                            <X size={16} />
+                          </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

@@ -839,25 +839,29 @@ export function Products() {
           >
             <Upload size={16} /> Nhập file
           </button>
-          <div className="mx-1 h-4 w-px bg-slate-300"></div>
-          <button
-            onClick={() => setInfoMessage('Danh sách này đang hiển thị sản phẩm thường theo backend hiện tại.')}
-            className="text-slate-600 transition-colors hover:text-[#0088FF]"
-          >
-            Loại sản phẩm
-          </button>
-          <button
-            onClick={() => setInfoMessage('Combo chưa có luồng backend riêng, mình đang giữ nguyên nút và thông báo trạng thái.')}
-            className="text-slate-600 transition-colors hover:text-[#0088FF]"
-          >
-            Combo
-          </button>
-          <button
-            onClick={() => setInfoMessage('Sản phẩm quy đổi chưa có backend riêng, mình đang giữ nguyên nút và thông báo trạng thái.')}
-            className="text-slate-600 transition-colors hover:text-[#0088FF]"
-          >
-            Sản phẩm quy đổi
-          </button>
+          <div className="list-toolbar-divider"></div>
+          <div className="list-link-group">
+            <button
+              onClick={() => setInfoMessage('Danh sách này đang hiển thị sản phẩm thường theo backend hiện tại.')}
+              className="list-link-button"
+            >
+              Loại sản phẩm
+            </button>
+            <div className="list-link-separator"></div>
+            <button
+              onClick={() => setInfoMessage('Combo chưa có luồng backend riêng, mình đang giữ nguyên nút và thông báo trạng thái.')}
+              className="list-link-button"
+            >
+              Combo
+            </button>
+            <div className="list-link-separator"></div>
+            <button
+              onClick={() => setInfoMessage('Sản phẩm quy đổi chưa có backend riêng, mình đang giữ nguyên nút và thông báo trạng thái.')}
+              className="list-link-button"
+            >
+              Sản phẩm quy đổi
+            </button>
+          </div>
         </div>
         <div className="list-primary-split">
           <button
