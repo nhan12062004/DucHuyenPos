@@ -74,6 +74,10 @@ export class SalesOrdersService {
     const { items, ...orderData } = dto;
     const deliveryFields = resolveDeliveryFields(orderData);
 
+    if (!orderData.customer_id) {
+      orderData.customer_id = await this.getWalkInCustomerId();
+    }
+
     orderData.order_no =
       normalizeManualCode(orderData.order_no) ??
       await generateNextCode(this.supabase, {
@@ -229,5 +233,61 @@ export class SalesOrdersService {
 
   async cancel(id: string, actor?: ActivityActor) {
     return this.update(id, { status: 'cancelled' }, actor);
+  }
+
+  private async getWalkInCustomerId() {
+    const { data: existingCustomer, error: existingCustomerError } = await this.supabase
+      .from('customers')
+      .select('id')
+      .eq('full_name', 'Khách lẻ')
+      .maybeSingle();
+
+    if (existingCustomerError) throw new Error(existingCustomerError.message);
+    if (existingCustomer?.id) return existingCustomer.id;
+
+    const customerGroupId = await this.getRetailCustomerGroupId();
+    const code = await generateNextCode(this.supabase, {
+      table: 'customers',
+      column: 'code',
+      prefix: CODE_PREFIXES.customer,
+    });
+
+    const { data: createdCustomer, error: createCustomerError } = await this.supabase
+      .from('customers')
+      .insert({
+        code,
+        full_name: 'Khách lẻ',
+        customer_group_id: customerGroupId,
+        status: 'active',
+        notes: 'Khách mặc định cho đơn hàng không có thông tin khách hàng',
+      })
+      .select('id')
+      .single();
+
+    if (createCustomerError || !createdCustomer) {
+      throw new Error(createCustomerError?.message ?? 'Không tạo được khách hàng mặc định');
+    }
+
+    return createdCustomer.id;
+  }
+
+  private async getRetailCustomerGroupId() {
+    const { data, error } = await this.supabase
+      .from('customer_groups')
+      .select('id, name')
+      .order('created_at', { ascending: true });
+
+    if (error) throw new Error(error.message);
+
+    const retailGroup = (data ?? []).find((group: any) => {
+      const normalizedName = String(group.name ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+
+      return normalizedName.includes('ban le');
+    });
+
+    return retailGroup?.id;
   }
 }

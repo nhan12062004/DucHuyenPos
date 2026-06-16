@@ -122,12 +122,62 @@ function parseOrderNote(rawNote?: string | null) {
 }
 
 function formatNumber(value: number) {
-  return value.toLocaleString('vi-VN');
+  return Math.round(value).toLocaleString('en-US');
 }
 
 function parseNumber(value: string) {
-  const parsed = Number(value);
+  const normalizedValue = value.replace(/,/g, '').trim();
+  const parsed = Number(normalizedValue);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function MoneyInput({
+  value,
+  onChange,
+  className,
+  onFocus,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  className?: string;
+  onFocus?: () => void;
+}) {
+  const [draftValue, setDraftValue] = useState(formatNumber(value));
+  const [isFocused, setIsFocused] = useState(false);
+
+  useEffect(() => {
+    if (!isFocused) {
+      setDraftValue(formatNumber(value));
+    }
+  }, [isFocused, value]);
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={draftValue}
+      onFocus={(event) => {
+        setIsFocused(true);
+        onFocus?.();
+        if (value === 0) {
+          setDraftValue('');
+          return;
+        }
+        event.currentTarget.select();
+      }}
+      onChange={(event) => {
+        const nextDraft = event.target.value.replace(/[^\d,]/g, '');
+        const nextValue = Math.max(0, parseNumber(nextDraft));
+        setDraftValue(nextDraft ? formatNumber(nextValue) : '');
+        onChange(nextValue);
+      }}
+      onBlur={() => {
+        setIsFocused(false);
+        setDraftValue(formatNumber(parseNumber(draftValue)));
+      }}
+      className={className}
+    />
+  );
 }
 
 function toDateInputValue(value?: string | null) {
@@ -1814,26 +1864,18 @@ export function POS() {
                           />
                         </td>
                         <td className={cn('px-2 py-4 text-right', isActive && 'border-y border-blue-400')}>
-                          <input
-                            type="number"
-                            min={0}
+                          <MoneyInput
                             value={product.price}
                             onFocus={() => setActiveCartProductId(product.id)}
-                            onChange={(event) =>
-                              updateCartProduct(product.id, 'price', parseNumber(event.target.value))
-                            }
+                            onChange={(value) => updateCartProduct(product.id, 'price', value)}
                             className="w-full border-b border-slate-200 bg-transparent py-1 text-right text-slate-800 transition-colors focus:border-blue-500 focus:outline-none hover:border-slate-300"
                           />
                         </td>
                         <td className={cn('px-2 py-4 text-right', isActive && 'border-y border-blue-400')}>
-                          <input
-                            type="number"
-                            min={0}
+                          <MoneyInput
                             value={product.discount}
                             onFocus={() => setActiveCartProductId(product.id)}
-                            onChange={(event) =>
-                              updateCartProduct(product.id, 'discount', parseNumber(event.target.value))
-                            }
+                            onChange={(value) => updateCartProduct(product.id, 'discount', value)}
                             className="w-full border-b border-slate-200 bg-transparent py-1 text-right text-slate-800 transition-colors focus:border-blue-500 focus:outline-none hover:border-slate-300"
                           />
                         </td>
@@ -1958,11 +2000,9 @@ export function POS() {
 
               <div className="flex items-center justify-between border-t border-slate-100 pt-2 text-slate-700">
                 <span>Khách đã trả</span>
-                <input
-                  type="number"
-                  min={0}
+                <MoneyInput
                   value={paidAmount}
-                  onChange={(event) => setPaidAmount(Math.max(0, parseNumber(event.target.value)))}
+                  onChange={(value) => setPaidAmount(Math.max(0, value))}
                   className="w-28 border-b border-dashed border-slate-300 bg-transparent text-right font-semibold focus:outline-none"
                 />
               </div>
@@ -2032,24 +2072,12 @@ export function POS() {
             </button>
           </div>
 
-          <div className="ui-subtle-panel p-4 text-slate-600">
-            {selectedCustomer ? (
-              <>
-                Giao theo khách hàng: <span className="font-medium text-slate-800">{selectedCustomer.full_name}</span>
-                {selectedCustomer.address ? ` - ${selectedCustomer.address}` : ' - Chưa có địa chỉ giao hàng'}
-              </>
-            ) : (
-              <>
-                Chưa chọn khách hàng. Đơn hàng sẽ được tạo cho khách lẻ.{' '}
-                <button
-                  onClick={() => document.getElementById('pos-customer-search')?.focus()}
-                  className="text-blue-600 hover:underline"
-                >
-                  Chọn khách hàng
-                </button>
-              </>
-            )}
-          </div>
+          {selectedCustomer ? (
+            <div className="ui-subtle-panel p-4 text-slate-600">
+              Giao theo khách hàng: <span className="font-medium text-slate-800">{selectedCustomer.full_name}</span>
+              {selectedCustomer.address ? ` - ${selectedCustomer.address}` : ' - Chưa có địa chỉ giao hàng'}
+            </div>
+          ) : null}
         </div>
 
         <div className="flex justify-end gap-3">
