@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { readSheet } from 'read-excel-file/browser';
 import {
   Search,
   ChevronDown,
@@ -12,6 +13,7 @@ import {
   Copy,
   ImageIcon,
   Info,
+  Loader2,
 } from 'lucide-react';
 import {
   productsService,
@@ -87,6 +89,130 @@ function getSystemDefaultBranch(branches: Branch[]) {
   return branches.find((branch) => branch.is_default) ?? branches[0] ?? null;
 }
 
+function normalizeImportKey(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function parseImportNumber(value?: string) {
+  if (!value) {
+    return 0;
+  }
+
+  const digits = value.replace(/[^\d]/g, '');
+  const numeric = Number(digits);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function parseImportBoolean(value: string | undefined, defaultValue: boolean) {
+  if (!value?.trim()) {
+    return defaultValue;
+  }
+
+  const normalized = normalizeImportKey(value);
+  if (['1', 'true', 'co', 'yes', 'y', 'bat', 'active', 'hoat dong'].includes(normalized)) {
+    return true;
+  }
+  if (['0', 'false', 'khong', 'no', 'n', 'tat', 'inactive', 'ngung', 'vo hieu hoa'].includes(normalized)) {
+    return false;
+  }
+
+  return defaultValue;
+}
+
+function parseCsvContent(content: string) {
+  const normalizedContent = content.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const firstLine = normalizedContent.split('\n', 1)[0] ?? '';
+  const delimiter = (firstLine.match(/;/g)?.length ?? 0) > (firstLine.match(/,/g)?.length ?? 0) ? ';' : ',';
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let inQuotes = false;
+
+  for (let index = 0; index < normalizedContent.length; index += 1) {
+    const char = normalizedContent[index];
+    const nextChar = normalizedContent[index + 1];
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        cell += '"';
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === delimiter && !inQuotes) {
+      row.push(cell.trim());
+      cell = '';
+      continue;
+    }
+
+    if (char === '\n' && !inQuotes) {
+      row.push(cell.trim());
+      if (row.some(Boolean)) {
+        rows.push(row);
+      }
+      row = [];
+      cell = '';
+      continue;
+    }
+
+    cell += char;
+  }
+
+  row.push(cell.trim());
+  if (row.some(Boolean)) {
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+async function parseImportFile(file: File) {
+  const fileName = file.name.toLowerCase();
+
+  if (fileName.endsWith('.xlsx')) {
+    const rows = await readSheet(file);
+    return rows
+      .map((row) => row.map((cell) => (cell === null ? '' : String(cell).trim())))
+      .filter((row) => row.some(Boolean));
+  }
+
+  return parseCsvContent(await file.text());
+}
+
+function getImportValue(record: Record<string, string>, aliases: string[]) {
+  for (const alias of aliases) {
+    const value = record[normalizeImportKey(alias)];
+    if (value?.trim()) {
+      return value.trim();
+    }
+  }
+
+  return '';
+}
+
+function findLookupId<T extends { id: string; code?: string; name: string }>(items: T[], value: string) {
+  if (!value.trim()) {
+    return undefined;
+  }
+
+  const normalized = normalizeImportKey(value);
+  return items.find((item) =>
+    item.id === value ||
+    normalizeImportKey(item.name) === normalized ||
+    (item.code ? normalizeImportKey(item.code) === normalized : false),
+  )?.id;
+}
+
 export function Products() {
   const [activeTab, setActiveTab] = useState('all');
   const [detailTab, setDetailTab] = useState<ProductDetailTab>('stock');
@@ -108,6 +234,8 @@ export function Products() {
   const [listError, setListError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const importFileInputRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const systemDefaultBranch = useMemo(() => getSystemDefaultBranch(branches), [branches]);
@@ -371,6 +499,115 @@ export function Products() {
     link.click();
     URL.revokeObjectURL(url);
     setInfoMessage(`Đã xuất ${visibleProducts.length} sản phẩm.`);
+  };
+
+  const handleImportProducts = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) {
+      return;
+    }
+
+    const lowerFileName = file.name.toLowerCase();
+    const supportedFile =
+      lowerFileName.endsWith('.csv') ||
+      lowerFileName.endsWith('.txt') ||
+      lowerFileName.endsWith('.xlsx');
+    if (!supportedFile) {
+      setInfoMessage('Hiện chức năng nhập file hỗ trợ Excel .xlsx và CSV.');
+      return;
+    }
+
+    setIsImporting(true);
+    setListError(null);
+    setInfoMessage(`Đang đọc file ${file.name}...`);
+
+    try {
+      const rows = await parseImportFile(file);
+      const [headers, ...dataRows] = rows;
+
+      if (!headers?.length || dataRows.length === 0) {
+        setInfoMessage('File nhập chưa có dữ liệu sản phẩm.');
+        return;
+      }
+
+      const normalizedHeaders = headers.map(normalizeImportKey);
+      const createdProducts: Product[] = [];
+      const failures: string[] = [];
+      let skippedRows = 0;
+
+      for (const [index, row] of dataRows.entries()) {
+        const record = normalizedHeaders.reduce<Record<string, string>>((acc, header, headerIndex) => {
+          acc[header] = row[headerIndex] ?? '';
+          return acc;
+        }, {});
+
+        const name = getImportValue(record, ['Tên sản phẩm', 'Ten san pham', 'Product name', 'Name', 'Tên']);
+        if (!name) {
+          skippedRows += 1;
+          continue;
+        }
+
+        const categoryValue = getImportValue(record, [
+          'product_category_id',
+          'category_id',
+          'Loại',
+          'Loại sản phẩm',
+          'Category',
+        ]);
+        const brandValue = getImportValue(record, ['brand_id', 'Nhãn hiệu', 'Thương hiệu', 'Brand']);
+        const statusValue = getImportValue(record, ['Trạng thái', 'Status']);
+        const isActive = statusValue ? parseImportBoolean(statusValue, true) : true;
+
+        try {
+          const created = await productsService.create({
+            sku: getImportValue(record, ['SKU', 'Mã sản phẩm', 'Ma san pham', 'Mã SP']) || undefined,
+            barcode: getImportValue(record, ['Barcode', 'Mã vạch', 'Ma vach']) || undefined,
+            name,
+            product_category_id: findLookupId(categories, categoryValue),
+            brand_id: findLookupId(brands, brandValue),
+            default_branch_id: systemDefaultBranch?.id,
+            unit_name: getImportValue(record, ['Đơn vị', 'Đơn vị tính', 'Unit', 'unit_name']) || 'cái',
+            description: getImportValue(record, ['Mô tả', 'Mo ta', 'Description']) || undefined,
+            sale_price: parseImportNumber(getImportValue(record, ['Giá bán', 'Giá bán lẻ', 'Sale price', 'sale_price'])),
+            cost_price: parseImportNumber(getImportValue(record, ['Giá nhập', 'Giá vốn', 'Cost price', 'cost_price'])),
+            reorder_level: parseImportNumber(getImportValue(record, ['Tồn tối thiểu', 'Reorder level', 'reorder_level'])),
+            track_inventory: parseImportBoolean(
+              getImportValue(record, ['Quản lý tồn kho', 'Track inventory', 'track_inventory']),
+              true,
+            ),
+            allow_negative_stock: parseImportBoolean(
+              getImportValue(record, ['Bán âm', 'Allow negative stock', 'allow_negative_stock']),
+              false,
+            ),
+            status: isActive ? 'active' : 'inactive',
+          } satisfies Partial<Product>);
+
+          createdProducts.push(created);
+        } catch (error: any) {
+          failures.push(`Dòng ${index + 2}: ${error?.message ?? 'Không nhập được sản phẩm.'}`);
+        }
+      }
+
+      if (createdProducts.length > 0) {
+        setProducts((current) => [...createdProducts, ...current]);
+      }
+
+      const summaryParts = [
+        createdProducts.length ? `Đã nhập ${createdProducts.length} sản phẩm` : 'Chưa nhập được sản phẩm nào',
+        skippedRows ? `bỏ qua ${skippedRows} dòng thiếu tên` : '',
+        failures.length ? `${failures.length} dòng lỗi` : '',
+      ].filter(Boolean);
+
+      setInfoMessage(
+        `${summaryParts.join(', ')}.${failures.length ? ` Lỗi đầu tiên: ${failures[0]}` : ''}`,
+      );
+    } catch (error: any) {
+      setListError(error?.message ?? 'Nhập file sản phẩm thất bại.');
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const handleDeleteProduct = async () => {
@@ -827,17 +1064,26 @@ export function Products() {
     <div className="flex flex-col gap-4">
       <div className="list-toolbar">
         <div className="list-toolbar-actions">
+          <input
+            ref={importFileInputRef}
+            type="file"
+            accept=".xlsx,.csv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+            className="hidden"
+            onChange={handleImportProducts}
+          />
           <button
             onClick={handleExportProducts}
+            disabled={isImporting}
             className="list-action-button"
           >
             <Download size={16} /> Xuất file
           </button>
           <button
-            onClick={() => setInfoMessage('Nhập file sản phẩm chưa có luồng backend riêng. Bạn có thể thêm trực tiếp bằng nút Thêm sản phẩm.')}
+            onClick={() => importFileInputRef.current?.click()}
+            disabled={isImporting}
             className="list-action-button"
           >
-            <Upload size={16} /> Nhập file
+            {isImporting ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />} Nhập file
           </button>
           <div className="list-toolbar-divider"></div>
           <div className="list-link-group">

@@ -19,6 +19,7 @@ import {
   ImageIcon,
   Loader2,
   AlertCircle,
+  X,
 } from 'lucide-react';
 import {
   salesOrdersService,
@@ -29,6 +30,8 @@ import { getDeliveryLabel, getDeliveryStatusFromTab, parseLegacyDeliveryTab } fr
 
 type OrderTab = 'all' | 'trading';
 type DatePreset = 'today' | 'this_month';
+type ExportScope = 'all' | 'current';
+type OrderExportType = 'orders' | 'products' | 'details';
 
 type DashboardOrderFilter = {
   branchId?: string;
@@ -244,6 +247,9 @@ export function Orders() {
   const [showProcessingWindowMenu, setShowProcessingWindowMenu] = useState(false);
   const [showCustomerExtra, setShowCustomerExtra] = useState(false);
   const [dashboardFilter, setDashboardFilter] = useState<DashboardOrderFilter | null>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportScope, setExportScope] = useState<ExportScope>('all');
+  const [orderExportType, setOrderExportType] = useState<OrderExportType>('orders');
   const processingWindowRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -486,23 +492,89 @@ export function Orders() {
   };
 
   const handleExportOrders = () => {
-    if (visibleOrders.length === 0) {
+    const ordersToExport = exportScope === 'all' ? orders : visibleOrders;
+
+    if (ordersToExport.length === 0) {
       setInfoMessage('Không có đơn hàng phù hợp để xuất file.');
       return;
     }
 
-    const rows = [
-      ['Mã đơn hàng', 'Ngày bán', 'Khách hàng', 'SĐT', 'Trạng thái', 'Thanh toán', 'Tổng tiền'],
-      ...visibleOrders.map((order) => [
-        order.order_no,
-        formatDateTime(order.sold_at),
-        order.customers?.full_name ?? 'Khách lẻ',
-        order.customers?.phone ?? '',
-        getOrderStatusMeta(order.status).label,
-        getPaymentStatusMeta(order.payment_status).label,
-        String(Number(order.total_amount || 0)),
-      ]),
-    ];
+    const rows =
+      orderExportType === 'products'
+        ? [
+            ['Mã đơn hàng', 'Ngày bán', 'Khách hàng', 'SĐT', 'SKU', 'Sản phẩm', 'Đơn vị', 'Số lượng', 'Đơn giá', 'Chiết khấu', 'Thành tiền'],
+            ...ordersToExport.flatMap((order) => {
+              const items = order.sales_order_items?.length ? order.sales_order_items : [null];
+              return items.map((item) => [
+                order.order_no,
+                formatDateTime(order.sold_at),
+                order.customers?.full_name ?? 'Khách lẻ',
+                order.customers?.phone ?? '',
+                item?.sku ?? '',
+                item?.product_name ?? '',
+                item?.unit_name ?? '',
+                item ? String(Number(item.quantity || 0)) : '',
+                item ? String(Number(item.unit_price || 0)) : '',
+                item ? String(Number(item.discount_amount || 0)) : '',
+                item ? String(Number(item.line_total || 0)) : '',
+              ]);
+            }),
+          ]
+        : orderExportType === 'details'
+        ? [
+            [
+              'Mã đơn hàng',
+              'Mã hóa đơn',
+              'Ngày bán',
+              'Chi nhánh',
+              'Nguồn',
+              'Khách hàng',
+              'SĐT',
+              'Trạng thái',
+              'Vận chuyển',
+              'Thanh toán',
+              'Tạm tính',
+              'Chiết khấu',
+              'Phí giao hàng',
+              'Thuế',
+              'Tổng tiền',
+              'Đã thanh toán',
+              'Khách phải trả',
+              'Ghi chú',
+            ],
+            ...ordersToExport.map((order) => [
+              order.order_no,
+              order.invoice_no ?? '',
+              formatDateTime(order.sold_at),
+              order.branches?.name ?? '',
+              order.source,
+              order.customers?.full_name ?? 'Khách lẻ',
+              order.customers?.phone ?? '',
+              getOrderStatusMeta(order.status).label,
+              getDeliveryLabel(order.delivery_status),
+              getPaymentStatusMeta(order.payment_status).label,
+              String(Number(order.subtotal || 0)),
+              String(Number(order.discount_amount || 0)),
+              String(Number(order.shipping_fee || 0)),
+              String(Number(order.tax_amount || 0)),
+              String(Number(order.total_amount || 0)),
+              String(Number(order.paid_amount || 0)),
+              String(Math.max(0, Number(order.total_amount || 0) - Number(order.paid_amount || 0))),
+              order.note ?? '',
+            ]),
+          ]
+        : [
+            ['Mã đơn hàng', 'Ngày bán', 'Khách hàng', 'SĐT', 'Trạng thái', 'Thanh toán', 'Tổng tiền'],
+            ...ordersToExport.map((order) => [
+              order.order_no,
+              formatDateTime(order.sold_at),
+              order.customers?.full_name ?? 'Khách lẻ',
+              order.customers?.phone ?? '',
+              getOrderStatusMeta(order.status).label,
+              getPaymentStatusMeta(order.payment_status).label,
+              String(Number(order.total_amount || 0)),
+            ]),
+          ];
 
     const csvContent = rows
       .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
@@ -511,10 +583,11 @@ export function Orders() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `orders-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `orders-${orderExportType}-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
-    setInfoMessage(`Đã xuất ${visibleOrders.length} đơn hàng.`);
+    setShowExportModal(false);
+    setInfoMessage(`Đã xuất ${ordersToExport.length} đơn hàng.`);
   };
 
   const handleCopyOrder = async () => {
@@ -1097,10 +1170,108 @@ export function Orders() {
 
   return (
     <div className="flex flex-col gap-4">
+      {showExportModal ? (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/45 px-4 pt-20">
+          <div className="w-full max-w-[560px] bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
+              <h2 className="text-[16px] font-semibold text-[#182537]">Xuất file danh sách đơn hàng</h2>
+              <button
+                type="button"
+                onClick={() => setShowExportModal(false)}
+                aria-label="Đóng"
+                className="flex h-7 w-7 items-center justify-center text-slate-400 transition-colors hover:text-slate-700"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4 px-6 py-4 text-[13px] text-[#182537]">
+              <div>
+                <div className="mb-2 font-medium">Giới hạn kết quả xuất</div>
+                <label className="flex cursor-pointer items-center gap-2 py-1">
+                  <input
+                    type="radio"
+                    checked={exportScope === 'all'}
+                    onChange={() => setExportScope('all')}
+                    className="h-3.5 w-3.5 accent-[#0088FF]"
+                  />
+                  <span>Tất cả đơn hàng</span>
+                </label>
+                <label className="flex cursor-pointer items-center gap-2 py-1">
+                  <input
+                    type="radio"
+                    checked={exportScope === 'current'}
+                    onChange={() => setExportScope('current')}
+                    className="h-3.5 w-3.5 accent-[#0088FF]"
+                  />
+                  <span>Đơn hàng trên trang này</span>
+                </label>
+              </div>
+
+              <div>
+                <div className="mb-2 font-medium">Loại xuất file</div>
+                <label className="flex cursor-pointer items-center gap-2 py-1">
+                  <input
+                    type="radio"
+                    checked={orderExportType === 'orders'}
+                    onChange={() => setOrderExportType('orders')}
+                    className="h-3.5 w-3.5 accent-[#0088FF]"
+                  />
+                  <span>File tổng quan theo đơn hàng</span>
+                </label>
+                <label className="flex cursor-pointer items-center gap-2 py-1">
+                  <input
+                    type="radio"
+                    checked={orderExportType === 'products'}
+                    onChange={() => setOrderExportType('products')}
+                    className="h-3.5 w-3.5 accent-[#0088FF]"
+                  />
+                  <span>File tổng quan theo sản phẩm</span>
+                </label>
+                <label className="flex cursor-pointer items-center gap-2 py-1">
+                  <input
+                    type="radio"
+                    checked={orderExportType === 'details'}
+                    onChange={() => setOrderExportType('details')}
+                    className="h-3.5 w-3.5 accent-[#0088FF]"
+                  />
+                  <span>File chi tiết</span>
+                </label>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setInfoMessage('Tùy chọn trường hiển thị sẽ dùng bộ cột tương ứng với loại xuất file đã chọn.')}
+                className="text-[13px] font-medium text-[#0088FF] hover:underline"
+              >
+                Tùy chọn trường hiển thị
+              </button>
+            </div>
+
+            <div className="flex justify-end gap-3 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setShowExportModal(false)}
+                className="h-8 border border-[#0088FF] bg-white px-5 text-[13px] font-medium text-[#0088FF] transition-colors hover:bg-blue-50"
+              >
+                Thoát
+              </button>
+              <button
+                type="button"
+                onClick={handleExportOrders}
+                className="h-8 bg-[#0088FF] px-5 text-[13px] font-medium text-white transition-colors hover:bg-blue-700"
+              >
+                Xuất file
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="list-toolbar">
         <div className="list-toolbar-actions">
           <button
-            onClick={handleExportOrders}
+            onClick={() => setShowExportModal(true)}
             className="list-action-button"
           >
             <Download size={16} /> Xuất file
