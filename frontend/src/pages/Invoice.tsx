@@ -5,36 +5,19 @@ import { Logo } from '../components/Logo';
 import { PageLoader } from '../components/PageLoader';
 import { salesOrdersService, type SalesOrder } from '../services/salesOrdersService';
 
-const STORE_NAME = 'CỬA HÀNG ĐIỆN NƯỚC ĐỨC HUYỀN';
+const STORE_NAME = 'Vật tư Điện Nước Đức Huyền';
 const STORE_ADDRESS = '277 Nguyễn Thị Duệ, Việt Hòa, TP. Hải Phòng';
 const STORE_PHONE = '0989 245 272 - 0904 538 786';
-
-const VIETNAMESE_DIGITS = [
-  'không',
-  'một',
-  'hai',
-  'ba',
-  'bốn',
-  'năm',
-  'sáu',
-  'bảy',
-  'tám',
-  'chín',
-];
 
 function formatCurrency(value: number) {
   return value.toLocaleString('vi-VN');
 }
 
 function formatDateTime(value?: string) {
-  if (!value) {
-    return '---';
-  }
+  if (!value) return '---';
 
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
+  if (Number.isNaN(date.getTime())) return value;
 
   return date.toLocaleString('vi-VN', {
     day: '2-digit',
@@ -45,72 +28,9 @@ function formatDateTime(value?: string) {
   });
 }
 
-function readThreeDigits(value: number, hasHigherGroup: boolean) {
-  const hundred = Math.floor(value / 100);
-  const ten = Math.floor((value % 100) / 10);
-  const unit = value % 10;
-  const parts: string[] = [];
-
-  if (hundred > 0) {
-    parts.push(`${VIETNAMESE_DIGITS[hundred]} trăm`);
-  } else if (hasHigherGroup && (ten > 0 || unit > 0)) {
-    parts.push('không trăm');
-  }
-
-  if (ten > 1) {
-    parts.push(`${VIETNAMESE_DIGITS[ten]} mươi`);
-    if (unit === 1) {
-      parts.push('mốt');
-    } else if (unit === 5) {
-      parts.push('lăm');
-    } else if (unit > 0) {
-      parts.push(VIETNAMESE_DIGITS[unit]);
-    }
-  } else if (ten === 1) {
-    parts.push('mười');
-    if (unit === 5) {
-      parts.push('lăm');
-    } else if (unit > 0) {
-      parts.push(VIETNAMESE_DIGITS[unit]);
-    }
-  } else if (unit > 0) {
-    if (hundred > 0 || hasHigherGroup) {
-      parts.push('lẻ');
-    }
-    parts.push(VIETNAMESE_DIGITS[unit]);
-  }
-
-  return parts.join(' ');
-}
-
-function numberToVietnameseCurrency(value: number) {
-  const amount = Math.round(Math.max(0, value));
-  if (amount === 0) {
-    return 'Không đồng chẵn.';
-  }
-
-  const units = ['', 'nghìn', 'triệu', 'tỷ'];
-  const groups: number[] = [];
-  let remaining = amount;
-
-  while (remaining > 0) {
-    groups.push(remaining % 1000);
-    remaining = Math.floor(remaining / 1000);
-  }
-
-  const words: string[] = [];
-  for (let index = groups.length - 1; index >= 0; index -= 1) {
-    const groupValue = groups[index];
-    if (groupValue === 0) {
-      continue;
-    }
-
-    const groupWords = readThreeDigits(groupValue, index < groups.length - 1);
-    words.push(`${groupWords}${units[index] ? ` ${units[index]}` : ''}`);
-  }
-
-  const sentence = `${words.join(' ')} đồng chẵn.`;
-  return sentence.charAt(0).toUpperCase() + sentence.slice(1);
+function getLineTotal(item: NonNullable<SalesOrder['sales_order_items']>[number]) {
+  return Number(item.line_total ?? 0) ||
+    Number(item.quantity ?? 0) * Number(item.unit_price ?? 0) - Number(item.discount_amount ?? 0);
 }
 
 export function Invoice() {
@@ -138,17 +58,11 @@ export function Invoice() {
 
       try {
         const detail = await salesOrdersService.getOne(orderId);
-        if (active) {
-          setOrder(detail);
-        }
+        if (active) setOrder(detail);
       } catch (loadError: any) {
-        if (active) {
-          setError(loadError?.message ?? 'Không tải được hóa đơn.');
-        }
+        if (active) setError(loadError?.message ?? 'Không tải được hóa đơn.');
       } finally {
-        if (active) {
-          setIsLoading(false);
-        }
+        if (active) setIsLoading(false);
       }
     }
 
@@ -160,9 +74,7 @@ export function Invoice() {
   }, [orderId]);
 
   useEffect(() => {
-    if (!shouldAutoPrint || isLoading || !order || hasAutoPrintedRef.current) {
-      return;
-    }
+    if (!shouldAutoPrint || isLoading || !order || hasAutoPrintedRef.current) return;
 
     hasAutoPrintedRef.current = true;
     const timer = window.setTimeout(() => {
@@ -179,11 +91,8 @@ export function Invoice() {
   const taxAmount = Number(order?.tax_amount ?? 0);
   const totalAmount = Number(order?.total_amount ?? 0);
   const paidAmount = Number(order?.paid_amount ?? 0);
-  const debtAmount = useMemo(
-    () => Math.max(0, totalAmount - paidAmount),
-    [paidAmount, totalAmount],
-  );
-  const amountInWords = useMemo(() => numberToVietnameseCurrency(totalAmount), [totalAmount]);
+  const debtAmount = useMemo(() => Math.max(0, totalAmount - paidAmount), [paidAmount, totalAmount]);
+  const invoiceNo = order?.invoice_no ?? order?.order_no ?? '---';
 
   const handleBack = () => {
     navigate('/orders', {
@@ -197,7 +106,7 @@ export function Invoice() {
 
   if (error || !order) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#eef1f5] px-6">
+      <div className="flex min-h-screen items-center justify-center bg-[#f3f5f8] px-6">
         <div className="border border-red-200 bg-white px-6 py-5 text-sm text-red-600 shadow-sm">
           {error ?? 'Không tìm thấy hóa đơn.'}
           <button
@@ -213,7 +122,7 @@ export function Invoice() {
   }
 
   return (
-    <div className="invoice-screen min-h-screen bg-[#eef1f5] px-5 py-7 text-[#111827]">
+    <div className="invoice-screen min-h-screen bg-[#eef1f5] px-5 py-7 text-[#07152b]">
       <div className="invoice-actions fixed right-7 top-5 z-20 flex items-center gap-3">
         <button
           type="button"
@@ -226,150 +135,149 @@ export function Invoice() {
         <button
           type="button"
           onClick={() => window.print()}
-          className="flex h-10 items-center gap-2 bg-[#0b57d0] px-5 text-sm font-semibold text-white shadow-sm hover:bg-[#0848ad]"
+          className="flex h-10 items-center gap-2 bg-[#111827] px-5 text-sm font-semibold text-white shadow-sm hover:bg-black"
         >
           <Printer size={17} />
-          In hóa đơn A5
+          In hóa đơn
         </button>
       </div>
 
-      <main className="invoice-paper mx-auto bg-white shadow-md">
-        <header className="invoice-header">
+      <main className="invoice-paper mx-auto bg-white shadow-[0_22px_70px_rgba(15,23,42,0.18)]">
+        <header className="invoice-hero">
           <div className="invoice-store">
             <Logo className="invoice-logo" />
-            <div>
+            <div className="invoice-store-copy">
               <h1>{STORE_NAME}</h1>
               <p>{STORE_ADDRESS}</p>
-              <p>ĐT: {STORE_PHONE}</p>
+              <p>Hotline: {STORE_PHONE}</p>
             </div>
-          </div>
-          <div className="invoice-id">
-            <div>Số HĐ: <strong>{order.invoice_no ?? order.order_no}</strong></div>
-            <div>Ngày: <strong>{formatDateTime(order.sold_at)}</strong></div>
           </div>
         </header>
 
-        <section className="invoice-title">
-          <h2>HÓA ĐƠN BÁN HÀNG</h2>
-          <span>Bản in A5</span>
+        <div className="invoice-rule" />
+
+        <section className="invoice-meta-grid">
+          <div>
+            <h3>THÔNG TIN KHÁCH HÀNG</h3>
+            <dl>
+              <div>
+                <dt>Khách hàng:</dt>
+                <dd>{order.customers?.full_name ?? 'Khách lẻ'}</dd>
+              </div>
+              <div>
+                <dt>Điện thoại:</dt>
+                <dd>{order.customers?.phone ?? '---'}</dd>
+              </div>
+              <div>
+                <dt>Địa chỉ:</dt>
+                <dd>{order.delivery_address ?? order.customers?.address ?? '---'}</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div className="invoice-transaction">
+            <h3>CHI TIẾT GIAO DỊCH</h3>
+            <dl>
+              <div>
+                <dt>Mã hóa đơn:</dt>
+                <dd>#{invoiceNo}</dd>
+              </div>
+              <div>
+                <dt>Ngày tạo:</dt>
+                <dd>{formatDateTime(order.sold_at)}</dd>
+              </div>
+              <div>
+                <dt>Thu ngân:</dt>
+                <dd>{order.cashier?.full_name ?? '---'}</dd>
+              </div>
+            </dl>
+          </div>
         </section>
 
-        <section className="invoice-info-grid">
-          <div>
-            <label>Khách hàng</label>
-            <strong>{order.customers?.full_name ?? 'Khách lẻ'}</strong>
-          </div>
-          <div>
-            <label>Điện thoại</label>
-            <strong>{order.customers?.phone ?? '---'}</strong>
-          </div>
-          <div className="span-2">
-            <label>Địa chỉ giao hàng</label>
-            <strong>{order.delivery_address ?? order.customers?.address ?? '---'}</strong>
-          </div>
-          <div>
-            <label>Thu ngân</label>
-            <strong>{order.cashier?.full_name ?? '---'}</strong>
-          </div>
-          <div>
-            <label>Chi nhánh</label>
-            <strong>{order.branches?.name ?? '---'}</strong>
-          </div>
-          {order.note?.trim() ? (
-            <div className="span-2">
-              <label>Ghi chú</label>
-              <strong>{order.note.trim()}</strong>
-            </div>
-          ) : null}
-        </section>
-
-        <table className="invoice-items">
-          <thead>
-            <tr>
-              <th>STT</th>
-              <th>Tên hàng</th>
-              <th>SL</th>
-              <th>Đơn giá</th>
-              <th>Thành tiền</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.length === 0 ? (
+        <section className="invoice-order-section">
+          <h3>ĐƠN HÀNG</h3>
+          <table className="invoice-items">
+            <thead>
               <tr>
-                <td colSpan={5} className="empty-row">
-                  Chưa có sản phẩm trong đơn hàng.
-                </td>
+                <th>STT</th>
+                <th>TÊN HÀNG HÓA</th>
+                <th>ĐVT</th>
+                <th>SL</th>
+                <th>ĐƠN GIÁ</th>
+                <th>THÀNH TIỀN</th>
               </tr>
-            ) : (
-              items.map((item, index) => (
-                <tr key={item.id ?? `${item.product_id}-${index}`}>
-                  <td>{index + 1}</td>
+            </thead>
+            <tbody>
+              {items.length ? (
+                items.map((item, index) => (
+                  <tr key={item.id ?? `${item.product_id}-${index}`}>
+                    <td>{index + 1}</td>
                   <td>
                     <strong>{item.product_name}</strong>
-                    <span>{item.sku ? `SKU: ${item.sku}` : item.unit_name ?? 'cái'}</span>
                   </td>
-                  <td>{formatCurrency(Number(item.quantity || 0))}</td>
-                  <td>{formatCurrency(Number(item.unit_price || 0))}</td>
-                  <td>{formatCurrency(Number(item.line_total || 0))}</td>
+                    <td>{item.unit_name || 'Cái'}</td>
+                    <td>{formatCurrency(Number(item.quantity ?? 0))}</td>
+                    <td>{formatCurrency(Number(item.unit_price ?? 0))}</td>
+                    <td>{formatCurrency(getLineTotal(item))}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="empty-row">
+                    Chưa có sản phẩm trong đơn hàng.
+                  </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </section>
 
-        <section className="invoice-bottom">
-          <div className="invoice-words">
-            <label>Bằng chữ</label>
-            <strong>{amountInWords}</strong>
+        <section className="invoice-summary">
+          <div className="invoice-summary-row">
+            <span>Tổng tiền hàng:</span>
+            <strong>{formatCurrency(subtotal)} đ</strong>
           </div>
-
-          <div className="invoice-totals">
-            <div>
-              <span>Tổng tiền hàng</span>
-              <strong>{formatCurrency(subtotal)}</strong>
+          <div className="invoice-summary-row">
+            <span>Chiết khấu / Giảm giá:</span>
+            <strong>{discountAmount ? `- ${formatCurrency(discountAmount)} đ` : '0 đ'}</strong>
+          </div>
+          {shippingFee > 0 ? (
+            <div className="invoice-summary-row">
+              <span>Phí giao hàng:</span>
+              <strong>{formatCurrency(shippingFee)} đ</strong>
             </div>
-            <div>
-              <span>Chiết khấu</span>
-              <strong>{discountAmount ? `- ${formatCurrency(discountAmount)}` : '0'}</strong>
+          ) : null}
+          {taxAmount > 0 ? (
+            <div className="invoice-summary-row">
+              <span>Thuế:</span>
+              <strong>{formatCurrency(taxAmount)} đ</strong>
             </div>
-            <div>
-              <span>Phí giao hàng</span>
-              <strong>{formatCurrency(shippingFee)}</strong>
-            </div>
-            <div>
-              <span>Thuế</span>
-              <strong>{formatCurrency(taxAmount)}</strong>
-            </div>
-            <div className="total">
-              <span>Tổng cộng</span>
-              <strong>{formatCurrency(totalAmount)} đ</strong>
-            </div>
-            <div>
-              <span>Đã thanh toán</span>
-              <strong>{formatCurrency(paidAmount)} đ</strong>
-            </div>
-            <div className="debt">
-              <span>Còn nợ</span>
-              <strong>{formatCurrency(debtAmount)} đ</strong>
-            </div>
+          ) : null}
+          <div className="invoice-grand-total">
+            <span>TỔNG CỘNG:</span>
+            <strong>{formatCurrency(totalAmount)} đ</strong>
+          </div>
+          <div className="invoice-summary-row paid">
+            <span>Khách đã thanh toán:</span>
+            <strong>{formatCurrency(paidAmount)} đ</strong>
+          </div>
+          <div className="invoice-debt">
+            <span>GHI NỢ:</span>
+            <strong>{formatCurrency(debtAmount)} đ</strong>
           </div>
         </section>
 
         <section className="invoice-signatures">
           <div>
-            <strong>Người mua hàng</strong>
+            <strong>NGƯỜI MUA HÀNG</strong>
             <span>(Ký, ghi rõ họ tên)</span>
           </div>
           <div>
-            <strong>Người bán hàng</strong>
+            <strong>NGƯỜI BÁN HÀNG</strong>
             <span>(Ký, ghi rõ họ tên)</span>
             <em>{order.cashier?.full_name ?? ''}</em>
           </div>
         </section>
-
-        <footer className="invoice-footer">
-          Cảm ơn Quý khách đã tin tưởng và ủng hộ Đức Huyền.
-        </footer>
       </main>
 
       <style>{`
@@ -379,133 +287,150 @@ export function Invoice() {
         }
 
         .invoice-paper {
-          width: 559px;
-          min-height: 794px;
-          padding: 34px 34px 30px;
-          font-size: 12px;
-          line-height: 1.42;
+          width: 148mm;
+          min-height: 210mm;
+          box-sizing: border-box;
+          padding: 11mm 10mm 9mm;
+          font-size: 10.5px;
+          line-height: 1.32;
         }
 
-        .invoice-header {
+        .invoice-hero {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) 156px;
-          gap: 18px;
+          grid-template-columns: minmax(0, 1fr);
           align-items: start;
-          border-bottom: 2px solid #0b57d0;
-          padding-bottom: 16px;
+          gap: 24px;
         }
 
         .invoice-store {
           display: grid;
-          grid-template-columns: 42px minmax(0, 1fr);
-          gap: 12px;
+          grid-template-columns: 38px minmax(0, 1fr);
+          gap: 10px;
           align-items: start;
         }
 
         .invoice-logo {
-          width: 42px;
-          height: 42px;
+          width: 32px;
+          height: 32px;
+        }
+
+        .invoice-store-copy {
+          padding-top: 0;
         }
 
         .invoice-store h1 {
           margin: 0 0 6px;
-          color: #0b57d0;
-          font-size: 14px;
+          color: #07152b;
+          font-size: 13px;
           font-weight: 900;
-          line-height: 1.25;
-          text-transform: uppercase;
+          letter-spacing: 0;
         }
 
-        .invoice-store p,
-        .invoice-id div {
+        .invoice-store p {
           margin: 2px 0;
-          color: #344054;
+          color: #334155;
+          font-size: 10px;
         }
 
-        .invoice-id {
+        .invoice-rule {
+          margin: 6mm 0 5mm;
+          border-top: 2px solid #111827;
+        }
+
+        .invoice-meta-grid {
           display: grid;
+          grid-template-columns: minmax(0, 1fr) 56mm;
+          gap: 7mm;
+        }
+
+        .invoice-meta-grid h3 {
+          margin: 0 0 12px;
+          border-bottom: 1px solid #e5e7eb;
+          padding-bottom: 5px;
+          color: #64748b;
+          font-size: 9px;
+          font-weight: 900;
+          letter-spacing: 0.06em;
+        }
+
+        .invoice-meta-grid dl {
+          display: grid;
+          gap: 4px;
+          margin: 0;
+        }
+
+        .invoice-meta-grid dl div {
+          display: grid;
+          grid-template-columns: 72px minmax(0, 1fr);
           gap: 8px;
+        }
+
+        .invoice-transaction dl div {
+          grid-template-columns: 78px minmax(0, 1fr);
+        }
+
+        .invoice-meta-grid dt,
+        .invoice-meta-grid dd {
+          margin: 0;
+        }
+
+        .invoice-meta-grid dt {
+          color: #07152b;
+          font-weight: 900;
+        }
+
+        .invoice-meta-grid dd {
+          color: #0f172a;
+          font-weight: 600;
+        }
+
+        .invoice-transaction {
           text-align: right;
         }
 
-        .invoice-title {
-          display: grid;
-          justify-items: center;
-          gap: 4px;
-          margin: 18px 0;
-          text-align: center;
+        .invoice-transaction dl div {
+          justify-content: end;
         }
 
-        .invoice-title h2 {
-          margin: 0;
-          color: #111827;
-          font-size: 18px;
+        .invoice-transaction dd {
           font-weight: 900;
-          letter-spacing: 0.02em;
         }
 
-        .invoice-title span {
-          border: 1px solid #c5cede;
-          background: #f8fafc;
-          padding: 2px 10px;
-          color: #667085;
-          font-size: 11px;
-          font-weight: 700;
-          text-transform: uppercase;
+        .invoice-order-section {
+          margin-top: 5mm;
         }
 
-        .invoice-info-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 10px 14px;
-          border: 1px solid #d0d7e2;
-          background: #fbfcfe;
-          padding: 12px;
-        }
-
-        .invoice-info-grid .span-2 {
-          grid-column: 1 / -1;
-        }
-
-        .invoice-info-grid label,
-        .invoice-words label {
-          display: block;
-          margin-bottom: 3px;
-          color: #667085;
-          font-size: 10px;
-          font-weight: 800;
+        .invoice-order-section h3 {
+          margin: 0 0 6px;
+          color: #020617;
+          font-size: 13px;
+          font-weight: 950;
           letter-spacing: 0.04em;
-          text-transform: uppercase;
-        }
-
-        .invoice-info-grid strong,
-        .invoice-words strong {
-          color: #111827;
-          font-weight: 700;
+          text-align: center;
         }
 
         .invoice-items {
           width: 100%;
-          margin-top: 16px;
           border-collapse: collapse;
         }
 
-        .invoice-items th,
-        .invoice-items td {
-          border: 1px solid #d0d7e2;
+        .invoice-items thead {
+          border-top: 2px solid #111827;
+          border-bottom: 1px solid #111827;
         }
 
         .invoice-items th {
-          background: #eef3fb;
-          padding: 8px 6px;
-          color: #1f2937;
-          font-size: 11px;
-          font-weight: 900;
-          text-align: center;
+          padding: 1.8mm 1.4mm;
+          color: #0f172a;
+          font-size: 9px;
+          font-weight: 950;
+          text-align: left;
         }
 
         .invoice-items td {
-          padding: 8px 6px;
+          border-bottom: 1px solid #eef2f7;
+          padding: 2mm 1.4mm;
+          color: #0f172a;
           vertical-align: top;
         }
 
@@ -513,24 +438,31 @@ export function Invoice() {
         .invoice-items td:nth-child(1) {
           width: 34px;
           text-align: center;
+          color: #334155;
         }
 
         .invoice-items th:nth-child(3),
         .invoice-items td:nth-child(3) {
-          width: 46px;
+          width: 14mm;
           text-align: center;
         }
 
         .invoice-items th:nth-child(4),
-        .invoice-items td:nth-child(4),
-        .invoice-items th:nth-child(5),
-        .invoice-items td:nth-child(5) {
-          width: 82px;
+        .invoice-items td:nth-child(4) {
+          width: 11mm;
           text-align: right;
         }
 
-        .invoice-items td:nth-child(5) {
-          font-weight: 800;
+        .invoice-items th:nth-child(5),
+        .invoice-items td:nth-child(5),
+        .invoice-items th:nth-child(6),
+        .invoice-items td:nth-child(6) {
+          width: 21mm;
+          text-align: right;
+        }
+
+        .invoice-items td:nth-child(6) {
+          font-weight: 950;
         }
 
         .invoice-items td strong,
@@ -538,81 +470,94 @@ export function Invoice() {
           display: block;
         }
 
+        .invoice-items td strong {
+          font-weight: 700;
+          line-height: 1.35;
+        }
+
         .invoice-items td span {
           margin-top: 3px;
-          color: #667085;
-          font-size: 10px;
+          color: #64748b;
+          font-size: 9px;
         }
 
         .invoice-items .empty-row {
-          padding: 18px;
+          padding: 22px;
           text-align: center;
-          color: #667085;
+          color: #64748b;
         }
 
-        .invoice-bottom {
+        .invoice-summary {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) 210px;
-          gap: 16px;
-          align-items: start;
-          margin-top: 14px;
+          gap: 1.8mm;
+          width: 74mm;
+          margin: 5mm 0 0 auto;
         }
 
-        .invoice-words {
-          border: 1px solid #e2e8f0;
-          padding: 10px;
-          min-height: 90px;
-        }
-
-        .invoice-words strong {
-          font-style: italic;
-        }
-
-        .invoice-totals {
-          border: 1px solid #d0d7e2;
-          border-bottom: 0;
-        }
-
-        .invoice-totals div {
+        .invoice-summary-row,
+        .invoice-grand-total,
+        .invoice-debt {
           display: flex;
           justify-content: space-between;
-          gap: 12px;
-          border-bottom: 1px solid #d0d7e2;
-          padding: 7px 8px;
+          align-items: baseline;
+          gap: 18px;
         }
 
-        .invoice-totals span {
-          color: #475467;
+        .invoice-summary-row span {
+          color: #475569;
         }
 
-        .invoice-totals strong {
-          font-weight: 800;
-          text-align: right;
+        .invoice-summary-row strong {
+          color: #0f172a;
+          font-weight: 700;
           white-space: nowrap;
         }
 
-        .invoice-totals .total {
-          background: #eaf1ff;
-          color: #0b57d0;
-          font-size: 13px;
-          text-transform: uppercase;
+        .invoice-grand-total {
+          border-top: 2px solid #111827;
+          border-bottom: 2px solid #111827;
+          padding: 1.9mm 0;
+          color: #020617;
         }
 
-        .invoice-totals .total span,
-        .invoice-totals .total strong {
-          color: #0b57d0;
+        .invoice-grand-total span {
+          font-size: 13px;
+          font-weight: 950;
+        }
+
+        .invoice-grand-total strong {
+          font-size: 20px;
+          font-weight: 950;
+          white-space: nowrap;
+        }
+
+        .invoice-summary-row.paid {
+          border-bottom: 1px solid #cbd5e1;
+          padding-bottom: 8px;
+        }
+
+        .invoice-debt {
+          padding: 0;
+        }
+
+        .invoice-debt span {
+          color: #111827;
           font-weight: 900;
         }
 
-        .invoice-totals .debt strong {
-          color: #047857;
+        .invoice-debt strong {
+          color: #dc2626;
+          font-size: 15px;
+          font-weight: 950;
+          white-space: nowrap;
         }
 
         .invoice-signatures {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 28px;
-          margin-top: 34px;
+          gap: 32mm;
+          margin-top: 8mm;
+          padding: 0;
           text-align: center;
         }
 
@@ -623,30 +568,25 @@ export function Invoice() {
         }
 
         .invoice-signatures strong {
-          font-weight: 900;
+          color: #020617;
+          font-size: 10px;
+          font-weight: 950;
         }
 
         .invoice-signatures span {
-          margin-top: 3px;
-          color: #475467;
+          margin-top: 2px;
+          color: #0f172a;
+          font-size: 9px;
           font-style: italic;
         }
 
         .invoice-signatures em {
-          margin-top: 54px;
-          color: #111827;
+          margin-top: 12mm;
+          border-top: 1px solid #e5e7eb;
+          padding-top: 6px;
+          color: #0f172a;
           font-style: normal;
-          font-weight: 700;
-        }
-
-        .invoice-footer {
-          margin-top: 22px;
-          border-top: 1px solid #d0d7e2;
-          padding-top: 12px;
-          text-align: center;
-          color: #344054;
-          font-style: italic;
-          font-weight: 700;
+          font-weight: 600;
         }
 
         @media print {
@@ -669,9 +609,10 @@ export function Invoice() {
           .invoice-paper {
             width: 148mm !important;
             min-height: 210mm !important;
+            box-sizing: border-box !important;
             box-shadow: none !important;
             margin: 0 !important;
-            padding: 9mm !important;
+            padding: 11mm 10mm 9mm !important;
           }
         }
       `}</style>
