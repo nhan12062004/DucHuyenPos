@@ -286,7 +286,7 @@ export function Invoice() {
 
       <style>{`
         @page {
-          size: 148mm 210mm;
+          size: A5 portrait;
           margin: 0;
         }
 
