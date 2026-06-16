@@ -223,10 +223,10 @@ export function Sidebar({ expanded, setExpanded }: SidebarProps) {
                   transition={CONTENT_TRANSITION}
                   className="ml-3 min-w-0 text-left"
                 >
-                  <span className="block truncate text-[11px] font-semibold uppercase tracking-[0.24em] text-blue-200">
+                  <span className="block whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-200">
                     Điện máy
                   </span>
-                  <span className="block truncate text-lg font-bold tracking-tight text-white">Đức Huyền</span>
+                  <span className="block whitespace-nowrap text-[17px] font-bold tracking-tight text-white">Đức Huyền</span>
                 </motion.div>
               )}
             </AnimatePresence>
