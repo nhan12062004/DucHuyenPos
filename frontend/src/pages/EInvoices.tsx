@@ -163,7 +163,7 @@ export function EInvoices() {
     try {
       const printed = await invoicesService.print(invoice.id);
       setInvoices((current) => current.map((item) => (item.id === printed.id ? printed : item)));
-      navigate(`/invoice?orderId=${printed.sales_order_id}`);
+      navigate(`/invoice?orderId=${printed.sales_order_id}&autoPrint=1`);
     } catch (nextError: any) {
       setError(nextError?.message ?? 'Không in được hóa đơn.');
     } finally {

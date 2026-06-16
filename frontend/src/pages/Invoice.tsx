@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Printer } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Logo } from '../components/Logo';
@@ -117,6 +117,8 @@ export function Invoice() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get('orderId');
+  const shouldAutoPrint = searchParams.get('autoPrint') === '1';
+  const hasAutoPrintedRef = useRef(false);
   const [order, setOrder] = useState<SalesOrder | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -156,6 +158,19 @@ export function Invoice() {
       active = false;
     };
   }, [orderId]);
+
+  useEffect(() => {
+    if (!shouldAutoPrint || isLoading || !order || hasAutoPrintedRef.current) {
+      return;
+    }
+
+    hasAutoPrintedRef.current = true;
+    const timer = window.setTimeout(() => {
+      window.print();
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [isLoading, order, shouldAutoPrint]);
 
   const items = order?.sales_order_items ?? [];
   const subtotal = Number(order?.subtotal ?? 0);
