@@ -1,19 +1,11 @@
 import React, { useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import { motion } from 'motion/react';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 
 const SIDEBAR_WIDTH = {
   expanded: 236,
   collapsed: 56
-} as const;
-
-const LAYOUT_TRANSITION = {
-  type: 'spring',
-  stiffness: 280,
-  damping: 30,
-  mass: 0.9
 } as const;
 
 export function Layout() {
@@ -30,17 +22,15 @@ export function Layout() {
     <div className="flex h-screen bg-[#F8FAFC] text-slate-900 overflow-hidden font-sans">
       {!isInvoiceRoute ? <Sidebar expanded={expanded} setExpanded={setExpanded} /> : null}
       
-      <motion.main 
-        initial={false}
-        animate={{ marginLeft: isInvoiceRoute ? 0 : expanded ? SIDEBAR_WIDTH.expanded : SIDEBAR_WIDTH.collapsed }}
-        transition={LAYOUT_TRANSITION}
-        className="flex-1 flex flex-col min-w-0"
+      <main
+        style={{ marginLeft: isInvoiceRoute ? 0 : expanded ? SIDEBAR_WIDTH.expanded : SIDEBAR_WIDTH.collapsed }}
+        className="flex-1 flex flex-col min-w-0 transition-[margin-left] duration-200 ease-out"
       >
         {!hasCustomHeader ? <TopBar /> : null}
         <div className={`flex-1 overflow-auto ${!isPosRoute && !hasCustomHeader ? 'px-6 py-6 lg:px-7 xl:px-8' : 'p-0'}`}>
           <Outlet />
         </div>
-      </motion.main>
+      </main>
     </div>
   );
 }

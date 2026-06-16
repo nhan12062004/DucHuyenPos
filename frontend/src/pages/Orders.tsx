@@ -32,7 +32,6 @@ import { inventoryService, type Branch } from '../services/inventoryService';
 import { PageLoader } from '../components/PageLoader';
 import { getDeliveryLabel, getDeliveryStatusFromTab, parseLegacyDeliveryTab } from '../utils/delivery';
 import { exportRowsToXlsx } from '../utils/excel';
-import { printInvoiceByOrderId } from '../utils/printInvoice';
 
 type OrderTab = 'all' | 'trading';
 type DatePreset = 'today' | 'this_month';
@@ -612,7 +611,7 @@ export function Orders() {
       return;
     }
 
-    printInvoiceByOrderId(selectedOrder.id);
+    navigate(`/invoice?orderId=${selectedOrder.id}&autoPrint=1`);
   };
 
   const handleExportOrders = () => {

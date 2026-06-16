@@ -14,17 +14,43 @@ export function PageLoader({
   className = '',
   fullScreen = false,
 }: PageLoaderProps) {
+  const isInvoiceRoute = window.location.pathname === '/invoice';
+  const sidebarOffset = isInvoiceRoute ? 0 : 236;
   const wrapperClassName = fullScreen
-    ? `flex w-full items-center justify-center text-slate-500 -mx-6 -my-6 lg:-mx-7 lg:-my-6 xl:-mx-8 xl:-my-6 ${className}`
+    ? `flex w-full items-center justify-center text-slate-500 ${className}`
     : `flex w-full items-center justify-center text-slate-500 ${className}`;
 
-  const style = fullScreen
-    ? { minHeight: 'calc(100vh - 4rem)' }
-    : { minHeight };
+  const style: React.CSSProperties = fullScreen
+    ? {
+        alignItems: 'center',
+        background: '#F8FAFC',
+        bottom: 0,
+        color: '#64748b',
+        display: 'flex',
+        justifyContent: 'center',
+        left: sidebarOffset,
+        minHeight: '100vh',
+        position: 'fixed',
+        right: 0,
+        top: 0,
+        width: 'auto',
+        zIndex: 20,
+      }
+    : {
+        alignItems: 'center',
+        color: '#64748b',
+        display: 'flex',
+        justifyContent: 'center',
+        minHeight,
+        width: '100%',
+      };
 
   return (
     <div className={wrapperClassName} style={style}>
-      <div className="flex flex-col items-center gap-3">
+      <div
+        className="flex flex-col items-center gap-3"
+        style={{ alignItems: 'center', display: 'flex', flexDirection: 'column', gap: 12 }}
+      >
         <Loader2 className="h-8 w-8 animate-spin text-[#0088FF]" />
         <p className="text-[13px] font-medium">{text}</p>
       </div>

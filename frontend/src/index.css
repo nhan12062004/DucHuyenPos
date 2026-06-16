@@ -1,14 +1,32 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --radius-panel: 18px;
   --radius-subtle: 14px;
   --shadow-panel: 0 14px 32px -22px rgba(15, 23, 42, 0.24), 0 2px 8px rgba(15, 23, 42, 0.05);
   --panel-border: rgb(226 232 240);
   --panel-divider: rgb(241 245 249);
   --panel-muted: rgb(248 250 252);
+}
+
+@layer base {
+  html {
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    min-height: 100vh;
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
 }
 
 @layer components {

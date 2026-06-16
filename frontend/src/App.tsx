@@ -28,16 +28,81 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { Login } from './pages/Login';
 import { PageLoader } from './components/PageLoader';
 
+const INITIAL_SIDEBAR_WIDTH = 236;
+const APP_FONT_FAMILY = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+
+function AuthLoadingScreen() {
+  const isInvoiceRoute = window.location.pathname === '/invoice';
+
+  if (isInvoiceRoute) {
+    return (
+      <div
+        className="flex min-h-screen items-center justify-center bg-[#F8FAFC]"
+        style={{
+          alignItems: 'center',
+          background: '#F8FAFC',
+          display: 'flex',
+          justifyContent: 'center',
+          minHeight: '100vh',
+        }}
+      >
+        <PageLoader text="Đang khởi tạo hệ thống..." minHeight="auto" />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans"
+      style={{
+        background: '#F8FAFC',
+        color: '#0f172a',
+        fontFamily: APP_FONT_FAMILY,
+        minHeight: '100vh',
+      }}
+    >
+      <div
+        className="fixed left-0 top-0 h-screen w-[236px] bg-[#182537]"
+        style={{
+          background: '#182537',
+          height: '100vh',
+          left: 0,
+          position: 'fixed',
+          top: 0,
+          width: INITIAL_SIDEBAR_WIDTH,
+        }}
+      />
+      <main
+        className="flex min-h-screen flex-col"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          marginLeft: INITIAL_SIDEBAR_WIDTH,
+          minHeight: '100vh',
+        }}
+      >
+        <div
+          className="flex min-h-screen items-center justify-center"
+          style={{
+            alignItems: 'center',
+            display: 'flex',
+            justifyContent: 'center',
+            minHeight: '100vh',
+          }}
+        >
+          <PageLoader text="Đang khởi tạo hệ thống..." minHeight="auto" />
+        </div>
+      </main>
+    </div>
+  );
+}
+
 function AppRoutes() {
   const { isLoggedIn, isLoading } = useAuth();
 
   // Đang kiểm tra session -> hiện loading để tránh flash
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
-        <PageLoader text="Đang khởi tạo hệ thống..." minHeight="auto" />
-      </div>
-    );
+    return <AuthLoadingScreen />;
   }
 
   if (!isLoggedIn) {

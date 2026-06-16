@@ -38,7 +38,6 @@ export function Invoice() {
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get('orderId');
   const shouldAutoPrint = searchParams.get('autoPrint') === '1';
-  const printOnly = searchParams.get('printOnly') === '1';
   const hasAutoPrintedRef = useRef(false);
   const [order, setOrder] = useState<SalesOrder | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -80,15 +79,10 @@ export function Invoice() {
     hasAutoPrintedRef.current = true;
     const timer = window.setTimeout(() => {
       window.print();
-      if (printOnly) {
-        window.setTimeout(() => {
-          window.frameElement?.remove();
-        }, 1000);
-      }
     }, 300);
 
     return () => window.clearTimeout(timer);
-  }, [isLoading, order, printOnly, shouldAutoPrint]);
+  }, [isLoading, order, shouldAutoPrint]);
 
   const items = order?.sales_order_items ?? [];
   const subtotal = Number(order?.subtotal ?? 0);
@@ -128,8 +122,7 @@ export function Invoice() {
   }
 
   return (
-    <div className={`invoice-screen min-h-screen bg-[#eef1f5] px-5 py-7 text-[#07152b] ${printOnly ? 'print-only-mode' : ''}`}>
-      {!printOnly ? (
+    <div className="invoice-screen min-h-screen bg-[#eef1f5] px-5 py-7 text-[#07152b]">
       <div className="invoice-actions fixed right-7 top-5 z-20 flex items-center gap-3">
         <button
           type="button"
@@ -148,7 +141,6 @@ export function Invoice() {
           In hóa đơn
         </button>
       </div>
-      ) : null}
 
       <main className="invoice-paper mx-auto bg-white shadow-[0_22px_70px_rgba(15,23,42,0.18)]">
         <header className="invoice-hero">
@@ -301,17 +293,6 @@ export function Invoice() {
           padding: 11mm 10mm 9mm;
           font-size: 10.5px;
           line-height: 1.32;
-        }
-
-        .print-only-mode {
-          min-height: auto;
-          padding: 0;
-          background: white;
-        }
-
-        .print-only-mode .invoice-paper {
-          box-shadow: none;
-          margin: 0;
         }
 
         .invoice-hero {
