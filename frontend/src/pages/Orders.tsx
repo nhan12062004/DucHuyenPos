@@ -491,6 +491,14 @@ export function Orders() {
     setInfoMessage('Đã lưu bộ lọc hiện tại.');
   };
 
+  const handlePrintOrder = () => {
+    if (!selectedOrder) {
+      return;
+    }
+
+    navigate(`/invoice?orderId=${selectedOrder.id}`);
+  };
+
   const handleExportOrders = () => {
     const ordersToExport = exportScope === 'all' ? orders : visibleOrders;
 
@@ -759,7 +767,7 @@ export function Orders() {
               </div>
               <div className="flex gap-2">
                 <button
-                  onClick={() => window.print()}
+                  onClick={handlePrintOrder}
                   className="flex items-center gap-2 rounded border border-slate-300 bg-white px-3 py-1.5 text-[13px] font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
                 >
                   <Printer size={14} className="text-slate-500" /> In đơn hàng{' '}
@@ -961,7 +969,7 @@ export function Orders() {
                   <Printer
                     className="ml-auto cursor-pointer text-slate-400 hover:text-slate-700"
                     size={16}
-                    onClick={() => window.print()}
+                    onClick={handlePrintOrder}
                   />
                 </div>
                 <div className="space-y-3 text-[13px]">

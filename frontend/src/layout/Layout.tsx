@@ -23,15 +23,16 @@ export function Layout() {
   const isCustomerGroupCreateRoute = location.pathname === '/customer-groups/create';
   const isProductCreateRoute = location.pathname === '/products/create';
   const isCustomerCreateRoute = location.pathname === '/customers/create';
-  const hasCustomHeader = isCustomerGroupCreateRoute || isProductCreateRoute || isCustomerCreateRoute;
+  const isInvoiceRoute = location.pathname === '/invoice';
+  const hasCustomHeader = isCustomerGroupCreateRoute || isProductCreateRoute || isCustomerCreateRoute || isInvoiceRoute;
 
   return (
     <div className="flex h-screen bg-[#F8FAFC] text-slate-900 overflow-hidden font-sans">
-      <Sidebar expanded={expanded} setExpanded={setExpanded} />
+      {!isInvoiceRoute ? <Sidebar expanded={expanded} setExpanded={setExpanded} /> : null}
       
       <motion.main 
         initial={false}
-        animate={{ marginLeft: expanded ? SIDEBAR_WIDTH.expanded : SIDEBAR_WIDTH.collapsed }}
+        animate={{ marginLeft: isInvoiceRoute ? 0 : expanded ? SIDEBAR_WIDTH.expanded : SIDEBAR_WIDTH.collapsed }}
         transition={LAYOUT_TRANSITION}
         className="flex-1 flex flex-col min-w-0"
       >
