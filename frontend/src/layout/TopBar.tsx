@@ -7,6 +7,7 @@ const routeNames: Record<string, string> = {
   '/': 'Tổng quan',
   '/pos': 'Bán hàng (POS)',
   '/orders': 'Danh sách đơn hàng',
+  '/e-invoices': 'Hóa đơn điện tử',
   '/returns': 'Khách trả hàng',
   '/products': 'Danh sách sản phẩm',
   '/products/create': 'Thêm sản phẩm',

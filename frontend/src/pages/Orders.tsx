@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { readSheet } from 'read-excel-file/browser';
 import {
   Search,
   ChevronDown,
@@ -23,10 +24,14 @@ import {
 } from 'lucide-react';
 import {
   salesOrdersService,
+  type CreateSalesOrderPayload,
   type SalesOrder,
 } from '../services/salesOrdersService';
+import { productsService, type Product } from '../services/productsService';
+import { inventoryService, type Branch } from '../services/inventoryService';
 import { PageLoader } from '../components/PageLoader';
 import { getDeliveryLabel, getDeliveryStatusFromTab, parseLegacyDeliveryTab } from '../utils/delivery';
+import { exportRowsToXlsx } from '../utils/excel';
 
 type OrderTab = 'all' | 'trading';
 type DatePreset = 'today' | 'this_month';
@@ -229,6 +234,105 @@ function isWithinRecentDays(value: string | null | undefined, days: number) {
   return diffDays >= 0 && diffDays <= days;
 }
 
+function normalizeImportKey(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function parseImportNumber(value?: string) {
+  if (!value?.trim()) {
+    return 0;
+  }
+
+  const cleaned = value.replace(/[^\d,.-]/g, '');
+  const separatorMatches = [...cleaned.matchAll(/[,.]/g)];
+  const lastSeparator = separatorMatches.at(-1);
+  const decimalIndex = lastSeparator?.index ?? -1;
+  const trailingDigits = decimalIndex >= 0 ? cleaned.slice(decimalIndex + 1).replace(/[^\d]/g, '') : '';
+  const hasDecimal = decimalIndex >= 0 && trailingDigits.length > 0 && trailingDigits.length <= 2;
+  const normalized = hasDecimal
+    ? `${cleaned.slice(0, decimalIndex).replace(/[^\d-]/g, '')}.${trailingDigits}`
+    : cleaned.replace(/[^\d-]/g, '');
+  const numeric = Number(normalized);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+async function parseImportFile(file: File) {
+  const rows = await readSheet(file);
+  return rows
+    .map((row) => row.map((cell) => (cell === null ? '' : String(cell).trim())))
+    .filter((row) => row.some(Boolean));
+}
+
+function getImportValue(record: Record<string, string>, aliases: string[]) {
+  for (const alias of aliases) {
+    const value = record[normalizeImportKey(alias)];
+    if (value?.trim()) {
+      return value.trim();
+    }
+  }
+
+  return '';
+}
+
+function findImportBranch(branches: Branch[], value: string) {
+  if (!value.trim()) {
+    return branches.find((branch) => branch.is_default) ?? branches[0];
+  }
+
+  const normalized = normalizeImportKey(value);
+  return branches.find((branch) =>
+    branch.id === value ||
+    normalizeImportKey(branch.code) === normalized ||
+    normalizeImportKey(branch.name) === normalized,
+  );
+}
+
+function findImportProduct(products: Product[], record: Record<string, string>) {
+  const productId = getImportValue(record, ['product_id', 'ID sản phẩm', 'Id san pham']);
+  const sku = getImportValue(record, ['SKU', 'Mã sản phẩm', 'Ma san pham', 'Mã SP']);
+  const barcode = getImportValue(record, ['Barcode', 'Mã vạch', 'Ma vach']);
+  const name = getImportValue(record, ['Sản phẩm', 'San pham', 'Tên sản phẩm', 'Ten san pham', 'Product']);
+  const normalizedName = normalizeImportKey(name);
+
+  return products.find((product) =>
+    (productId ? product.id === productId : false) ||
+    (sku ? normalizeImportKey(product.sku) === normalizeImportKey(sku) : false) ||
+    (barcode ? normalizeImportKey(product.barcode ?? '') === normalizeImportKey(barcode) : false) ||
+    (name ? normalizeImportKey(product.name) === normalizedName : false),
+  );
+}
+
+function parseImportStatus(value: string): SalesOrder['status'] {
+  const normalized = normalizeImportKey(value);
+  if (['draft', 'cho duyet', 'nhap'].includes(normalized)) return 'draft';
+  if (['pending', 'dang giao dich', 'dang xu ly', 'cho xu ly'].includes(normalized)) return 'pending';
+  if (['cancelled', 'da huy', 'huy'].includes(normalized)) return 'cancelled';
+  return 'completed';
+}
+
+function parseImportSource(value: string): SalesOrder['source'] {
+  const normalized = normalizeImportKey(value);
+  if (['pos', 'web', 'phone', 'manual'].includes(normalized)) {
+    return normalized as SalesOrder['source'];
+  }
+  if (['dien thoai', 'sdt'].includes(normalized)) return 'phone';
+  if (['thu cong'].includes(normalized)) return 'manual';
+  return 'manual';
+}
+
+function getImportPaymentStatus(totalAmount: number, paidAmount: number): SalesOrder['payment_status'] {
+  if (paidAmount <= 0) return 'unpaid';
+  if (paidAmount >= totalAmount) return 'paid';
+  return 'partial';
+}
+
 export function Orders() {
   const [activeTab, setActiveTab] = useState<OrderTab>('all');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -250,6 +354,8 @@ export function Orders() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportScope, setExportScope] = useState<ExportScope>('all');
   const [orderExportType, setOrderExportType] = useState<OrderExportType>('orders');
+  const [isImporting, setIsImporting] = useState(false);
+  const importFileInputRef = useRef<HTMLInputElement | null>(null);
   const processingWindowRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -593,18 +699,162 @@ export function Orders() {
             ]),
           ];
 
-    const csvContent = rows
-      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-    const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `orders-${orderExportType}-${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    exportRowsToXlsx(rows, `orders-${orderExportType}-${new Date().toISOString().slice(0, 10)}`, 'Đơn hàng');
     setShowExportModal(false);
     setInfoMessage(`Đã xuất ${ordersToExport.length} đơn hàng.`);
+  };
+
+  const handleImportOrders = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) {
+      return;
+    }
+
+    const lowerFileName = file.name.toLowerCase();
+    const isSupportedFile = lowerFileName.endsWith('.xlsx');
+
+    if (!isSupportedFile) {
+      setInfoMessage('Hiện chức năng nhập đơn hàng chỉ hỗ trợ Excel .xlsx.');
+      return;
+    }
+
+    setIsImporting(true);
+    setListError(null);
+    setInfoMessage(`Đang đọc file ${file.name}...`);
+
+    try {
+      const rows = await parseImportFile(file);
+      const [headers, ...dataRows] = rows;
+
+      if (!headers?.length || dataRows.length === 0) {
+        setInfoMessage('File nhập chưa có dữ liệu đơn hàng.');
+        return;
+      }
+
+      const [productsResponse, branchList] = await Promise.all([
+        productsService.getAll({ page: 1, limit: 1000, status: 'active' }),
+        inventoryService.getBranches(),
+      ]);
+      const products = productsResponse.data;
+      const normalizedHeaders = headers.map(normalizeImportKey);
+      const groupedRows = new Map<string, Record<string, string>[]>();
+
+      dataRows.forEach((row, rowIndex) => {
+        const record = normalizedHeaders.reduce<Record<string, string>>((acc, header, headerIndex) => {
+          acc[header] = row[headerIndex] ?? '';
+          return acc;
+        }, {});
+        const orderNo = getImportValue(record, ['Mã đơn hàng', 'Ma don hang', 'order_no', 'Order no']);
+        const productMarker =
+          getImportValue(record, ['product_id', 'SKU', 'Mã sản phẩm', 'Ma san pham', 'Sản phẩm', 'San pham']) ||
+          getImportValue(record, ['Tên sản phẩm', 'Ten san pham']);
+
+        if (!productMarker) {
+          return;
+        }
+
+        const groupKey = orderNo || `__row_${rowIndex + 2}`;
+        groupedRows.set(groupKey, [...(groupedRows.get(groupKey) ?? []), record]);
+      });
+
+      if (groupedRows.size === 0) {
+        setInfoMessage('File nhập chưa có dòng sản phẩm hợp lệ.');
+        return;
+      }
+
+      const createdOrders: SalesOrder[] = [];
+      const failures: string[] = [];
+
+      for (const [groupKey, groupRows] of groupedRows.entries()) {
+        const firstRow = groupRows[0];
+        const branchValue = getImportValue(firstRow, ['branch_id', 'Chi nhánh', 'Chi nhanh', 'Branch']);
+        const branch = findImportBranch(branchList, branchValue);
+        const orderNo = getImportValue(firstRow, ['Mã đơn hàng', 'Ma don hang', 'order_no', 'Order no']);
+
+        if (!branch) {
+          failures.push(`${orderNo || groupKey}: không tìm thấy chi nhánh.`);
+          continue;
+        }
+
+        const items: CreateSalesOrderPayload['items'] = [];
+        for (const record of groupRows) {
+          const product = findImportProduct(products, record);
+          if (!product) {
+            failures.push(`${orderNo || groupKey}: không tìm thấy sản phẩm ${getImportValue(record, ['SKU', 'Sản phẩm', 'Tên sản phẩm']) || 'không rõ'}.`);
+            continue;
+          }
+
+          const quantity = parseImportNumber(getImportValue(record, ['Số lượng', 'So luong', 'Quantity', 'Qty'])) || 1;
+          const unitPrice =
+            parseImportNumber(getImportValue(record, ['Đơn giá', 'Don gia', 'Giá bán', 'Gia ban', 'Unit price'])) ||
+            Number(product.sale_price ?? 0);
+          const discountAmount = parseImportNumber(getImportValue(record, ['Chiết khấu', 'Chiet khau', 'Discount']));
+
+          items.push({
+            product_id: product.id,
+            product_name: product.name,
+            sku: product.sku,
+            unit_name: getImportValue(record, ['Đơn vị', 'Don vi', 'Unit']) || product.unit_name || 'cái',
+            quantity,
+            unit_price: unitPrice,
+            discount_amount: discountAmount,
+          });
+        }
+
+        if (items.length === 0) {
+          continue;
+        }
+
+        const subtotal = items.reduce(
+          (sum, item) => sum + Number(item.quantity || 0) * Number(item.unit_price || 0) - Number(item.discount_amount || 0),
+          0,
+        );
+        const discountAmount = parseImportNumber(getImportValue(firstRow, ['Chiết khấu đơn', 'Chiet khau don', 'order_discount', 'discount_amount']));
+        const shippingFee = parseImportNumber(getImportValue(firstRow, ['Phí giao hàng', 'Phi giao hang', 'shipping_fee']));
+        const taxAmount = parseImportNumber(getImportValue(firstRow, ['Thuế', 'Thue', 'tax_amount']));
+        const totalAmount = Math.max(0, subtotal - discountAmount + shippingFee + taxAmount);
+        const paidAmount = parseImportNumber(getImportValue(firstRow, ['Đã thanh toán', 'Da thanh toan', 'paid_amount', 'Paid']));
+
+        try {
+          const created = await salesOrdersService.create({
+            branch_id: branch.id,
+            customer_id: getImportValue(firstRow, ['customer_id', 'ID khách hàng', 'Id khach hang']) || undefined,
+            order_no: orderNo || undefined,
+            source: parseImportSource(getImportValue(firstRow, ['Nguồn', 'Nguon', 'source'])),
+            status: parseImportStatus(getImportValue(firstRow, ['Trạng thái', 'Trang thai', 'status'])),
+            payment_status: getImportPaymentStatus(totalAmount, paidAmount),
+            paid_amount: paidAmount,
+            discount_amount: discountAmount,
+            shipping_fee: shippingFee,
+            tax_amount: taxAmount,
+            note: getImportValue(firstRow, ['Ghi chú', 'Ghi chu', 'note']) || undefined,
+            delivery_address: getImportValue(firstRow, ['Địa chỉ giao hàng', 'Dia chi giao hang', 'delivery_address']) || undefined,
+            items,
+          });
+          createdOrders.push(created);
+        } catch (error: any) {
+          failures.push(`${orderNo || groupKey}: ${error?.message ?? 'không nhập được đơn hàng.'}`);
+        }
+      }
+
+      if (createdOrders.length > 0) {
+        setOrders((current) => [...createdOrders, ...current]);
+        setSelectedOrderId(createdOrders[0].id);
+        setSelectedOrderDetail(createdOrders[0]);
+      }
+
+      const summaryParts = [
+        createdOrders.length ? `Đã nhập ${createdOrders.length} đơn hàng` : 'Chưa nhập được đơn hàng nào',
+        failures.length ? `${failures.length} lỗi` : '',
+      ].filter(Boolean);
+      setInfoMessage(`${summaryParts.join(', ')}.${failures.length ? ` Lỗi đầu tiên: ${failures[0]}` : ''}`);
+    } catch (error: any) {
+      setListError(error?.message ?? 'Nhập file đơn hàng thất bại.');
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const handleCopyOrder = async () => {
@@ -902,13 +1152,21 @@ export function Orders() {
                     <Receipt size={18} className="text-slate-400" /> Hóa đơn điện tử
                   </h3>
                   <p className="text-[13px] leading-relaxed text-slate-500">
-                    Đơn hàng chưa được phát hành hóa đơn điện tử từ backend hiện tại.
+                    Phát hành và quản lý hóa đơn điện tử cho đơn hàng này ở luồng hóa đơn riêng.
                     <br />
-                    Bạn vẫn có thể in đơn hàng hoặc sửa đơn trước khi phát hành ở luồng riêng.
+                    Sau khi phát hành, bạn có thể in lại hóa đơn từ trang hóa đơn điện tử.
                   </p>
                 </div>
                 <button
-                  onClick={() => setInfoMessage('Chức năng hóa đơn điện tử chưa được nối backend riêng.')}
+                  onClick={() =>
+                    navigate('/e-invoices', {
+                      state: {
+                        orderId: selectedOrder.id,
+                        orderNo: selectedOrder.order_no,
+                        message: `Đang mở hóa đơn điện tử cho đơn ${selectedOrder.order_no}.`,
+                      },
+                    })
+                  }
                   className="shrink-0 rounded bg-[#0088FF] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-blue-700"
                 >
                   Tạo hóa đơn điện tử
@@ -1309,6 +1567,13 @@ export function Orders() {
 
       <div className="list-toolbar">
         <div className="list-toolbar-actions">
+          <input
+            ref={importFileInputRef}
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="hidden"
+            onChange={handleImportOrders}
+          />
           <button
             onClick={() => setShowExportModal(true)}
             className="list-action-button"
@@ -1316,10 +1581,11 @@ export function Orders() {
             <Download size={16} /> Xuất file
           </button>
           <button
-            onClick={() => setInfoMessage('Luồng nhập file đơn hàng chưa được cấu hình riêng, vui lòng tạo trực tiếp từ POS.')}
+            onClick={() => importFileInputRef.current?.click()}
+            disabled={isImporting}
             className="list-action-button"
           >
-            <Upload size={16} /> Nhập file
+            {isImporting ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />} Nhập file
           </button>
         </div>
         <div className="flex items-center gap-3">

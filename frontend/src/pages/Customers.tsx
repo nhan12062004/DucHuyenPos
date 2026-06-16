@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { readSheet } from 'read-excel-file/browser';
 import {
   Search,
   ChevronDown,
@@ -10,9 +11,12 @@ import {
   Download,
   Upload,
   Plus,
+  Loader2,
+  X,
 } from 'lucide-react';
 import {
   customersService,
+  findDefaultRetailCustomerGroup,
   type Customer,
   type CustomerDebtSummary,
   type CustomerGroup,
@@ -22,8 +26,10 @@ import {
   salesOrdersService,
   type SalesOrder,
 } from '../services/salesOrdersService';
+import { exportRowsToXlsx } from '../utils/excel';
 
 type CustomerTab = 'all' | 'trading';
+type ExportScope = 'all' | 'current';
 type CustomerDetailTab =
   | 'history'
   | 'debt'
@@ -113,6 +119,48 @@ function buildCustomersData(
   });
 }
 
+function normalizeImportKey(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+async function parseImportFile(file: File) {
+  const rows = await readSheet(file);
+  return rows
+    .map((row) => row.map((cell) => (cell === null ? '' : String(cell).trim())))
+    .filter((row) => row.some(Boolean));
+}
+
+function getImportValue(record: Record<string, string>, aliases: string[]) {
+  for (const alias of aliases) {
+    const value = record[normalizeImportKey(alias)];
+    if (value?.trim()) {
+      return value.trim();
+    }
+  }
+
+  return '';
+}
+
+function findImportCustomerGroup(groups: CustomerGroup[], value: string) {
+  if (!value.trim()) {
+    return findDefaultRetailCustomerGroup(groups);
+  }
+
+  const normalized = normalizeImportKey(value);
+  return groups.find((group) =>
+    group.id === value ||
+    normalizeImportKey(group.code) === normalized ||
+    normalizeImportKey(group.name) === normalized,
+  );
+}
+
 export function Customers() {
   const [activeTab, setActiveTab] = useState<CustomerTab>('all');
   const [detailTab, setDetailTab] = useState<CustomerDetailTab>('history');
@@ -132,6 +180,10 @@ export function Customers() {
   const [listError, setListError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportScope, setExportScope] = useState<ExportScope>('all');
+  const importFileInputRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -340,6 +392,141 @@ export function Customers() {
         ? 'Đang lọc khách hàng còn hoạt động.'
         : 'Đang lọc khách hàng đã vô hiệu hóa.',
     );
+  };
+
+  const handleExportCustomers = async () => {
+    let customersToExport = visibleCustomers;
+
+    if (exportScope === 'all') {
+      try {
+        const response = await customersService.getAll({
+          page: 1,
+          limit: Math.max(totalCustomers || visibleCustomers.length || limit, limit),
+          search: searchTerm || undefined,
+          status: statusFilter === 'all' ? undefined : statusFilter,
+        });
+        const allCustomersData = buildCustomersData(response.data, debtMap, orderMap);
+        customersToExport =
+          activeTab === 'all'
+            ? allCustomersData
+            : allCustomersData.filter((customer) => customer.ordersCount > 0);
+      } catch (error: any) {
+        setListError(error?.message ?? 'Không tải được dữ liệu khách hàng để xuất file.');
+        return;
+      }
+    }
+
+    if (customersToExport.length === 0) {
+      setInfoMessage('Không có khách hàng phù hợp để xuất file.');
+      return;
+    }
+
+    const rows = [
+      ['Mã khách hàng', 'Tên khách hàng', 'SĐT', 'Email', 'Nhóm khách hàng', 'Địa chỉ', 'Trạng thái', 'Tổng chi tiêu', 'Công nợ', 'Ghi chú'],
+      ...customersToExport.map((customer) => [
+        customer.code ?? '',
+        customer.full_name,
+        customer.phone ?? '',
+        customer.email ?? '',
+        customer.groupName,
+        customer.address ?? '',
+        customer.status === 'active' ? 'Đang hoạt động' : 'Ngừng hoạt động',
+        String(Number(customer.totalSpent || 0)),
+        String(Number(customer.debt || 0)),
+        customer.notes ?? '',
+      ]),
+    ];
+
+    exportRowsToXlsx(rows, `customers-${new Date().toISOString().slice(0, 10)}`, 'Khách hàng');
+    setShowExportModal(false);
+    setInfoMessage(`Đã xuất ${customersToExport.length} khách hàng.`);
+  };
+
+  const handleImportCustomers = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) {
+      return;
+    }
+
+    const lowerFileName = file.name.toLowerCase();
+    const isSupportedFile = lowerFileName.endsWith('.xlsx');
+
+    if (!isSupportedFile) {
+      setInfoMessage('Hiện chức năng nhập khách hàng chỉ hỗ trợ Excel .xlsx.');
+      return;
+    }
+
+    setIsImporting(true);
+    setListError(null);
+    setInfoMessage(`Đang đọc file ${file.name}...`);
+
+    try {
+      const rows = await parseImportFile(file);
+      const [headers, ...dataRows] = rows;
+
+      if (!headers?.length || dataRows.length === 0) {
+        setInfoMessage('File nhập chưa có dữ liệu khách hàng.');
+        return;
+      }
+
+      const normalizedHeaders = headers.map(normalizeImportKey);
+      const createdCustomers: Customer[] = [];
+      const failures: string[] = [];
+      let skippedRows = 0;
+
+      for (const [index, row] of dataRows.entries()) {
+        const record = normalizedHeaders.reduce<Record<string, string>>((acc, header, headerIndex) => {
+          acc[header] = row[headerIndex] ?? '';
+          return acc;
+        }, {});
+
+        const fullName = getImportValue(record, ['Tên khách hàng', 'Ten khach hang', 'Khách hàng', 'Khach hang', 'Name', 'full_name']);
+        if (!fullName) {
+          skippedRows += 1;
+          continue;
+        }
+
+        const groupValue = getImportValue(record, ['customer_group_id', 'Nhóm khách hàng', 'Nhom khach hang', 'Group']);
+        const matchedGroup = findImportCustomerGroup(customerGroups, groupValue);
+
+        try {
+          const created = await customersService.create({
+            code: getImportValue(record, ['Mã khách hàng', 'Ma khach hang', 'code']) || undefined,
+            customer_group_id: matchedGroup?.id,
+            full_name: fullName,
+            phone: getImportValue(record, ['SĐT', 'SDT', 'Số điện thoại', 'So dien thoai', 'Phone']) || undefined,
+            email: getImportValue(record, ['Email']) || undefined,
+            birthdate: getImportValue(record, ['Ngày sinh', 'Ngay sinh', 'birthdate']) || undefined,
+            tax_code: getImportValue(record, ['Mã số thuế', 'Ma so thue', 'tax_code']) || undefined,
+            address: getImportValue(record, ['Địa chỉ', 'Dia chi', 'address']) || undefined,
+            notes: getImportValue(record, ['Ghi chú', 'Ghi chu', 'notes']) || undefined,
+            status: normalizeImportKey(getImportValue(record, ['Trạng thái', 'Trang thai', 'status'])).includes('ngung') ? 'inactive' : 'active',
+          });
+          createdCustomers.push(created);
+        } catch (error: any) {
+          failures.push(`Dòng ${index + 2}: ${error?.message ?? 'Không nhập được khách hàng.'}`);
+        }
+      }
+
+      if (createdCustomers.length > 0) {
+        setCustomers((current) => [...createdCustomers, ...current]);
+        setTotalCustomers((current) => current + createdCustomers.length);
+      }
+
+      const summaryParts = [
+        createdCustomers.length ? `Đã nhập ${createdCustomers.length} khách hàng` : 'Chưa nhập được khách hàng nào',
+        skippedRows ? `bỏ qua ${skippedRows} dòng thiếu tên` : '',
+        failures.length ? `${failures.length} dòng lỗi` : '',
+      ].filter(Boolean);
+
+      setInfoMessage(`${summaryParts.join(', ')}.${failures.length ? ` Lỗi đầu tiên: ${failures[0]}` : ''}`);
+    } catch (error: any) {
+      setListError(error?.message ?? 'Nhập file khách hàng thất bại.');
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const handleDeleteCustomer = async () => {
@@ -795,10 +982,75 @@ export function Customers() {
 
   return (
     <div className="customer-list-page -mx-2 -my-2 flex min-h-[calc(100vh-64px)] flex-col bg-[#f3f5f7] text-[13px]">
+      {showExportModal ? (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/45 px-4 pt-20">
+          <div className="w-full max-w-[460px] bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
+              <h2 className="text-[16px] font-semibold text-[#182537]">Xuất file danh sách khách hàng</h2>
+              <button
+                type="button"
+                onClick={() => setShowExportModal(false)}
+                aria-label="Đóng"
+                className="flex h-7 w-7 items-center justify-center text-slate-400 transition-colors hover:text-slate-700"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-3 px-6 py-4 text-[13px] text-[#182537]">
+              <div className="font-medium">Giới hạn kết quả xuất</div>
+              <label className="flex cursor-pointer items-center gap-2 py-1">
+                <input
+                  type="radio"
+                  checked={exportScope === 'all'}
+                  onChange={() => setExportScope('all')}
+                  className="h-3.5 w-3.5 accent-[#0088FF]"
+                />
+                <span>Tất cả khách hàng theo bộ lọc hiện tại</span>
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 py-1">
+                <input
+                  type="radio"
+                  checked={exportScope === 'current'}
+                  onChange={() => setExportScope('current')}
+                  className="h-3.5 w-3.5 accent-[#0088FF]"
+                />
+                <span>Khách hàng trên trang hiện tại</span>
+              </label>
+            </div>
+
+            <div className="flex justify-end gap-3 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setShowExportModal(false)}
+                className="h-8 border border-[#0088FF] bg-white px-5 text-[13px] font-medium text-[#0088FF] transition-colors hover:bg-blue-50"
+              >
+                Thoát
+              </button>
+              <button
+                type="button"
+                onClick={handleExportCustomers}
+                className="h-8 bg-[#0088FF] px-5 text-[13px] font-medium text-white transition-colors hover:bg-blue-700"
+              >
+                Xuất file
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="flex min-h-10 items-center justify-between bg-[#f5f7f9] px-3 py-1">
         <div className="list-toolbar-actions">
+          <input
+            ref={importFileInputRef}
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="hidden"
+            onChange={handleImportCustomers}
+          />
           <button
             type="button"
+            onClick={() => setShowExportModal(true)}
             className="list-action-button"
           >
             <Download size={16} className="text-[#8a99a8]" />
@@ -806,9 +1058,15 @@ export function Customers() {
           </button>
           <button
             type="button"
+            onClick={() => importFileInputRef.current?.click()}
+            disabled={isImporting}
             className="list-action-button"
           >
-            <Upload size={16} className="text-[#8a99a8]" />
+            {isImporting ? (
+              <Loader2 size={16} className="animate-spin text-[#8a99a8]" />
+            ) : (
+              <Upload size={16} className="text-[#8a99a8]" />
+            )}
             Nhập file
           </button>
         </div>

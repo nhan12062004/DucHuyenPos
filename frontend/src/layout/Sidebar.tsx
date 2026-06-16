@@ -20,8 +20,8 @@ interface SidebarProps {
 }
 
 const SIDEBAR_WIDTH = {
-  expanded: 280,
-  collapsed: 68
+  expanded: 236,
+  collapsed: 56
 } as const;
 
 const SIDEBAR_TRANSITION = {

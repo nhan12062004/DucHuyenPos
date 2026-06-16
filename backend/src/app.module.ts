@@ -12,6 +12,8 @@ import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.
 import { InventoryModule } from './modules/inventory/inventory.module.js';
 import { DashboardModule } from './modules/dashboard/dashboard.module.js';
 import { StaffModule } from './modules/staff/staff.module.js';
+import { InvoicesModule } from './modules/invoices/invoices.module.js';
+import { SalesReturnsModule } from './modules/sales-returns/sales-returns.module.js';
 
 @Module({
   imports: [
@@ -31,6 +33,8 @@ import { StaffModule } from './modules/staff/staff.module.js';
     InventoryModule,
     DashboardModule,
     StaffModule,
+    InvoicesModule,
+    SalesReturnsModule,
   ],
 })
 export class AppModule {}

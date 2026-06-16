@@ -14,6 +14,7 @@ import {
   ImageIcon,
   Info,
   Loader2,
+  X,
 } from 'lucide-react';
 import {
   productsService,
@@ -24,8 +25,10 @@ import {
 } from '../services/productsService';
 import { inventoryService, type Branch } from '../services/inventoryService';
 import { PageLoader } from '../components/PageLoader';
+import { exportRowsToXlsx } from '../utils/excel';
 
 type ProductDetailTab = 'stock' | 'history';
+type ExportScope = 'all' | 'current';
 type ProductsRouteState = {
   selectedProductId?: string;
   detailTab?: ProductDetailTab;
@@ -126,67 +129,11 @@ function parseImportBoolean(value: string | undefined, defaultValue: boolean) {
   return defaultValue;
 }
 
-function parseCsvContent(content: string) {
-  const normalizedContent = content.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  const firstLine = normalizedContent.split('\n', 1)[0] ?? '';
-  const delimiter = (firstLine.match(/;/g)?.length ?? 0) > (firstLine.match(/,/g)?.length ?? 0) ? ';' : ',';
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let cell = '';
-  let inQuotes = false;
-
-  for (let index = 0; index < normalizedContent.length; index += 1) {
-    const char = normalizedContent[index];
-    const nextChar = normalizedContent[index + 1];
-
-    if (char === '"') {
-      if (inQuotes && nextChar === '"') {
-        cell += '"';
-        index += 1;
-      } else {
-        inQuotes = !inQuotes;
-      }
-      continue;
-    }
-
-    if (char === delimiter && !inQuotes) {
-      row.push(cell.trim());
-      cell = '';
-      continue;
-    }
-
-    if (char === '\n' && !inQuotes) {
-      row.push(cell.trim());
-      if (row.some(Boolean)) {
-        rows.push(row);
-      }
-      row = [];
-      cell = '';
-      continue;
-    }
-
-    cell += char;
-  }
-
-  row.push(cell.trim());
-  if (row.some(Boolean)) {
-    rows.push(row);
-  }
-
-  return rows;
-}
-
 async function parseImportFile(file: File) {
-  const fileName = file.name.toLowerCase();
-
-  if (fileName.endsWith('.xlsx')) {
-    const rows = await readSheet(file);
-    return rows
-      .map((row) => row.map((cell) => (cell === null ? '' : String(cell).trim())))
-      .filter((row) => row.some(Boolean));
-  }
-
-  return parseCsvContent(await file.text());
+  const rows = await readSheet(file);
+  return rows
+    .map((row) => row.map((cell) => (cell === null ? '' : String(cell).trim())))
+    .filter((row) => row.some(Boolean));
 }
 
 function getImportValue(record: Record<string, string>, aliases: string[]) {
@@ -235,6 +182,8 @@ export function Products() {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportScope, setExportScope] = useState<ExportScope>('all');
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -470,14 +419,16 @@ export function Products() {
   };
 
   const handleExportProducts = () => {
-    if (visibleProducts.length === 0) {
+    const productsToExport = exportScope === 'all' ? visibleProducts : visibleProducts;
+
+    if (productsToExport.length === 0) {
       setInfoMessage('Không có sản phẩm phù hợp để xuất file.');
       return;
     }
 
     const rows = [
       ['SKU', 'Tên sản phẩm', 'Loại', 'Nhãn hiệu', 'Có thể bán', 'Tồn kho', 'Ngày tạo'],
-      ...visibleProducts.map((product) => [
+      ...productsToExport.map((product) => [
         product.sku || '---',
         product.name,
         product.typeName,
@@ -488,17 +439,9 @@ export function Products() {
       ]),
     ];
 
-    const csvContent = rows
-      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-    const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `products-${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-    setInfoMessage(`Đã xuất ${visibleProducts.length} sản phẩm.`);
+    exportRowsToXlsx(rows, `products-${new Date().toISOString().slice(0, 10)}`, 'Sản phẩm');
+    setShowExportModal(false);
+    setInfoMessage(`Đã xuất ${productsToExport.length} sản phẩm.`);
   };
 
   const handleImportProducts = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -510,12 +453,9 @@ export function Products() {
     }
 
     const lowerFileName = file.name.toLowerCase();
-    const supportedFile =
-      lowerFileName.endsWith('.csv') ||
-      lowerFileName.endsWith('.txt') ||
-      lowerFileName.endsWith('.xlsx');
+    const supportedFile = lowerFileName.endsWith('.xlsx');
     if (!supportedFile) {
-      setInfoMessage('Hiện chức năng nhập file hỗ trợ Excel .xlsx và CSV.');
+      setInfoMessage('Hiện chức năng nhập file chỉ hỗ trợ Excel .xlsx.');
       return;
     }
 
@@ -1062,17 +1002,74 @@ export function Products() {
 
   return (
     <div className="flex flex-col gap-4">
+      {showExportModal ? (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/45 px-4 pt-20">
+          <div className="w-full max-w-[460px] bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
+              <h2 className="text-[16px] font-semibold text-[#182537]">Xuất file danh sách sản phẩm</h2>
+              <button
+                type="button"
+                onClick={() => setShowExportModal(false)}
+                aria-label="Đóng"
+                className="flex h-7 w-7 items-center justify-center text-slate-400 transition-colors hover:text-slate-700"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-3 px-6 py-4 text-[13px] text-[#182537]">
+              <div className="font-medium">Giới hạn kết quả xuất</div>
+              <label className="flex cursor-pointer items-center gap-2 py-1">
+                <input
+                  type="radio"
+                  checked={exportScope === 'all'}
+                  onChange={() => setExportScope('all')}
+                  className="h-3.5 w-3.5 accent-[#0088FF]"
+                />
+                <span>Tất cả sản phẩm theo bộ lọc hiện tại</span>
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 py-1">
+                <input
+                  type="radio"
+                  checked={exportScope === 'current'}
+                  onChange={() => setExportScope('current')}
+                  className="h-3.5 w-3.5 accent-[#0088FF]"
+                />
+                <span>Sản phẩm trên trang hiện tại</span>
+              </label>
+            </div>
+
+            <div className="flex justify-end gap-3 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setShowExportModal(false)}
+                className="h-8 border border-[#0088FF] bg-white px-5 text-[13px] font-medium text-[#0088FF] transition-colors hover:bg-blue-50"
+              >
+                Thoát
+              </button>
+              <button
+                type="button"
+                onClick={handleExportProducts}
+                className="h-8 bg-[#0088FF] px-5 text-[13px] font-medium text-white transition-colors hover:bg-blue-700"
+              >
+                Xuất file
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="list-toolbar">
         <div className="list-toolbar-actions">
           <input
             ref={importFileInputRef}
             type="file"
-            accept=".xlsx,.csv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             className="hidden"
             onChange={handleImportProducts}
           />
           <button
-            onClick={handleExportProducts}
+            onClick={() => setShowExportModal(true)}
             disabled={isImporting}
             className="list-action-button"
           >

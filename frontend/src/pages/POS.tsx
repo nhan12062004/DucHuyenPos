@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
-  ArrowLeftRight,
   Box,
   Calendar,
   CheckCircle,
@@ -784,14 +783,7 @@ function AddCustomerModal({ open, onClose, onCreated }: AddCustomerModalProps) {
         </div>
 
         {/* Footer */}
-        <div className="flex shrink-0 items-center justify-between border-t border-slate-100 px-5 py-3">
-          <button
-            type="button"
-            className="flex items-center gap-1.5 text-[13px] font-medium text-blue-600 hover:text-blue-700"
-          >
-            <ArrowLeftRight size={14} />
-            Chuyển đổi địa chỉ
-          </button>
+        <div className="flex shrink-0 items-center justify-end border-t border-slate-100 px-5 py-3">
           <div className="flex items-center gap-2">
             <button
               type="button"

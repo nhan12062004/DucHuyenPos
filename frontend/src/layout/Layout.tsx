@@ -5,8 +5,8 @@ import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 
 const SIDEBAR_WIDTH = {
-  expanded: 280,
-  collapsed: 68
+  expanded: 236,
+  collapsed: 56
 } as const;
 
 const LAYOUT_TRANSITION = {
