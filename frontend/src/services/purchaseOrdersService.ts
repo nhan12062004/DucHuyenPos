@@ -55,6 +55,10 @@ export const purchaseOrdersService = {
   create: (dto: {
     branch_id: string;
     supplier_id: string;
+    status?: PurchaseOrder['status'];
+    payment_status?: PurchaseOrder['payment_status'];
+    paid_amount?: number;
+    payment_method?: 'cash' | 'bank_transfer' | 'card' | 'ewallet' | 'other';
     note?: string;
     discount_amount?: number;
     expected_delivery_at?: string;

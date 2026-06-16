@@ -57,6 +57,12 @@ export interface InventoryQuery {
   branch_id?: string;
 }
 
+export interface InventoryAdjustmentResult {
+  check_code: string;
+  adjusted_count: number;
+  transactions: InventoryTransaction[];
+}
+
 // ─── Service ─────────────────────────────────────────────────────────────────
 
 export const inventoryService = {
@@ -68,4 +74,10 @@ export const inventoryService = {
 
   getBranches: () =>
     api.get<Branch[]>('/inventory/branches'),
+
+  createAdjustment: (dto: {
+    branch_id: string;
+    note?: string;
+    items: { product_id: string; actual_qty: number }[];
+  }) => api.post<InventoryAdjustmentResult>('/inventory/adjustments', dto),
 };

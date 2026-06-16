@@ -1,6 +1,7 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { InventoryService } from './inventory.service.js';
 import { PaginationDto } from '../../common/dto/pagination.dto.js';
+import { CreateInventoryAdjustmentDto } from './dto/inventory-adjustment.dto.js';
 
 @Controller('inventory')
 export class InventoryController {
@@ -19,5 +20,10 @@ export class InventoryController {
   @Get('branches')
   getBranches() {
     return this.inventoryService.getBranches();
+  }
+
+  @Post('adjustments')
+  createAdjustment(@Body() dto: CreateInventoryAdjustmentDto) {
+    return this.inventoryService.createAdjustment(dto);
   }
 }

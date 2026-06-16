@@ -44,6 +44,19 @@ export class CreatePurchaseOrderDto {
   discount_amount?: number = 0;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  paid_amount?: number = 0;
+
+  @IsOptional()
+  @IsIn(['unpaid', 'partial', 'paid'])
+  payment_status?: string;
+
+  @IsOptional()
+  @IsIn(['cash', 'bank_transfer', 'card', 'ewallet', 'other'])
+  payment_method?: string = 'cash';
+
+  @IsOptional()
   @IsString()
   note?: string;
 
