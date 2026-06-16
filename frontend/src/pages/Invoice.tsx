@@ -78,8 +78,12 @@ export function Invoice() {
 
     hasAutoPrintedRef.current = true;
     const timer = window.setTimeout(() => {
-      window.print();
-    }, 300);
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          window.print();
+        });
+      });
+    }, 600);
 
     return () => window.clearTimeout(timer);
   }, [isLoading, order, shouldAutoPrint]);
@@ -322,7 +326,7 @@ export function Invoice() {
           margin: 0 0 6px;
           color: #07152b;
           font-size: 13px;
-          font-weight: 900;
+          font-weight: 700;
           letter-spacing: 0;
         }
 
@@ -347,9 +351,9 @@ export function Invoice() {
           margin: 0 0 12px;
           border-bottom: 1px solid #e5e7eb;
           padding-bottom: 5px;
-          color: #64748b;
+          color: #475569;
           font-size: 9px;
-          font-weight: 900;
+          font-weight: 600;
           letter-spacing: 0.06em;
         }
 
@@ -376,12 +380,12 @@ export function Invoice() {
 
         .invoice-meta-grid dt {
           color: #07152b;
-          font-weight: 900;
+          font-weight: 700;
         }
 
         .invoice-meta-grid dd {
           color: #0f172a;
-          font-weight: 600;
+          font-weight: 400;
         }
 
         .invoice-transaction {
@@ -393,7 +397,7 @@ export function Invoice() {
         }
 
         .invoice-transaction dd {
-          font-weight: 900;
+          font-weight: 600;
         }
 
         .invoice-order-section {
@@ -404,7 +408,7 @@ export function Invoice() {
           margin: 0 0 6px;
           color: #020617;
           font-size: 13px;
-          font-weight: 950;
+          font-weight: 700;
           letter-spacing: 0.04em;
           text-align: center;
         }
@@ -434,7 +438,7 @@ export function Invoice() {
           padding: 1.8mm 1.4mm;
           color: #0f172a;
           font-size: 9px;
-          font-weight: 950;
+          font-weight: 600;
           text-align: left;
         }
 
@@ -473,7 +477,7 @@ export function Invoice() {
         }
 
         .invoice-items td:nth-child(6) {
-          font-weight: 950;
+          font-weight: 600;
         }
 
         .invoice-items td strong,
@@ -482,7 +486,7 @@ export function Invoice() {
         }
 
         .invoice-items td strong {
-          font-weight: 700;
+          font-weight: 400;
           line-height: 1.35;
         }
 
@@ -522,7 +526,7 @@ export function Invoice() {
 
         .invoice-summary-row strong {
           color: #0f172a;
-          font-weight: 700;
+          font-weight: 600;
           white-space: nowrap;
         }
 
@@ -555,13 +559,13 @@ export function Invoice() {
 
         .invoice-debt span {
           color: #111827;
-          font-weight: 900;
+          font-weight: 600;
         }
 
         .invoice-debt strong {
-          color: #dc2626;
+          color: #111827;
           font-size: 15px;
-          font-weight: 950;
+          font-weight: 600;
           white-space: nowrap;
         }
 
@@ -585,7 +589,7 @@ export function Invoice() {
         .invoice-signatures strong {
           color: #020617;
           font-size: 10px;
-          font-weight: 950;
+          font-weight: 700;
         }
 
         .invoice-signatures span {
@@ -601,7 +605,7 @@ export function Invoice() {
           padding-top: 6px;
           color: #0f172a;
           font-style: normal;
-          font-weight: 600;
+          font-weight: 400;
         }
 
         @media print {

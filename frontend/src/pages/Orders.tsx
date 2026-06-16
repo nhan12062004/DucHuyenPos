@@ -611,7 +611,7 @@ export function Orders() {
       return;
     }
 
-    navigate(`/invoice?orderId=${selectedOrder.id}&autoPrint=1`);
+    window.location.assign(`/invoice?orderId=${encodeURIComponent(selectedOrder.id)}&autoPrint=1`);
   };
 
   const handleExportOrders = () => {
