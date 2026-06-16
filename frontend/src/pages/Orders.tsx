@@ -32,6 +32,7 @@ import { inventoryService, type Branch } from '../services/inventoryService';
 import { PageLoader } from '../components/PageLoader';
 import { getDeliveryLabel, getDeliveryStatusFromTab, parseLegacyDeliveryTab } from '../utils/delivery';
 import { exportRowsToXlsx } from '../utils/excel';
+import { printInvoiceByOrderId } from '../utils/printInvoice';
 
 type OrderTab = 'all' | 'trading';
 type DatePreset = 'today' | 'this_month';
@@ -611,7 +612,7 @@ export function Orders() {
       return;
     }
 
-    navigate(`/invoice?orderId=${selectedOrder.id}&autoPrint=1`);
+    printInvoiceByOrderId(selectedOrder.id);
   };
 
   const handleExportOrders = () => {
@@ -1013,12 +1014,6 @@ export function Orders() {
           {detailError ? (
             <div className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
               {detailError}
-            </div>
-          ) : null}
-
-          {isDetailLoading ? (
-            <div className="mb-4 rounded border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
-              Đang cập nhật chi tiết đơn hàng...
             </div>
           ) : null}
 

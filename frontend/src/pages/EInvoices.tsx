@@ -11,6 +11,7 @@ import {
 import { PageLoader } from '../components/PageLoader';
 import { invoicesService, type Invoice, type InvoiceStatus } from '../services/invoicesService';
 import { salesOrdersService, type SalesOrder } from '../services/salesOrdersService';
+import { printInvoiceByOrderId } from '../utils/printInvoice';
 
 type EInvoicesRouteState = {
   orderId?: string;
@@ -163,7 +164,7 @@ export function EInvoices() {
     try {
       const printed = await invoicesService.print(invoice.id);
       setInvoices((current) => current.map((item) => (item.id === printed.id ? printed : item)));
-      navigate(`/invoice?orderId=${printed.sales_order_id}&autoPrint=1`);
+      printInvoiceByOrderId(printed.sales_order_id);
     } catch (nextError: any) {
       setError(nextError?.message ?? 'Không in được hóa đơn.');
     } finally {

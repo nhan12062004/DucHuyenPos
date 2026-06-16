@@ -38,6 +38,7 @@ export function Invoice() {
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get('orderId');
   const shouldAutoPrint = searchParams.get('autoPrint') === '1';
+  const printOnly = searchParams.get('printOnly') === '1';
   const hasAutoPrintedRef = useRef(false);
   const [order, setOrder] = useState<SalesOrder | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -79,10 +80,15 @@ export function Invoice() {
     hasAutoPrintedRef.current = true;
     const timer = window.setTimeout(() => {
       window.print();
+      if (printOnly) {
+        window.setTimeout(() => {
+          window.frameElement?.remove();
+        }, 1000);
+      }
     }, 300);
 
     return () => window.clearTimeout(timer);
-  }, [isLoading, order, shouldAutoPrint]);
+  }, [isLoading, order, printOnly, shouldAutoPrint]);
 
   const items = order?.sales_order_items ?? [];
   const subtotal = Number(order?.subtotal ?? 0);
@@ -122,7 +128,8 @@ export function Invoice() {
   }
 
   return (
-    <div className="invoice-screen min-h-screen bg-[#eef1f5] px-5 py-7 text-[#07152b]">
+    <div className={`invoice-screen min-h-screen bg-[#eef1f5] px-5 py-7 text-[#07152b] ${printOnly ? 'print-only-mode' : ''}`}>
+      {!printOnly ? (
       <div className="invoice-actions fixed right-7 top-5 z-20 flex items-center gap-3">
         <button
           type="button"
@@ -141,6 +148,7 @@ export function Invoice() {
           In hóa đơn
         </button>
       </div>
+      ) : null}
 
       <main className="invoice-paper mx-auto bg-white shadow-[0_22px_70px_rgba(15,23,42,0.18)]">
         <header className="invoice-hero">
@@ -282,7 +290,7 @@ export function Invoice() {
 
       <style>{`
         @page {
-          size: A5;
+          size: 148mm 210mm;
           margin: 0;
         }
 
@@ -293,6 +301,17 @@ export function Invoice() {
           padding: 11mm 10mm 9mm;
           font-size: 10.5px;
           line-height: 1.32;
+        }
+
+        .print-only-mode {
+          min-height: auto;
+          padding: 0;
+          background: white;
+        }
+
+        .print-only-mode .invoice-paper {
+          box-shadow: none;
+          margin: 0;
         }
 
         .invoice-hero {
@@ -412,11 +431,22 @@ export function Invoice() {
         .invoice-items {
           width: 100%;
           border-collapse: collapse;
+          page-break-inside: auto;
         }
 
         .invoice-items thead {
           border-top: 2px solid #111827;
           border-bottom: 1px solid #111827;
+          display: table-header-group;
+        }
+
+        .invoice-items tbody {
+          display: table-row-group;
+        }
+
+        .invoice-items tr {
+          break-inside: avoid;
+          page-break-inside: avoid;
         }
 
         .invoice-items th {
@@ -492,6 +522,8 @@ export function Invoice() {
           gap: 1.8mm;
           width: 74mm;
           margin: 5mm 0 0 auto;
+          break-inside: avoid;
+          page-break-inside: avoid;
         }
 
         .invoice-summary-row,
@@ -559,6 +591,8 @@ export function Invoice() {
           margin-top: 8mm;
           padding: 0;
           text-align: center;
+          break-inside: avoid;
+          page-break-inside: avoid;
         }
 
         .invoice-signatures strong,
@@ -608,11 +642,30 @@ export function Invoice() {
 
           .invoice-paper {
             width: 148mm !important;
-            min-height: 210mm !important;
+            min-height: auto !important;
+            height: auto !important;
             box-sizing: border-box !important;
             box-shadow: none !important;
             margin: 0 !important;
             padding: 11mm 10mm 9mm !important;
+            overflow: visible !important;
+          }
+
+          .invoice-meta-grid,
+          .invoice-order-section,
+          .invoice-summary,
+          .invoice-signatures {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          .invoice-items thead {
+            display: table-header-group;
+          }
+
+          .invoice-items tr {
+            break-inside: avoid;
+            page-break-inside: avoid;
           }
         }
       `}</style>
