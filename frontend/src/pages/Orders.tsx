@@ -312,6 +312,15 @@ export function Orders() {
   }, [location.state, navigate]);
 
   useEffect(() => {
+    if (!infoMessage) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => setInfoMessage(null), 4500);
+    return () => window.clearTimeout(timeoutId);
+  }, [infoMessage]);
+
+  useEffect(() => {
     let active = true;
 
     async function loadOrders() {
@@ -706,6 +715,20 @@ export function Orders() {
 
     return (
       <div className="flex flex-col gap-4">
+        {infoMessage ? (
+          <div className="fixed right-5 top-5 z-[70] flex max-w-[380px] items-start gap-3 border border-blue-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-xl shadow-slate-200/80">
+            <CheckCircle size={18} className="mt-0.5 shrink-0 text-emerald-500" />
+            <div className="font-medium">{infoMessage}</div>
+            <button
+              type="button"
+              onClick={() => setInfoMessage(null)}
+              aria-label="Đóng thông báo"
+              className="ml-2 text-slate-400 transition-colors hover:text-slate-700"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        ) : null}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <button
             onClick={() => setSelectedOrderId(null)}
@@ -737,12 +760,6 @@ export function Orders() {
         </div>
 
         <div className="flex flex-col gap-5">
-          {infoMessage ? (
-            <div className="mb-4 rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-              {infoMessage}
-            </div>
-          ) : null}
-
           {detailError ? (
             <div className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
               {detailError}
@@ -1178,6 +1195,20 @@ export function Orders() {
 
   return (
     <div className="flex flex-col gap-4">
+      {infoMessage ? (
+        <div className="fixed right-5 top-5 z-[70] flex max-w-[380px] items-start gap-3 border border-blue-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-xl shadow-slate-200/80">
+          <CheckCircle size={18} className="mt-0.5 shrink-0 text-emerald-500" />
+          <div className="font-medium">{infoMessage}</div>
+          <button
+            type="button"
+            onClick={() => setInfoMessage(null)}
+            aria-label="Đóng thông báo"
+            className="ml-2 text-slate-400 transition-colors hover:text-slate-700"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      ) : null}
       {showExportModal ? (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/45 px-4 pt-20">
           <div className="w-full max-w-[560px] bg-white shadow-2xl">
@@ -1310,12 +1341,6 @@ export function Orders() {
       </div>
 
       <div className="flex flex-col gap-5">
-        {infoMessage ? (
-          <div className="rounded-lg border border-blue-200 bg-blue-50 px-5 py-4 text-sm text-blue-700">
-            {infoMessage}
-          </div>
-        ) : null}
-
         {listError ? (
           <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-600">
             {listError}

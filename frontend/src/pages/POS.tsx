@@ -5,6 +5,7 @@ import {
   ArrowLeftRight,
   Box,
   Calendar,
+  CheckCircle,
   ChevronDown,
   Gift,
   ImageIcon,
@@ -19,6 +20,7 @@ import {
 } from 'lucide-react';
 import {
   customersService,
+  findDefaultRetailCustomerGroup,
   type Customer,
   type CustomerDebtSummary,
   type CustomerGroup,
@@ -363,9 +365,14 @@ function AddCustomerModal({ open, onClose, onCreated }: AddCustomerModalProps) {
     if (customerGroupsList.length === 0) {
       setLoadingGroups(true);
       customersService.getGroups()
-        .then(setCustomerGroupsList)
+        .then((groups) => {
+          setCustomerGroupsList(groups);
+          setCustomerGroup((current) => current || findDefaultRetailCustomerGroup(groups)?.id || '');
+        })
         .catch(() => {})
         .finally(() => setLoadingGroups(false));
+    } else {
+      setCustomerGroup((current) => current || findDefaultRetailCustomerGroup(customerGroupsList)?.id || '');
     }
   }, [open]);
 
@@ -465,7 +472,7 @@ function AddCustomerModal({ open, onClose, onCreated }: AddCustomerModalProps) {
       if (gender !== 'other') extraNotes += (extraNotes ? ' | ' : '') + `Giới tính: ${gender === 'male' ? 'Nam' : 'Nữ'}`;
       if (website.trim()) extraNotes += (extraNotes ? ' | ' : '') + `Website: ${website.trim()}`;
 
-      const dto: Partial<Customer> & { created_by?: string } = {
+      const dto: Partial<Customer> = {
         full_name: fullName.trim(),
         phone:     phone.trim() || undefined,
         address:   addrParts.join(', ') || undefined,
@@ -475,9 +482,6 @@ function AddCustomerModal({ open, onClose, onCreated }: AddCustomerModalProps) {
         notes:     extraNotes || undefined,
         customer_group_id: customerGroup || undefined,
       };
-      
-      // Some backends might allow setting assignee this way, otherwise it's handled by token
-      if (assignee) dto.created_by = assignee;
       
       if (customerCode.trim()) dto.code = customerCode.trim();
       const created = await customersService.create(dto);
@@ -1020,6 +1024,15 @@ export function POS() {
     };
   }, [editingOrderIdFromRoute, hasHydratedRouteOrder, loading, user]);
 
+  useEffect(() => {
+    if (!successMessage) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => setSuccessMessage(null), 4500);
+    return () => window.clearTimeout(timeoutId);
+  }, [successMessage]);
+
   const selectedCustomer = customers.find((customer) => customer.id === customerId) ?? null;
   const selectedDebt = selectedCustomer ? debtSummary[selectedCustomer.id] : null;
   const hasCustomer = !!selectedCustomer;
@@ -1194,16 +1207,12 @@ export function POS() {
         return;
       }
 
-      setSuccessMessage(`Đã tạo đơn hàng ${savedOrder.order_no}.`);
-      setCartProducts([]);
-      setActiveCartProductId('');
-      setOrderNo('');
-      setOrderNote('');
-      setTags('');
-      setProductQuery('');
-      setOrderDiscount(0);
-      setShippingFee(0);
-      setPaidAmount(0);
+      navigate('/orders', {
+        state: {
+          selectedOrderId: savedOrder.id,
+          message: `Đã tạo đơn hàng ${savedOrder.order_no}.`,
+        },
+      });
     } catch (submitError: any) {
       setError(submitError?.message ?? 'Tạo đơn hàng thất bại.');
     } finally {
@@ -1240,17 +1249,25 @@ export function POS() {
 
   return (
     <>
+      {successMessage ? (
+        <div className="fixed right-5 top-5 z-[70] flex max-w-[360px] items-start gap-3 border border-emerald-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-xl shadow-slate-200/80">
+          <CheckCircle size={18} className="mt-0.5 shrink-0 text-emerald-500" />
+          <div className="font-medium">{successMessage}</div>
+          <button
+            type="button"
+            onClick={() => setSuccessMessage(null)}
+            aria-label="Đóng thông báo"
+            className="ml-2 text-slate-400 transition-colors hover:text-slate-700"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      ) : null}
       <div className="min-h-full bg-[#F4F6F8] pb-20 font-sans text-sm">
       <div className="mx-auto max-w-[1400px] space-y-6 p-4 md:p-6">
         {error ? (
           <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
             {error}
-          </div>
-        ) : null}
-
-        {successMessage ? (
-          <div className="rounded border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-            {successMessage}
           </div>
         ) : null}
 
@@ -1369,7 +1386,7 @@ export function POS() {
                           <circle cx="12" cy="7" r="4" />
                         </svg>
                       </div>
-                      <p>Chưa có thông tin khách hàng</p>
+                      <p>Khách lẻ</p>
                     </div>
                 </div>
               ) : (
@@ -2031,12 +2048,12 @@ export function POS() {
               </>
             ) : (
               <>
-                Bạn hãy thêm thông tin khách hàng để sử dụng dịch vụ giao hàng.{' '}
+                Chưa chọn khách hàng. Đơn hàng sẽ được tạo cho khách lẻ.{' '}
                 <button
                   onClick={() => document.getElementById('pos-customer-search')?.focus()}
                   className="text-blue-600 hover:underline"
                 >
-                  Cập nhật tại đây
+                  Chọn khách hàng
                 </button>
               </>
             )}

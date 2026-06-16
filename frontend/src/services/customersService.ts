@@ -66,6 +66,21 @@ export interface CustomersQuery {
   status?: string;
 }
 
+const normalizeGroupKey = (value?: string | null) =>
+  (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '')
+    .toLowerCase();
+
+export function findDefaultRetailCustomerGroup(groups: CustomerGroup[]) {
+  return (
+    groups.find((group) => normalizeGroupKey(group.name) === 'banle') ??
+    groups.find((group) => ['banle', 'retail'].includes(normalizeGroupKey(group.code))) ??
+    groups.find((group) => group.default_price_type === 'retail')
+  );
+}
+
 // ─── Service ─────────────────────────────────────────────────────────────────
 
 export const customersService = {

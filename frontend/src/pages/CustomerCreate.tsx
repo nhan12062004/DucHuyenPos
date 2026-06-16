@@ -3,6 +3,7 @@ import { ArrowLeft, CalendarDays, ChevronDown, Info, Loader2 } from 'lucide-reac
 import { useNavigate } from 'react-router-dom';
 import {
   customersService,
+  findDefaultRetailCustomerGroup,
   type Customer,
   type CustomerGroup,
 } from '../services/customersService';
@@ -286,6 +287,7 @@ export function CustomerCreate() {
           return;
         }
         setGroups(groupList);
+        setGroupId((current) => current || findDefaultRetailCustomerGroup(groupList)?.id || '');
         setProvinces(provinceList);
         setStaff(staffList);
 
