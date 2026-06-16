@@ -14,8 +14,26 @@ export class SalesOrdersService {
     private readonly activityLogsService: ActivityLogsService,
   ) {}
 
-  async findAll(query: PaginationDto & { from_date?: string; to_date?: string; payment_status?: string }): Promise<PaginatedResult<any>> {
-    const { page = 1, limit = 20, search, status, payment_status, from_date, to_date } = query;
+  async findAll(
+    query: PaginationDto & {
+      from_date?: string;
+      to_date?: string;
+      payment_status?: string;
+      delivery_status?: string;
+      delivery_method?: string;
+    },
+  ): Promise<PaginatedResult<any>> {
+    const {
+      page = 1,
+      limit = 20,
+      search,
+      status,
+      payment_status,
+      from_date,
+      to_date,
+      delivery_status,
+      delivery_method,
+    } = query;
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
@@ -37,6 +55,8 @@ export class SalesOrdersService {
     }
     if (status) q = q.eq('status', status);
     if (payment_status) q = q.eq('payment_status', payment_status);
+    if (delivery_status) q = q.eq('delivery_status', delivery_status);
+    if (delivery_method) q = q.eq('delivery_method', delivery_method);
     if (from_date) q = q.gte('sold_at', from_date);
     if (to_date) q = q.lte('sold_at', to_date);
 

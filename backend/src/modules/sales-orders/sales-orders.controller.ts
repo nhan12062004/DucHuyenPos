@@ -11,7 +11,16 @@ export class SalesOrdersController {
   constructor(private readonly salesOrdersService: SalesOrdersService) {}
 
   @Get()
-  findAll(@Query() query: PaginationDto & { from_date?: string; to_date?: string; payment_status?: string }) {
+  findAll(
+    @Query()
+    query: PaginationDto & {
+      from_date?: string;
+      to_date?: string;
+      payment_status?: string;
+      delivery_status?: string;
+      delivery_method?: string;
+    },
+  ) {
     return this.salesOrdersService.findAll(query);
   }
 

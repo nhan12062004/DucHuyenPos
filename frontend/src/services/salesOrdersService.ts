@@ -65,6 +65,8 @@ export interface SalesOrdersQuery {
   search?: string;
   status?: string;
   payment_status?: string;
+  delivery_status?: DeliveryStatus;
+  delivery_method?: DeliveryTab;
   from_date?: string;
   to_date?: string;
 }
