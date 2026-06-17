@@ -10,6 +10,7 @@ import {
   Upload,
   Plus,
   ChevronLeft,
+  ChevronRight,
   Copy,
   ImageIcon,
   Info,
@@ -21,6 +22,7 @@ import {
   type Brand,
   type Product,
   type ProductCategory,
+  type ProductsQuery,
   type ProductStockSummary,
 } from '../services/productsService';
 import { inventoryService, type Branch } from '../services/inventoryService';
@@ -160,15 +162,42 @@ function findLookupId<T extends { id: string; code?: string; name: string }>(ite
   )?.id;
 }
 
+async function loadAllProducts(query: Omit<ProductsQuery, 'page' | 'limit'>) {
+  const firstPage = await productsService.getAll({
+    ...query,
+    page: 1,
+    limit: 200,
+  });
+
+  if (firstPage.totalPages <= 1) {
+    return firstPage.data;
+  }
+
+  const remainingPages = await Promise.all(
+    Array.from({ length: firstPage.totalPages - 1 }, (_, index) =>
+      productsService.getAll({
+        ...query,
+        page: index + 2,
+        limit: 200,
+      }),
+    ),
+  );
+
+  return [firstPage.data, ...remainingPages.map((pageResponse) => pageResponse.data)].flat();
+}
+
 export function Products() {
   const [activeTab, setActiveTab] = useState('all');
   const [detailTab, setDetailTab] = useState<ProductDetailTab>('stock');
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [categoryFilterId, setCategoryFilterId] = useState('all');
   const [brandFilterId, setBrandFilterId] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProductDetail, setSelectedProductDetail] = useState<Product | null>(null);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
@@ -176,6 +205,7 @@ export function Products() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [stockMap, setStockMap] = useState<Record<string, ProductStockSummary>>({});
   const [isListLoading, setIsListLoading] = useState(true);
+  const [hasLoadedListData, setHasLoadedListData] = useState(false);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
@@ -247,6 +277,16 @@ export function Products() {
   }, [location.state, navigate]);
 
   useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [searchTerm]);
+
+  useEffect(() => {
     let active = true;
 
     async function loadListData() {
@@ -255,10 +295,8 @@ export function Products() {
 
       try {
         const [productsResponse, stockSummary, categoriesResponse, brandsResponse, branchesResponse] = await Promise.all([
-          productsService.getAll({
-            page: 1,
-            limit: 200,
-            search: searchTerm || undefined,
+          loadAllProducts({
+            search: debouncedSearchTerm || undefined,
             status: statusFilter === 'all' ? undefined : statusFilter,
           }),
           productsService.getStockSummary(),
@@ -276,7 +314,7 @@ export function Products() {
           return acc;
         }, {});
 
-        setProducts(productsResponse.data);
+        setProducts(productsResponse);
         setStockMap(nextStockMap);
         setCategories(categoriesResponse);
         setBrands(brandsResponse);
@@ -289,6 +327,7 @@ export function Products() {
       } finally {
         if (active) {
           setIsListLoading(false);
+          setHasLoadedListData(true);
         }
       }
     }
@@ -298,7 +337,11 @@ export function Products() {
     return () => {
       active = false;
     };
-  }, [searchTerm, statusFilter]);
+  }, [debouncedSearchTerm, statusFilter]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [brandFilterId, categoryFilterId, searchTerm, sortOrder, statusFilter]);
 
   useEffect(() => {
     let active = true;
@@ -360,6 +403,13 @@ export function Products() {
     });
   }, [brandFilterId, categoryFilterId, productsData, sortOrder]);
 
+  const totalPages = Math.max(1, Math.ceil((visibleProducts.length || 1) / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedProducts = visibleProducts.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const pageStart = pagedProducts.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const pageEnd = pagedProducts.length === 0 ? 0 : pageStart + pagedProducts.length - 1;
+  const isRefreshingList = isListLoading && hasLoadedListData;
+
   const selectedProduct =
     selectedProductDetail ??
     productsData.find((product) => product.id === selectedProductId) ??
@@ -419,7 +469,7 @@ export function Products() {
   };
 
   const handleExportProducts = () => {
-    const productsToExport = exportScope === 'all' ? visibleProducts : visibleProducts;
+    const productsToExport = exportScope === 'all' ? visibleProducts : pagedProducts;
 
     if (productsToExport.length === 0) {
       setInfoMessage('Không có sản phẩm phù hợp để xuất file.');
@@ -996,7 +1046,7 @@ export function Products() {
     );
   }
 
-  if (isListLoading && !selectedProductId) {
+  if (isListLoading && !selectedProductId && !hasLoadedListData) {
     return <PageLoader text="Đang tải danh sách sản phẩm..." fullScreen />;
   }
 
@@ -1151,7 +1201,11 @@ export function Products() {
 
           <div className="flex items-center gap-3 border-b border-slate-100 p-5">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              {isRefreshingList ? (
+                <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 animate-spin text-slate-400" size={16} />
+              ) : (
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              )}
               <input
                 type="text"
                 value={searchTerm}
@@ -1224,7 +1278,7 @@ export function Products() {
                       </td>
                     </tr>
                   ) : (
-                    visibleProducts.map((product) => (
+                    pagedProducts.map((product) => (
                       <tr key={product.id} className="group transition-colors hover:bg-slate-50">
                         <td className="border-r border-slate-100 px-4 py-3 text-center text-slate-400"></td>
                         <td className="px-2 py-3 text-center"><input type="checkbox" className="rounded border-slate-300 text-[#0088FF]" /></td>
@@ -1259,6 +1313,49 @@ export function Products() {
                 </tbody>
               </table>
             </div>
+          <div className="flex items-center justify-end border-t border-slate-200 px-5 py-4 text-[13px] text-[#182537]">
+            <div className="mr-6 flex items-center gap-2">
+              <span className="text-slate-600">Hiá»ƒn thá»‹</span>
+              <div className="relative">
+                <select
+                  value={pageSize}
+                  onChange={(event) => {
+                    setPageSize(Number(event.target.value));
+                    setPage(1);
+                  }}
+                  className="appearance-none rounded border border-slate-300 bg-white px-3 py-1 pr-8 text-[#182537] focus:border-[#0088FF] focus:outline-none"
+                >
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <ChevronDown size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-500" />
+              </div>
+              <span className="text-slate-600">káº¿t quáº£</span>
+            </div>
+            <div className="mr-6 text-slate-600">
+              Tá»« {pageStart} Ä‘áº¿n {pageEnd} trÃªn tá»•ng {visibleProducts.length}
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={safePage === 1}
+                className="flex h-7 w-7 items-center justify-center rounded text-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <button className="flex h-7 w-7 items-center justify-center rounded bg-[#0088FF] font-medium text-white">
+                {safePage}
+              </button>
+              <button
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                disabled={safePage === totalPages}
+                className="flex h-7 w-7 items-center justify-center rounded text-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

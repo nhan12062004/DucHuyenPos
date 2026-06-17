@@ -14,7 +14,7 @@ export const CODE_PREFIXES = {
   customerGroup: 'NHOM',
   product: 'SP',
   supplier: 'NCC',
-  salesOrder: 'HD',
+  salesOrder: 'DH',
   purchaseOrder: 'DN',
   receipt: 'PT',
   payment: 'PC',
@@ -30,25 +30,35 @@ export async function generateNextCode(
     table,
     column,
     prefix,
-    digits = 6,
-    sampleSize = 20,
+    digits = 7,
+    sampleSize = 1000,
   } = options;
 
-  const { data, error } = await supabase
-    .from(table)
-    .select(column)
-    .like(column, `${prefix}%`)
-    .order(column, { ascending: false })
-    .limit(sampleSize);
+  const rows: Record<string, unknown>[] = [];
 
-  if (error) {
-    throw new Error(error.message);
+  for (let from = 0; ; from += sampleSize) {
+    const { data, error } = await supabase
+      .from(table)
+      .select(column)
+      .like(column, `${prefix}%`)
+      .range(from, from + sampleSize - 1);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    rows.push(...((data ?? []) as unknown as Record<string, unknown>[]));
+
+    if (!data || data.length < sampleSize) {
+      break;
+    }
   }
 
-  const matcher = new RegExp(`^${prefix}(\\d+)$`);
+  const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const matcher = new RegExp(`^${escapedPrefix}(\\d+)$`);
 
-  const maxNumber = (data ?? []).reduce((max, row) => {
-    const rawValue = row?.[column as keyof typeof row];
+  const maxNumber = rows.reduce((max, row) => {
+    const rawValue = row[column];
     if (typeof rawValue !== 'string') {
       return max;
     }
