@@ -10,6 +10,7 @@ import {
   Upload,
   Plus,
   ChevronLeft,
+  ChevronRight,
   Printer,
   Copy,
   Check,
@@ -333,10 +334,25 @@ function getImportPaymentStatus(totalAmount: number, paidAmount: number): SalesO
   return 'partial';
 }
 
+async function loadAllSalesOrders() {
+  const limit = 200;
+  const firstPage = await salesOrdersService.getAll({ page: 1, limit });
+  const allOrders = [...firstPage.data];
+
+  for (let page = 2; page <= firstPage.totalPages; page += 1) {
+    const response = await salesOrdersService.getAll({ page, limit });
+    allOrders.push(...response.data);
+  }
+
+  return allOrders;
+}
+
 export function Orders() {
   const [activeTab, setActiveTab] = useState<OrderTab>('all');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [orders, setOrders] = useState<SalesOrder[]>([]);
   const [selectedOrderDetail, setSelectedOrderDetail] = useState<SalesOrder | null>(null);
   const [isListLoading, setIsListLoading] = useState(true);
@@ -434,11 +450,11 @@ export function Orders() {
       setListError(null);
 
       try {
-        const response = await salesOrdersService.getAll({ page: 1, limit: 200 });
+        const response = await loadAllSalesOrders();
         if (!active) {
           return;
         }
-        setOrders(response.data);
+        setOrders(response);
       } catch (error: any) {
         if (!active) {
           return;
@@ -457,6 +473,10 @@ export function Orders() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, dashboardFilter, searchTerm]);
 
   useEffect(() => {
     let active = true;
@@ -570,6 +590,12 @@ export function Orders() {
     );
   });
 
+  const totalPages = Math.max(1, Math.ceil((visibleOrders.length || 1) / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedOrders = visibleOrders.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const pageStart = pagedOrders.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const pageEnd = pagedOrders.length === 0 ? 0 : pageStart + pagedOrders.length - 1;
+
   const selectedOrder =
     selectedOrderDetail ?? orders.find((order) => order.id === selectedOrderId) ?? null;
 
@@ -615,7 +641,7 @@ export function Orders() {
   };
 
   const handleExportOrders = () => {
-    const ordersToExport = exportScope === 'all' ? orders : visibleOrders;
+    const ordersToExport = exportScope === 'all' ? orders : pagedOrders;
 
     if (ordersToExport.length === 0) {
       setInfoMessage('Không có đơn hàng phù hợp để xuất file.');
@@ -1762,7 +1788,7 @@ export function Orders() {
 
             <div className="flex items-center gap-0">
               <button
-                onClick={() => setInfoMessage('Lọc ngày tạo sẽ được mở rộng ở bước sau, hiện tại hệ thống đang lấy 200 đơn gần nhất.')}
+                onClick={() => setInfoMessage('Lọc ngày tạo sẽ được mở rộng ở bước sau, hiện tại hệ thống đang lấy toàn bộ danh sách đơn hàng.')}
                 className="flex w-32 items-center justify-between rounded-l border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-700 transition-colors hover:bg-slate-50"
               >
                 <span>Ngày tạo</span>
@@ -1825,7 +1851,7 @@ export function Orders() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-[13.5px] text-[#182537]">
-                  {visibleOrders.map((order) => {
+                  {pagedOrders.map((order) => {
                     const rowStatus = getOrderStatusMeta(order.status);
                     const rowPayment = getPaymentStatusMeta(order.payment_status);
 
@@ -1866,6 +1892,49 @@ export function Orders() {
               </table>
             </div>
           )}
+          <div className="flex items-center justify-end border-t border-slate-200 px-5 py-4 text-[13px] text-[#182537]">
+            <div className="mr-6 flex items-center gap-2">
+              <span className="text-slate-600">Hiá»ƒn thá»‹</span>
+              <div className="relative">
+                <select
+                  value={pageSize}
+                  onChange={(event) => {
+                    setPageSize(Number(event.target.value));
+                    setPage(1);
+                  }}
+                  className="appearance-none rounded border border-slate-300 bg-white px-3 py-1 pr-8 text-[#182537] focus:border-[#0088FF] focus:outline-none"
+                >
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <ChevronDown size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-500" />
+              </div>
+              <span className="text-slate-600">káº¿t quáº£</span>
+            </div>
+            <div className="mr-6 text-slate-600">
+              Tá»« {pageStart} Ä‘áº¿n {pageEnd} trÃªn tá»•ng {visibleOrders.length}
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={safePage === 1}
+                className="flex h-7 w-7 items-center justify-center rounded text-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <button className="flex h-7 w-7 items-center justify-center rounded bg-[#0088FF] font-medium text-white">
+                {safePage}
+              </button>
+              <button
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                disabled={safePage === totalPages}
+                className="flex h-7 w-7 items-center justify-center rounded text-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
