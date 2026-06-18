@@ -269,56 +269,6 @@ export function Customers() {
     }
     if (typeof routeState.searchTerm === 'string') {
       setSearchTerm(routeState.searchTerm);
-
-  useEffect(() => {
-    try {
-      const savedFilters = window.localStorage.getItem(CUSTOMER_FILTERS_KEY);
-      if (!savedFilters) {
-        return;
-      }
-
-      const parsed = JSON.parse(savedFilters) as {
-        activeTab?: CustomerTab;
-        searchTerm?: string;
-        statusFilter?: 'all' | 'active' | 'inactive';
-        limit?: number;
-      };
-
-      if (parsed.activeTab === 'all' || parsed.activeTab === 'trading') {
-        setActiveTab(parsed.activeTab);
-      }
-      if (typeof parsed.searchTerm === 'string') {
-        setSearchTerm(parsed.searchTerm);
-      }
-      if (
-        parsed.statusFilter === 'all' ||
-        parsed.statusFilter === 'active' ||
-        parsed.statusFilter === 'inactive'
-      ) {
-        setStatusFilter(parsed.statusFilter);
-      }
-      if (typeof parsed.limit === 'number' && parsed.limit > 0) {
-        setLimit(parsed.limit);
-      }
-    } catch {
-      window.localStorage.removeItem(CUSTOMER_FILTERS_KEY);
-    }
-  }, []);
-
-  useEffect(() => {
-    const routeState = location.state as CustomersRouteState;
-    if (!routeState) {
-      return;
-    }
-
-    if (routeState.selectedCustomerId) {
-      setSelectedCustomerId(routeState.selectedCustomerId);
-    }
-    if (routeState.detailTab) {
-      setDetailTab(routeState.detailTab);
-    }
-    if (typeof routeState.searchTerm === 'string') {
-      setSearchTerm(routeState.searchTerm);
     }
     if (routeState.message) {
       setInfoMessage(routeState.message);
@@ -637,6 +587,84 @@ export function Customers() {
   };
 
   const handleDeleteCustomer = async () => {
+    if (!selectedCustomer) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Vô hiệu hóa khách hàng ${selectedCustomer.full_name}?`);
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await customersService.delete(selectedCustomer.id);
+      invalidateCustomersCache();
+      setCustomers((current) =>
+        current.map((customer) =>
+          customer.id === selectedCustomer.id ? { ...customer, status: 'inactive' } : customer,
+        ),
+      );
+      setSelectedCustomerDetail((current) =>
+        current ? { ...current, status: 'inactive' } : current,
+      );
+      setInfoMessage(`Đã vô hiệu hóa khách hàng ${selectedCustomer.full_name}.`);
+    } catch (error: any) {
+      setDetailError(error?.message ?? 'Xóa khách hàng thất bại.');
+    }
+  };
+
+  const handleUpdateCustomer = async (mode: 'basic' | 'note' = 'basic') => {
+    if (!selectedCustomer) {
+      return;
+    }
+
+    try {
+      if (mode === 'note') {
+        const notes = window.prompt('Cập nhật ghi chú khách hàng', selectedCustomer.notes ?? '');
+        if (notes === null) {
+          return;
+        }
+        const updated = await customersService.update(selectedCustomer.id, { notes });
+        invalidateCustomersCache();
+        setSelectedCustomerDetail(updated);
+        setCustomers((current) =>
+          current.map((customer) => (customer.id === updated.id ? { ...customer, ...updated } : customer)),
+        );
+        setInfoMessage(`Đã cập nhật ghi chú của ${updated.full_name}.`);
+        return;
+      }
+
+      const fullName = window.prompt('Tên khách hàng', selectedCustomer.full_name);
+      if (!fullName?.trim()) {
+        return;
+      }
+
+      const phone = window.prompt('Số điện thoại', selectedCustomer.phone ?? '');
+      if (phone === null) {
+        return;
+      }
+      const email = window.prompt('Email', selectedCustomer.email ?? '');
+      if (email === null) {
+        return;
+      }
+      const address = window.prompt('Địa chỉ', selectedCustomer.address ?? '');
+      if (address === null) {
+        return;
+      }
+
+      const updated = await customersService.update(selectedCustomer.id, {
+        full_name: fullName.trim(),
+        phone: phone.trim() || undefined,
+        email: email.trim() || undefined,
+        address: address.trim() || undefined,
+      });
+
+      invalidateCustomersCache();
+      setSelectedCustomerDetail(updated);
+      setCustomers((current) =>
+        current.map((customer) => (customer.id === updated.id ? { ...customer, ...updated } : customer)),
+      );
+      setInfoMessage(`Đã cập nhật khách hàng ${updated.full_name}.`);
     } catch (error: any) {
       setDetailError(error?.message ?? 'Cập nhật khách hàng thất bại.');
     }
