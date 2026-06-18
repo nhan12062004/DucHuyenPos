@@ -363,7 +363,8 @@ create index if not exists idx_inventory_transactions_created_at on public.inven
 create index if not exists idx_activity_logs_actor_id on public.activity_logs(actor_id);
 create index if not exists idx_activity_logs_created_at on public.activity_logs(created_at desc);
 
-create or replace view public.customer_debt_summary as
+create or replace view public.customer_debt_summary
+with (security_invoker = true) as
 select
   c.id as customer_id,
   c.code as customer_code,
@@ -377,7 +378,8 @@ left join public.sales_orders so
  and so.status <> 'cancelled'
 group by c.id, c.code, c.full_name;
 
-create or replace view public.supplier_debt_summary as
+create or replace view public.supplier_debt_summary
+with (security_invoker = true) as
 select
   s.id as supplier_id,
   s.code as supplier_code,
@@ -391,7 +393,8 @@ left join public.purchase_orders po
  and po.status <> 'cancelled'
 group by s.id, s.code, s.name;
 
-create or replace view public.product_stock_summary as
+create or replace view public.product_stock_summary
+with (security_invoker = true) as
 select
   p.id as product_id,
   p.sku,
