@@ -697,6 +697,7 @@ export function Products() {
       }
 
       if (createdProducts.length > 0) {
+        invalidateProductsCache();
         setProducts((current) => [...createdProducts, ...current]);
       }
 
@@ -728,6 +729,7 @@ export function Products() {
 
     try {
       await productsService.delete(selectedProduct.id);
+      invalidateProductsCache();
       setProducts((current) =>
         current.map((product) =>
           product.id === selectedProduct.id ? { ...product, status: 'inactive' } : product,
@@ -807,6 +809,7 @@ export function Products() {
         default_branch_id: nextDefaultBranchId,
       });
 
+      invalidateProductsCache();
       setProducts((current) =>
         current.map((product) => (product.id === updated.id ? { ...product, ...updated } : product)),
       );
@@ -844,6 +847,7 @@ export function Products() {
         status: 'active',
       });
 
+      invalidateProductsCache();
       setProducts((current) => [duplicated, ...current]);
       setSelectedProductId(duplicated.id);
       setSelectedProductDetail(duplicated);
