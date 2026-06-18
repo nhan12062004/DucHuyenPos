@@ -27,6 +27,7 @@ import {
   type SalesOrder,
 } from '../services/salesOrdersService';
 import { exportRowsToXlsx } from '../utils/excel';
+import { invalidatePosCache } from './POS';
 
 type CustomerTab = 'all' | 'trading';
 type ExportScope = 'all' | 'current';
@@ -568,6 +569,7 @@ export function Customers() {
 
       if (createdCustomers.length > 0) {
         invalidateCustomersCache();
+      invalidatePosCache();
         setCustomers((current) => [...createdCustomers, ...current]);
         setTotalCustomers((current) => current + createdCustomers.length);
       }
@@ -599,6 +601,7 @@ export function Customers() {
     try {
       await customersService.delete(selectedCustomer.id);
       invalidateCustomersCache();
+      invalidatePosCache();
       setCustomers((current) =>
         current.map((customer) =>
           customer.id === selectedCustomer.id ? { ...customer, status: 'inactive' } : customer,
@@ -626,6 +629,7 @@ export function Customers() {
         }
         const updated = await customersService.update(selectedCustomer.id, { notes });
         invalidateCustomersCache();
+      invalidatePosCache();
         setSelectedCustomerDetail(updated);
         setCustomers((current) =>
           current.map((customer) => (customer.id === updated.id ? { ...customer, ...updated } : customer)),
@@ -660,6 +664,7 @@ export function Customers() {
       });
 
       invalidateCustomersCache();
+      invalidatePosCache();
       setSelectedCustomerDetail(updated);
       setCustomers((current) =>
         current.map((customer) => (customer.id === updated.id ? { ...customer, ...updated } : customer)),

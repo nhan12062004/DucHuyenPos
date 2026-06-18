@@ -70,6 +70,45 @@ const EMPTY_PROCESSING_SUMMARY: SalesOrdersProcessingSummary = {
   cancelledDelivery: { count: 0, total_amount: 0 },
 };
 
+// ─── Module-level cache ───────────────────────────────────────────────────────
+const CACHE_TTL_MS = 5 * 60 * 1000;
+type OrdersCache = {
+  orders: SalesOrder[];
+  totalOrders: number;
+  processingSummary: SalesOrdersProcessingSummary;
+  page: number;
+  limit: number;
+  searchTerm: string;
+  activeTab: OrderTab;
+  dashboardFilter: string | null;
+  timestamp: number;
+};
+let ordersCache: OrdersCache | null = null;
+
+function isCacheValid(
+  page: number,
+  limit: number,
+  searchTerm: string,
+  activeTab: OrderTab,
+  dashboardFilter: DashboardOrderFilter | null,
+): boolean {
+  if (!ordersCache) return false;
+  if (
+    ordersCache.page !== page ||
+    ordersCache.limit !== limit ||
+    ordersCache.searchTerm !== searchTerm ||
+    ordersCache.activeTab !== activeTab ||
+    ordersCache.dashboardFilter !== JSON.stringify(dashboardFilter)
+  ) {
+    return false;
+  }
+  return Date.now() - ordersCache.timestamp < CACHE_TTL_MS;
+}
+
+export function invalidateOrdersCache() {
+  ordersCache = null;
+}
+
 function formatCurrency(value: number) {
   return value.toLocaleString('vi-VN');
 }
@@ -531,25 +570,53 @@ export function Orders() {
     let active = true;
 
     async function loadOrders() {
+      if (isCacheValid(page, pageSize, searchTerm, activeTab, dashboardFilter)) {
+        setOrders(ordersCache!.orders);
+        setTotalOrders(ordersCache!.totalOrders);
+        setProcessingSummary(ordersCache!.processingSummary);
+        setIsListLoading(false);
+        return;
+      }
+
       setIsListLoading(true);
       setListError(null);
 
       try {
-        const response = await salesOrdersService.getAll(
-          buildOrdersQuery({
-            activeTab,
-            dashboardFilter,
-            searchTerm,
-            page,
-            limit: pageSize,
-            includeItems: false,
-          }),
-        );
+        const [response, summaryResponse] = await Promise.all([
+          salesOrdersService.getAll(
+            buildOrdersQuery({
+              activeTab,
+              dashboardFilter,
+              searchTerm,
+              page,
+              limit: pageSize,
+              includeItems: false,
+            }),
+          ),
+          salesOrdersService.getProcessingSummary(processingWindowDays).catch(() => ({
+            ...EMPTY_PROCESSING_SUMMARY,
+            days: processingWindowDays,
+          })),
+        ]);
+
         if (!active) {
           return;
         }
         setOrders(response.data);
         setTotalOrders(response.total);
+        setProcessingSummary(summaryResponse);
+
+        ordersCache = {
+          orders: response.data,
+          totalOrders: response.total,
+          processingSummary: summaryResponse,
+          page,
+          limit: pageSize,
+          searchTerm,
+          activeTab,
+          dashboardFilter: JSON.stringify(dashboardFilter),
+          timestamp: Date.now(),
+        };
       } catch (error: any) {
         if (!active) {
           return;
@@ -574,13 +641,21 @@ export function Orders() {
   }, [activeTab, dashboardFilter, searchTerm]);
 
   useEffect(() => {
+    // Processing summary is now loaded alongside orders in loadOrders()
+    // Keeping this hook just for processingWindowDays updates
     let active = true;
 
     async function loadProcessingSummary() {
+      if (ordersCache && ordersCache.processingSummary.days === processingWindowDays) {
+        return;
+      }
       try {
         const response = await salesOrdersService.getProcessingSummary(processingWindowDays);
         if (active) {
           setProcessingSummary(response);
+          if (ordersCache) {
+            ordersCache.processingSummary = response;
+          }
         }
       } catch {
         if (active) {
@@ -940,6 +1015,7 @@ export function Orders() {
       }
 
       if (createdOrders.length > 0) {
+        invalidateOrdersCache();
         setOrders((current) => [...createdOrders, ...current]);
         setTotalOrders((current) => current + createdOrders.length);
         setSelectedOrderId(createdOrders[0].id);
@@ -999,6 +1075,7 @@ export function Orders() {
         })),
       });
 
+      invalidateOrdersCache();
       setOrders((current) => [duplicated, ...current]);
       setTotalOrders((current) => current + 1);
       setSelectedOrderId(duplicated.id);
@@ -1042,6 +1119,7 @@ export function Orders() {
 
     try {
       const updated = await salesOrdersService.cancel(selectedOrder.id);
+      invalidateOrdersCache();
       setOrders((current) =>
         current.map((order) => (order.id === updated.id ? { ...order, ...updated } : order)),
       );

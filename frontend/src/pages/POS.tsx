@@ -860,6 +860,23 @@ function AddCustomerModal({ open, onClose, onCreated }: AddCustomerModalProps) {
 
 // ─── POS ─────────────────────────────────────────────────────────────────────
 
+// ─── Module-level cache ───────────────────────────────────────────────────────
+const POS_CACHE_TTL_MS = 5 * 60 * 1000;
+type PosCache = {
+  branches: Branch[];
+  customers: Customer[];
+  debtSummary: Record<string, CustomerDebtSummary>;
+  products: Product[];
+  stockSummary: Record<string, ProductStockSummary>;
+  staffList: StaffProfile[];
+  timestamp: number;
+};
+let posCache: PosCache | null = null;
+
+export function invalidatePosCache() {
+  posCache = null;
+}
+
 export function POS() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -897,6 +914,7 @@ export function POS() {
   const [editingOrderId, setEditingOrderId] = useState('');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+
   const [stockSummary, setStockSummary] = useState<Record<string, ProductStockSummary>>({});
   const [debtSummary, setDebtSummary] = useState<Record<string, CustomerDebtSummary>>({});
   const [loading, setLoading] = useState(true);
@@ -925,6 +943,25 @@ export function POS() {
     let active = true;
 
     async function loadData() {
+      if (posCache && Date.now() - posCache.timestamp < POS_CACHE_TTL_MS) {
+        setBranches(posCache.branches);
+        setCustomers(posCache.customers);
+        setDebtSummary(posCache.debtSummary);
+        setProducts(posCache.products);
+        setStockSummary(posCache.stockSummary);
+        setStaffList(posCache.staffList);
+        
+        // Ensure default branch is set if none selected
+        if (!branchId) {
+          const defaultBranch = posCache.branches.find((b) => b.is_default) ?? posCache.branches[0];
+          if (defaultBranch) setBranchId(defaultBranch.id);
+        }
+        
+        setLoading(false);
+        setLoadingStaff(false);
+        return;
+      }
+
       setLoading(true);
       setError(null);
       setLoadingStaff(true);
@@ -1849,19 +1886,12 @@ export function POS() {
                           <div className="text-[12px] text-blue-500">{product.code}</div>
                         </td>
                         <td className={cn('px-2 py-4 text-center', isActive && 'border-y border-blue-400')}>
-                          <input
-                            type="number"
-                            min={1}
+                          <MoneyInput
                             value={product.qty}
-                            onFocus={(event) => {
-                              setActiveCartProductId(product.id);
-                              event.target.select();
-                            }}
-                            onChange={(event) =>
-                              updateCartProduct(product.id, 'qty', parseNumber(event.target.value))
-                            }
+                            onFocus={() => setActiveCartProductId(product.id)}
+                            onChange={(value) => updateCartProduct(product.id, 'qty', value)}
                             className={cn(
-                              'w-14 border-b-[1.5px] bg-transparent py-1 text-center font-semibold focus:outline-none',
+                              'w-14 border-b-[1.5px] bg-transparent py-1 text-center font-semibold focus:outline-none hover:border-slate-300',
                               isActive ? 'border-blue-500 text-blue-600' : 'border-slate-200 text-slate-800',
                             )}
                           />
