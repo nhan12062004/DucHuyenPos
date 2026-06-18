@@ -4,6 +4,15 @@ import { SUPABASE_CLIENT } from '../supabase/supabase.constants.js';
 import { ActivityLogsService } from '../../common/activity-logs.service.js';
 import { resolveDeliveryFields } from '../sales-orders/delivery-fields.js';
 
+type TopProductStats = {
+  product_id: string;
+  name: string;
+  sku: string | null;
+  order_count: number;
+  sold_qty: number;
+  revenue: number;
+};
+
 @Injectable()
 export class DashboardService {
   constructor(
@@ -56,76 +65,7 @@ export class DashboardService {
     const { data: pendingOrders, error: pendingOrdersError } = await pendingOrdersQuery;
     if (pendingOrdersError) throw new Error(pendingOrdersError.message);
 
-    let topProductsOrdersQuery = this.supabase
-      .from('sales_orders')
-      .select('id')
-      .eq('status', 'completed')
-      .gte('sold_at', topProductsFrom.toISOString());
-    if (branchId) topProductsOrdersQuery = topProductsOrdersQuery.eq('branch_id', branchId);
-    const { data: topProductsOrders, error: topProductsOrdersError } = await topProductsOrdersQuery;
-    if (topProductsOrdersError) throw new Error(topProductsOrdersError.message);
-
-    const topProductsOrderIds = (topProductsOrders ?? []).map((order: any) => order.id).filter(Boolean);
-    let topProducts: Array<{
-      product_id: string;
-      name: string;
-      sku: string | null;
-      order_count: number;
-      sold_qty: number;
-      revenue: number;
-    }> = [];
-
-    if (topProductsOrderIds.length > 0) {
-      const { data: orderItems, error: orderItemsError } = await this.supabase
-        .from('sales_order_items')
-        .select('sales_order_id, product_id, product_name, sku, quantity, line_total')
-        .in('sales_order_id', topProductsOrderIds);
-
-      if (orderItemsError) throw new Error(orderItemsError.message);
-
-      const groupedProducts = new Map<string, {
-        product_id: string;
-        name: string;
-        sku: string | null;
-        order_count: number;
-        sold_qty: number;
-        revenue: number;
-        order_ids: Set<string>;
-      }>();
-
-      (orderItems ?? []).forEach((item: any) => {
-        const key = item.product_id ?? `${item.product_name}-${item.sku ?? ''}`;
-        const current = groupedProducts.get(key) ?? {
-          product_id: item.product_id ?? key,
-          name: item.product_name,
-          sku: item.sku ?? null,
-          order_count: 0,
-          sold_qty: 0,
-          revenue: 0,
-          order_ids: new Set<string>(),
-        };
-
-        current.sold_qty += Number(item.quantity ?? 0);
-        current.revenue += Number(item.line_total ?? 0);
-        if (item.sales_order_id) {
-          current.order_ids.add(String(item.sales_order_id));
-          current.order_count = current.order_ids.size;
-        }
-        groupedProducts.set(key, current);
-      });
-
-      topProducts = Array.from(groupedProducts.values())
-        .map((item) => ({
-          product_id: item.product_id,
-          name: item.name,
-          sku: item.sku,
-          order_count: item.order_count,
-          sold_qty: item.sold_qty,
-          revenue: item.revenue,
-        }))
-        .sort((a, b) => b.sold_qty - a.sold_qty)
-        .slice(0, 5);
-    }
+    const topProducts = await this.getTopProducts(topProductsFrom.toISOString(), branchId);
 
     const recentActivities = await this.activityLogsService.getRecentActivities(10);
 
@@ -196,6 +136,74 @@ export class DashboardService {
       top_products: topProducts,
       recent_activities: recentActivities,
     };
+  }
+
+  private async getTopProducts(fromIso: string, branchId?: string): Promise<TopProductStats[]> {
+    const orderPageSize = 500;
+    const itemBatchSize = 100;
+    const groupedProducts = new Map<string, TopProductStats & { order_ids: Set<string> }>();
+
+    for (let from = 0; ; from += orderPageSize) {
+      let topProductsOrdersQuery = this.supabase
+        .from('sales_orders')
+        .select('id')
+        .eq('status', 'completed')
+        .gte('sold_at', fromIso)
+        .range(from, from + orderPageSize - 1);
+
+      if (branchId) topProductsOrdersQuery = topProductsOrdersQuery.eq('branch_id', branchId);
+
+      const { data: topProductsOrders, error: topProductsOrdersError } = await topProductsOrdersQuery;
+      if (topProductsOrdersError) throw new Error(topProductsOrdersError.message);
+
+      const topProductsOrderIds = (topProductsOrders ?? []).map((order: any) => order.id).filter(Boolean);
+      if (topProductsOrderIds.length === 0) break;
+
+      for (let i = 0; i < topProductsOrderIds.length; i += itemBatchSize) {
+        const orderIdBatch = topProductsOrderIds.slice(i, i + itemBatchSize);
+        const { data: orderItems, error: orderItemsError } = await this.supabase
+          .from('sales_order_items')
+          .select('sales_order_id, product_id, product_name, sku, quantity, line_total')
+          .in('sales_order_id', orderIdBatch);
+
+        if (orderItemsError) throw new Error(orderItemsError.message);
+
+        (orderItems ?? []).forEach((item: any) => {
+          const key = item.product_id ?? `${item.product_name}-${item.sku ?? ''}`;
+          const current = groupedProducts.get(key) ?? {
+            product_id: item.product_id ?? key,
+            name: item.product_name,
+            sku: item.sku ?? null,
+            order_count: 0,
+            sold_qty: 0,
+            revenue: 0,
+            order_ids: new Set<string>(),
+          };
+
+          current.sold_qty += Number(item.quantity ?? 0);
+          current.revenue += Number(item.line_total ?? 0);
+          if (item.sales_order_id) {
+            current.order_ids.add(String(item.sales_order_id));
+            current.order_count = current.order_ids.size;
+          }
+          groupedProducts.set(key, current);
+        });
+      }
+
+      if (topProductsOrderIds.length < orderPageSize) break;
+    }
+
+    return Array.from(groupedProducts.values())
+      .map((item) => ({
+        product_id: item.product_id,
+        name: item.name,
+        sku: item.sku,
+        order_count: item.order_count,
+        sold_qty: item.sold_qty,
+        revenue: item.revenue,
+      }))
+      .sort((a, b) => b.sold_qty - a.sold_qty)
+      .slice(0, 5);
   }
 
   async getInventorySummary(branchId?: string) {
