@@ -31,7 +31,13 @@ export class ProductsService {
       .order('created_at', { ascending: false });
 
     if (search) {
-      q = q.or(`name.ilike.%${search}%,sku.ilike.%${search}%,barcode.ilike.%${search}%`);
+      // Multi-keyword search: tách từng từ, mỗi từ phải khớp ít nhất 1 trong name/sku/barcode
+      // Ví dụ: "tủ dle 2/4" → tìm sản phẩm có chứa "tủ" VÀ "dle" VÀ "2/4"
+      const keywords = search.trim().split(/\s+/).filter(Boolean);
+      for (const keyword of keywords) {
+        const escaped = keyword.replace(/[%_]/g, '\\$&');
+        q = q.or(`name.ilike.%${escaped}%,sku.ilike.%${escaped}%,barcode.ilike.%${escaped}%`);
+      }
     }
     if (status) {
       q = q.eq('status', status);
