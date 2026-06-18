@@ -10,13 +10,16 @@ const rootDir = path.resolve(__dirname, '..');
 
 dotenv.config({ path: path.join(rootDir, 'backend/.env'), quiet: true });
 
-const PRODUCT_FILE =
+const DEFAULT_PRODUCT_FILE =
   'c:/Users/NHAN/Downloads/danh_sach_san_pham_16.06.2026_b384c7819a059a5b0b9cfada2c3ebc65.xlsx';
 const CUSTOMER_FILE =
   'c:/Users/NHAN/Downloads/danh_sach_khach_hang_16.06.2026_7da10a5f1d207ad34c9e0fc00e62221f.xlsx';
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
 const dryRun = process.argv.includes('--dry-run');
+const productsOnly = process.argv.includes('--products-only');
+const productFileArg = process.argv.find((arg) => arg.startsWith('--product-file='));
+const PRODUCT_FILE = productFileArg ? productFileArg.slice('--product-file='.length) : DEFAULT_PRODUCT_FILE;
 
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
   throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in backend/.env');
@@ -32,6 +35,19 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 function text(value) {
   const normalized = String(value ?? '').trim();
   return normalized || null;
+}
+
+function productCode(index) {
+  return `SP${String(index + 1).padStart(7, '0')}`;
+}
+
+function get(row, aliases) {
+  for (const alias of aliases) {
+    const value = text(row[alias]);
+    if (value) return value;
+  }
+
+  return null;
 }
 
 function numberValue(value) {
@@ -62,6 +78,27 @@ function rowsFromXlsx(filePath) {
   return XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
 }
 
+function productAttributeSuffix(row) {
+  return [
+    get(row, ['Giá trị thuộc tính 1', 'Gia tri thuoc tinh 1']),
+    get(row, ['Giá trị thuộc tính 2', 'Gia tri thuoc tinh 2']),
+    get(row, ['Giá trị thuộc tính 3', 'Gia tri thuoc tinh 3']),
+  ]
+    .filter((value) => value && !['Mặc định', 'Mac dinh', 'Default'].includes(value))
+    .join(' ');
+}
+
+function productName(row, currentBaseName) {
+  const variantName = get(row, ['Tên phiên bản sản phẩm', 'Ten phien ban san pham']);
+  if (variantName) return variantName;
+
+  const baseName = get(row, ['Tên sản phẩm*', 'Tên sản phẩm', 'Ten san pham']);
+  if (baseName) return baseName;
+
+  const suffix = productAttributeSuffix(row);
+  return currentBaseName && suffix ? `${currentBaseName} - ${suffix}` : null;
+}
+
 function uniqueBy(items, keyFn) {
   const seen = new Set();
   const output = [];
@@ -80,40 +117,57 @@ function buildProducts() {
   const rows = rowsFromXlsx(PRODUCT_FILE);
   const skipped = [];
   const products = [];
+  let currentBaseName = null;
+  let currentBaseRow = null;
 
   for (const [index, row] of rows.entries()) {
-    const sku = text(row['Mã SKU*']);
-    const name = text(row['Tên phiên bản sản phẩm']) ?? text(row['Tên sản phẩm*']);
+    const baseName = get(row, ['Tên sản phẩm*', 'Tên sản phẩm', 'Ten san pham']);
+    if (baseName) {
+      currentBaseName = baseName;
+      currentBaseRow = row;
+    }
+
+    const inheritedRow = baseName ? null : currentBaseRow;
+    const sku = get(row, ['Mã SKU*', 'Mã SKU', 'Ma SKU', 'SKU']);
+    const name = productName(row, currentBaseName);
 
     if (!sku || !name) {
       skipped.push({ row: index + 2, sku, name });
       continue;
     }
 
-    const inputCost = numberValue(row['PL_Giá nhập']);
-    const openingCost = numberValue(row['LC_CN1_Giá vốn khởi tạo*']);
+    const inputCost = numberValue(get(row, ['PL_Giá nhập', 'PL_Gia nhap']));
+    const openingCost = numberValue(get(row, ['LC_CN1_Giá vốn khởi tạo*', 'LC_CN1_Gia von khoi tao*']));
     const costPrice = inputCost > 0 ? inputCost : openingCost;
 
     products.push({
       sourceRow: index + 2,
       sku,
-      barcode: text(row.Barcode),
+      barcode: get(row, ['Barcode', 'Mã vạch', 'Ma vach']),
       name,
-      unit_name: text(row['Đơn vị']) ?? 'CÁI',
-      image_url: text(row['Ảnh đại diện']),
-      description: text(row['Mô tả sản phẩm']),
-      sale_price: numberValue(row['PL_Giá bán lẻ']),
+      unit_name: get(row, ['Đơn vị', 'Don vi']) ?? (inheritedRow ? get(inheritedRow, ['Đơn vị', 'Don vi']) : null) ?? 'CÁI',
+      image_url: get(row, ['Ảnh đại diện', 'Anh dai dien']),
+      description: get(row, ['Mô tả sản phẩm', 'Mo ta san pham']) ?? (inheritedRow ? get(inheritedRow, ['Mô tả sản phẩm', 'Mo ta san pham']) : null),
+      sale_price: numberValue(get(row, ['PL_Giá bán lẻ', 'PL_Gia ban le'])),
       cost_price: costPrice,
-      reorder_level: numberValue(row['LC_CN1_Tồn tối thiểu']),
+      reorder_level: numberValue(get(row, ['LC_CN1_Tồn tối thiểu', 'LC_CN1_Ton toi thieu']) ?? (inheritedRow ? get(inheritedRow, ['LC_CN1_Tồn tối thiểu', 'LC_CN1_Ton toi thieu']) : null)),
       track_inventory: true,
       allow_negative_stock: true,
       status: 'active',
-      opening_stock: numberValue(row['LC_CN1_Tồn kho ban đầu*']),
+      opening_stock: numberValue(get(row, ['LC_CN1_Tồn kho ban đầu*', 'LC_CN1_Ton kho ban dau*'])),
       opening_cost: openingCost > 0 ? openingCost : costPrice,
     });
   }
 
-  return { products: uniqueBy(products, (item) => item.sku), skipped };
+  const uniqueProducts = uniqueBy(products, (item) => item.sku);
+  return {
+    products: uniqueProducts.map((product, index) => ({
+      ...product,
+      source_sku: product.sku,
+      sku: productCode(index),
+    })),
+    skipped,
+  };
 }
 
 function buildCustomers(groupIdByCode) {
@@ -193,6 +247,21 @@ async function insertChunks(table, rows, chunkSize = 500, selectColumns = '') {
   return inserted;
 }
 
+async function upsertChunks(table, rows, options, chunkSize = 500, selectColumns = '') {
+  const upserted = [];
+
+  for (let index = 0; index < rows.length; index += chunkSize) {
+    const chunk = rows.slice(index, index + chunkSize);
+    let query = supabase.from(table).upsert(chunk, options);
+    if (selectColumns) query = query.select(selectColumns);
+    const { data, error } = await query;
+    if (error) throw new Error(`upsert ${table}: ${error.message}`);
+    if (data) upserted.push(...data);
+  }
+
+  return upserted;
+}
+
 async function getDefaultBranchId() {
   const { data, error } = await supabase
     .from('branches')
@@ -270,6 +339,72 @@ async function main() {
   const branchId = await getDefaultBranchId();
   const groupIdByCode = await getCustomerGroupIdByCode();
   const { products, skipped: skippedProducts } = buildProducts();
+
+  if (productsOnly) {
+    console.log(
+      JSON.stringify(
+        {
+          mode: dryRun ? 'products-only dry-run' : 'products-only execute',
+          productFile: PRODUCT_FILE,
+          beforeCounts,
+          defaultBranchId: branchId,
+          importCounts: {
+            products: products.length,
+            skippedProducts,
+          },
+          sampleProducts: products.slice(0, 8).map((product) => ({
+            sku: product.sku,
+            name: product.name,
+            stock: product.opening_stock,
+            sale_price: product.sale_price,
+            cost_price: product.cost_price,
+          })),
+        },
+        null,
+        2,
+      ),
+    );
+
+    if (dryRun) return;
+
+    const backupPath = await backupExistingData(['products', 'branch_stocks']);
+    console.log(`backup=${backupPath}`);
+
+    const productRows = products.map(({ sourceRow, source_sku, opening_stock, opening_cost, barcode, ...product }) => ({
+      ...product,
+      default_branch_id: branchId,
+    }));
+    const upsertedProducts = await upsertChunks(
+      'products',
+      productRows,
+      { onConflict: 'sku' },
+      400,
+      'id, sku, cost_price',
+    );
+    const productBySku = new Map(upsertedProducts.map((product) => [product.sku, product]));
+
+    const stockRows = products.map((product) => {
+      const upserted = productBySku.get(product.sku);
+      if (!upserted) throw new Error(`Missing upserted product for sku ${product.sku}`);
+
+      return {
+        branch_id: branchId,
+        product_id: upserted.id,
+        on_hand_qty: product.opening_stock,
+        reserved_qty: 0,
+        average_cost: product.opening_cost,
+      };
+    });
+    await upsertChunks('branch_stocks', stockRows, { onConflict: 'branch_id,product_id' }, 400);
+
+    const afterCounts = Object.fromEntries(
+      await Promise.all(['products', 'branch_stocks', 'customers', 'sales_orders', 'sales_order_items'].map(async (table) => [table, await countTable(table)])),
+    );
+
+    console.log(JSON.stringify({ upsertedProducts: upsertedProducts.length, upsertedStocks: stockRows.length, afterCounts }, null, 2));
+    return;
+  }
+
   const { customers, skipped: skippedCustomers } = buildCustomers(groupIdByCode);
 
   console.log(
@@ -300,7 +435,7 @@ async function main() {
     console.log(`cleared=${table}`);
   }
 
-  const productRows = products.map(({ sourceRow, opening_stock, opening_cost, ...product }) => ({
+  const productRows = products.map(({ sourceRow, source_sku, opening_stock, opening_cost, ...product }) => ({
     ...product,
     default_branch_id: branchId,
   }));

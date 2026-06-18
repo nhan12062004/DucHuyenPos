@@ -149,6 +149,53 @@ function getImportValue(record: Record<string, string>, aliases: string[]) {
   return '';
 }
 
+function getImportValueWithFallback(
+  record: Record<string, string>,
+  fallbackRecord: Record<string, string> | null,
+  aliases: string[],
+) {
+  return getImportValue(record, aliases) || (fallbackRecord ? getImportValue(fallbackRecord, aliases) : '');
+}
+
+function getImportVariantAttributeSuffix(record: Record<string, string>) {
+  const values = [
+    getImportValue(record, ['Giá trị thuộc tính 1', 'Gia tri thuoc tinh 1', 'Attribute value 1']),
+    getImportValue(record, ['Giá trị thuộc tính 2', 'Gia tri thuoc tinh 2', 'Attribute value 2']),
+    getImportValue(record, ['Giá trị thuộc tính 3', 'Gia tri thuoc tinh 3', 'Attribute value 3']),
+  ]
+    .map((value) => value.trim())
+    .filter((value) => value && !['mac dinh', 'default'].includes(normalizeImportKey(value)));
+
+  return values.join(' ');
+}
+
+function getImportProductName(
+  record: Record<string, string>,
+  fallbackBaseName: string,
+) {
+  const variantName = getImportValue(record, [
+    'Tên phiên bản sản phẩm',
+    'Ten phien ban san pham',
+    'Variant product name',
+    'Variant name',
+  ]);
+  if (variantName) {
+    return variantName;
+  }
+
+  const productName = getImportValue(record, ['Tên sản phẩm*', 'Ten san pham', 'Product name', 'Name', 'Tên']);
+  if (productName) {
+    return productName;
+  }
+
+  const attributeSuffix = getImportVariantAttributeSuffix(record);
+  if (fallbackBaseName && attributeSuffix) {
+    return `${fallbackBaseName} - ${attributeSuffix}`;
+  }
+
+  return '';
+}
+
 function findLookupId<T extends { id: string; code?: string; name: string }>(items: T[], value: string) {
   if (!value.trim()) {
     return undefined;
@@ -526,6 +573,8 @@ export function Products() {
       const createdProducts: Product[] = [];
       const failures: string[] = [];
       let skippedRows = 0;
+      let currentBaseName = '';
+      let currentBaseRecord: Record<string, string> | null = null;
 
       for (const [index, row] of dataRows.entries()) {
         const record = normalizedHeaders.reduce<Record<string, string>>((acc, header, headerIndex) => {
@@ -533,21 +582,28 @@ export function Products() {
           return acc;
         }, {});
 
-        const name = getImportValue(record, ['Tên sản phẩm', 'Ten san pham', 'Product name', 'Name', 'Tên']);
+        const baseName = getImportValue(record, ['Tên sản phẩm', 'Tên sản phẩm*', 'Ten san pham', 'Product name', 'Name', 'Tên']);
+        if (baseName) {
+          currentBaseName = baseName;
+          currentBaseRecord = record;
+        }
+
+        const name = getImportProductName(record, currentBaseName);
         if (!name) {
           skippedRows += 1;
           continue;
         }
 
-        const categoryValue = getImportValue(record, [
+        const inheritedRecord = baseName ? null : currentBaseRecord;
+        const categoryValue = getImportValueWithFallback(record, inheritedRecord, [
           'product_category_id',
           'category_id',
           'Loại',
           'Loại sản phẩm',
           'Category',
         ]);
-        const brandValue = getImportValue(record, ['brand_id', 'Nhãn hiệu', 'Thương hiệu', 'Brand']);
-        const statusValue = getImportValue(record, ['Trạng thái', 'Status']);
+        const brandValue = getImportValueWithFallback(record, inheritedRecord, ['brand_id', 'Nhãn hiệu', 'Thương hiệu', 'Brand']);
+        const statusValue = getImportValueWithFallback(record, inheritedRecord, ['Trạng thái', 'Status']);
         const isActive = statusValue ? parseImportBoolean(statusValue, true) : true;
 
         try {
@@ -558,17 +614,17 @@ export function Products() {
             product_category_id: findLookupId(categories, categoryValue),
             brand_id: findLookupId(brands, brandValue),
             default_branch_id: systemDefaultBranch?.id,
-            unit_name: getImportValue(record, ['Đơn vị', 'Đơn vị tính', 'Unit', 'unit_name']) || 'cái',
-            description: getImportValue(record, ['Mô tả', 'Mo ta', 'Description']) || undefined,
+            unit_name: getImportValueWithFallback(record, inheritedRecord, ['Đơn vị', 'Đơn vị tính', 'Unit', 'unit_name']) || 'cái',
+            description: getImportValueWithFallback(record, inheritedRecord, ['Mô tả', 'Mo ta', 'Description']) || undefined,
             sale_price: parseImportNumber(getImportValue(record, ['Giá bán', 'Giá bán lẻ', 'Sale price', 'sale_price'])),
             cost_price: parseImportNumber(getImportValue(record, ['Giá nhập', 'Giá vốn', 'Cost price', 'cost_price'])),
-            reorder_level: parseImportNumber(getImportValue(record, ['Tồn tối thiểu', 'Reorder level', 'reorder_level'])),
+            reorder_level: parseImportNumber(getImportValueWithFallback(record, inheritedRecord, ['Tồn tối thiểu', 'Reorder level', 'reorder_level'])),
             track_inventory: parseImportBoolean(
-              getImportValue(record, ['Quản lý tồn kho', 'Track inventory', 'track_inventory']),
+              getImportValueWithFallback(record, inheritedRecord, ['Quản lý tồn kho', 'Track inventory', 'track_inventory']),
               true,
             ),
             allow_negative_stock: parseImportBoolean(
-              getImportValue(record, ['Bán âm', 'Allow negative stock', 'allow_negative_stock']),
+              getImportValueWithFallback(record, inheritedRecord, ['Bán âm', 'Allow negative stock', 'allow_negative_stock']),
               false,
             ),
             status: isActive ? 'active' : 'inactive',
@@ -1313,9 +1369,9 @@ export function Products() {
                 </tbody>
               </table>
             </div>
-          <div className="flex items-center justify-end border-t border-slate-200 px-5 py-4 text-[13px] text-[#182537]">
-            <div className="mr-6 flex items-center gap-2">
-              <span className="text-slate-600">Hiá»ƒn thá»‹</span>
+          <div className="flex min-h-16 flex-wrap items-center justify-end gap-x-6 gap-y-3 border-t border-slate-200 bg-white px-5 py-4 text-[13px] text-[#182537]">
+            <div className="flex items-center gap-2">
+              <span className="text-slate-600">Hiển thị</span>
               <div className="relative">
                 <select
                   value={pageSize}
@@ -1323,7 +1379,7 @@ export function Products() {
                     setPageSize(Number(event.target.value));
                     setPage(1);
                   }}
-                  className="appearance-none rounded border border-slate-300 bg-white px-3 py-1 pr-8 text-[#182537] focus:border-[#0088FF] focus:outline-none"
+                  className="h-8 min-w-[68px] appearance-none border border-slate-300 bg-white px-3 pr-8 text-[#182537] transition-colors focus:border-[#0088FF] focus:outline-none"
                 >
                   <option value={20}>20</option>
                   <option value={50}>50</option>
@@ -1331,26 +1387,34 @@ export function Products() {
                 </select>
                 <ChevronDown size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-500" />
               </div>
-              <span className="text-slate-600">káº¿t quáº£</span>
+              <span className="text-slate-600">kết quả</span>
             </div>
-            <div className="mr-6 text-slate-600">
-              Tá»« {pageStart} Ä‘áº¿n {pageEnd} trÃªn tá»•ng {visibleProducts.length}
+            <div className="text-slate-600">
+              Từ {pageStart} đến {pageEnd} trên tổng {visibleProducts.length}
             </div>
             <div className="flex items-center gap-1">
               <button
+                type="button"
                 onClick={() => setPage((current) => Math.max(1, current - 1))}
                 disabled={safePage === 1}
-                className="flex h-7 w-7 items-center justify-center rounded text-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-7 w-7 items-center justify-center text-slate-400 transition-colors hover:bg-slate-100 hover:text-[#0088FF] disabled:cursor-not-allowed disabled:bg-transparent disabled:text-slate-300"
+                aria-label="Trang trước"
               >
                 <ChevronLeft size={16} />
               </button>
-              <button className="flex h-7 w-7 items-center justify-center rounded bg-[#0088FF] font-medium text-white">
+              <button
+                type="button"
+                className="flex h-7 w-7 items-center justify-center bg-[#0088FF] font-medium text-white"
+                aria-label={`Trang ${safePage}`}
+              >
                 {safePage}
               </button>
               <button
+                type="button"
                 onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
                 disabled={safePage === totalPages}
-                className="flex h-7 w-7 items-center justify-center rounded text-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-7 w-7 items-center justify-center text-slate-400 transition-colors hover:bg-slate-100 hover:text-[#0088FF] disabled:cursor-not-allowed disabled:bg-transparent disabled:text-slate-300"
+                aria-label="Trang sau"
               >
                 <ChevronRight size={16} />
               </button>

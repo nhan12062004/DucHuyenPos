@@ -27,6 +27,8 @@ import {
   salesOrdersService,
   type CreateSalesOrderPayload,
   type SalesOrder,
+  type SalesOrdersProcessingSummary,
+  type SalesOrdersQuery,
 } from '../services/salesOrdersService';
 import { productsService, type Product } from '../services/productsService';
 import { inventoryService, type Branch } from '../services/inventoryService';
@@ -57,6 +59,16 @@ type OrdersRouteState = {
 } | null;
 
 const ORDER_FILTERS_KEY = 'duc-huyen-pos.orders.filters';
+
+const EMPTY_PROCESSING_SUMMARY: SalesOrdersProcessingSummary = {
+  days: 90,
+  pending: { count: 0, total_amount: 0 },
+  unpaid: { count: 0, total_amount: 0 },
+  packing: { count: 0, total_amount: 0 },
+  waitingPickup: { count: 0, total_amount: 0 },
+  delivering: { count: 0, total_amount: 0 },
+  cancelledDelivery: { count: 0, total_amount: 0 },
+};
 
 function formatCurrency(value: number) {
   return value.toLocaleString('vi-VN');
@@ -334,13 +346,84 @@ function getImportPaymentStatus(totalAmount: number, paidAmount: number): SalesO
   return 'partial';
 }
 
-async function loadAllSalesOrders() {
+function getDatePresetRange(datePreset?: DatePreset) {
+  if (!datePreset) {
+    return {};
+  }
+
+  const fromDate = new Date();
+  const toDate = new Date();
+
+  if (datePreset === 'today') {
+    fromDate.setHours(0, 0, 0, 0);
+    toDate.setHours(23, 59, 59, 999);
+  } else {
+    fromDate.setDate(1);
+    fromDate.setHours(0, 0, 0, 0);
+    toDate.setHours(23, 59, 59, 999);
+  }
+
+  return {
+    from_date: fromDate.toISOString(),
+    to_date: toDate.toISOString(),
+  };
+}
+
+function buildOrdersQuery({
+  activeTab,
+  dashboardFilter,
+  searchTerm,
+  page,
+  limit,
+  includeItems = false,
+}: {
+  activeTab: OrderTab;
+  dashboardFilter: DashboardOrderFilter | null;
+  searchTerm: string;
+  page: number;
+  limit: number;
+  includeItems?: boolean;
+}): SalesOrdersQuery {
+  const query: SalesOrdersQuery = {
+    page,
+    limit,
+    search: searchTerm.trim() || undefined,
+    include_items: includeItems,
+    ...getDatePresetRange(dashboardFilter?.datePreset),
+  };
+
+  if (dashboardFilter?.branchId) {
+    query.branch_id = dashboardFilter.branchId;
+  }
+
+  if (dashboardFilter?.status) {
+    query.status = dashboardFilter.status;
+  } else if (dashboardFilter?.onlyProcessing || activeTab === 'trading') {
+    query.status_in = 'draft,pending';
+  }
+
+  if (dashboardFilter?.paymentStatus === 'open') {
+    query.payment_status_in = 'unpaid,partial';
+  } else if (dashboardFilter?.paymentStatus) {
+    query.payment_status = dashboardFilter.paymentStatus;
+  }
+
+  if (dashboardFilter?.deliveryStatus === 'cancelled_delivery') {
+    query.delivery_issue = 'cancelled_delivery';
+  } else if (dashboardFilter?.deliveryStatus) {
+    query.delivery_status = dashboardFilter.deliveryStatus;
+  }
+
+  return query;
+}
+
+async function loadAllSalesOrders(query: SalesOrdersQuery) {
   const limit = 200;
-  const firstPage = await salesOrdersService.getAll({ page: 1, limit });
+  const firstPage = await salesOrdersService.getAll({ ...query, page: 1, limit });
   const allOrders = [...firstPage.data];
 
   for (let page = 2; page <= firstPage.totalPages; page += 1) {
-    const response = await salesOrdersService.getAll({ page, limit });
+    const response = await salesOrdersService.getAll({ ...query, page, limit });
     allOrders.push(...response.data);
   }
 
@@ -354,7 +437,9 @@ export function Orders() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [orders, setOrders] = useState<SalesOrder[]>([]);
+  const [totalOrders, setTotalOrders] = useState(0);
   const [selectedOrderDetail, setSelectedOrderDetail] = useState<SalesOrder | null>(null);
+  const [processingSummary, setProcessingSummary] = useState<SalesOrdersProcessingSummary>(EMPTY_PROCESSING_SUMMARY);
   const [isListLoading, setIsListLoading] = useState(true);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -450,11 +535,21 @@ export function Orders() {
       setListError(null);
 
       try {
-        const response = await loadAllSalesOrders();
+        const response = await salesOrdersService.getAll(
+          buildOrdersQuery({
+            activeTab,
+            dashboardFilter,
+            searchTerm,
+            page,
+            limit: pageSize,
+            includeItems: false,
+          }),
+        );
         if (!active) {
           return;
         }
-        setOrders(response);
+        setOrders(response.data);
+        setTotalOrders(response.total);
       } catch (error: any) {
         if (!active) {
           return;
@@ -472,11 +567,34 @@ export function Orders() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [activeTab, dashboardFilter, page, pageSize, searchTerm]);
 
   useEffect(() => {
     setPage(1);
   }, [activeTab, dashboardFilter, searchTerm]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadProcessingSummary() {
+      try {
+        const response = await salesOrdersService.getProcessingSummary(processingWindowDays);
+        if (active) {
+          setProcessingSummary(response);
+        }
+      } catch {
+        if (active) {
+          setProcessingSummary({ ...EMPTY_PROCESSING_SUMMARY, days: processingWindowDays });
+        }
+      }
+    }
+
+    loadProcessingSummary();
+
+    return () => {
+      active = false;
+    };
+  }, [processingWindowDays]);
 
   useEffect(() => {
     let active = true;
@@ -534,91 +652,28 @@ export function Orders() {
     };
   }, [showProcessingWindowMenu]);
 
-  const visibleOrders = orders.filter((order) => {
-    const matchesTab =
-      activeTab === 'all' ? true : order.status === 'draft' || order.status === 'pending';
-
-    if (!matchesTab) {
-      return false;
-    }
-
-    if (dashboardFilter?.onlyProcessing && order.status !== 'draft' && order.status !== 'pending') {
-      return false;
-    }
-
-    if (dashboardFilter?.branchId && order.branch_id !== dashboardFilter.branchId) {
-      return false;
-    }
-
-    if (dashboardFilter?.status && order.status !== dashboardFilter.status) {
-      return false;
-    }
-
-    if (dashboardFilter?.paymentStatus === 'open') {
-      if (order.payment_status !== 'unpaid' && order.payment_status !== 'partial') {
-        return false;
-      }
-    } else if (dashboardFilter?.paymentStatus && order.payment_status !== dashboardFilter.paymentStatus) {
-      return false;
-    }
-
-    if (dashboardFilter?.deliveryStatus === 'cancelled_delivery') {
-      if (order.status !== 'cancelled' && order.delivery_status !== 'cancelled') {
-        return false;
-      }
-    } else if (dashboardFilter?.deliveryStatus && order.delivery_status !== dashboardFilter.deliveryStatus) {
-      return false;
-    }
-
-    if (dashboardFilter?.datePreset === 'today' && !isSameDay(order.sold_at)) {
-      return false;
-    }
-
-    if (dashboardFilter?.datePreset === 'this_month' && !isThisMonth(order.sold_at)) {
-      return false;
-    }
-
-    const query = searchTerm.trim().toLowerCase();
-    if (!query) {
-      return true;
-    }
-
-    return (
-      order.order_no.toLowerCase().includes(query) ||
-      order.customers?.full_name?.toLowerCase().includes(query) ||
-      order.customers?.phone?.toLowerCase().includes(query)
-    );
-  });
-
-  const totalPages = Math.max(1, Math.ceil((visibleOrders.length || 1) / pageSize));
+  const visibleOrders = orders;
+  const totalPages = Math.max(1, Math.ceil((totalOrders || 1) / pageSize));
   const safePage = Math.min(page, totalPages);
-  const pagedOrders = visibleOrders.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const pagedOrders = visibleOrders;
   const pageStart = pagedOrders.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const pageEnd = pagedOrders.length === 0 ? 0 : pageStart + pagedOrders.length - 1;
+
+  useEffect(() => {
+    if (!isListLoading && page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [isListLoading, page, totalPages]);
 
   const selectedOrder =
     selectedOrderDetail ?? orders.find((order) => order.id === selectedOrderId) ?? null;
 
-  const processingOrders = orders.filter((order) => isWithinRecentDays(order.sold_at, processingWindowDays));
-
-  const pendingOrders = processingOrders.filter((order) => order.status === 'draft');
-  const unpaidOrders = processingOrders.filter(
-    (order) =>
-      order.status !== 'cancelled' &&
-      (order.payment_status === 'unpaid' || order.payment_status === 'partial'),
-  );
-  const packingOrders = processingOrders.filter(
-    (order) => order.status === 'pending' && order.delivery_status === 'pending_packing',
-  );
-  const waitingPickupOrders = processingOrders.filter(
-    (order) => order.status === 'pending' && order.delivery_status === 'waiting_pick_up',
-  );
-  const deliveringOrders = processingOrders.filter(
-    (order) => order.status === 'pending' && order.delivery_status === 'delivering',
-  );
-  const cancelledDeliveryOrders = processingOrders.filter(
-    (order) => order.status === 'cancelled' || order.delivery_status === 'cancelled',
-  );
+  const pendingOrders = processingSummary.pending;
+  const unpaidOrders = processingSummary.unpaid;
+  const packingOrders = processingSummary.packing;
+  const waitingPickupOrders = processingSummary.waitingPickup;
+  const deliveringOrders = processingSummary.delivering;
+  const cancelledDeliveryOrders = processingSummary.cancelledDelivery;
   const statusMeta = getOrderStatusMeta(selectedOrder?.status);
   const paymentMeta = getPaymentStatusMeta(selectedOrder?.payment_status);
   const selectedOrderItems = selectedOrder?.sales_order_items ?? [];
@@ -640,94 +695,113 @@ export function Orders() {
     window.location.assign(`/invoice?orderId=${encodeURIComponent(selectedOrder.id)}&autoPrint=1`);
   };
 
-  const handleExportOrders = () => {
-    const ordersToExport = exportScope === 'all' ? orders : pagedOrders;
+  const handleExportOrders = async () => {
+    try {
+      const includeItems = orderExportType === 'products';
+      const ordersToExport =
+        exportScope === 'all'
+          ? await loadAllSalesOrders(
+              buildOrdersQuery({
+                activeTab,
+                dashboardFilter,
+                searchTerm,
+                page: 1,
+                limit: 200,
+                includeItems,
+              }),
+            )
+          : includeItems
+            ? await Promise.all(pagedOrders.map((order) => salesOrdersService.getOne(order.id)))
+            : pagedOrders;
 
-    if (ordersToExport.length === 0) {
-      setInfoMessage('Không có đơn hàng phù hợp để xuất file.');
-      return;
-    }
+      if (ordersToExport.length === 0) {
+        setInfoMessage('Không có đơn hàng phù hợp để xuất file.');
+        return;
+      }
 
-    const rows =
-      orderExportType === 'products'
-        ? [
-            ['Mã đơn hàng', 'Ngày bán', 'Khách hàng', 'SĐT', 'SKU', 'Sản phẩm', 'Đơn vị', 'Số lượng', 'Đơn giá', 'Chiết khấu', 'Thành tiền'],
-            ...ordersToExport.flatMap((order) => {
-              const items = order.sales_order_items?.length ? order.sales_order_items : [null];
-              return items.map((item) => [
+      const rows =
+        orderExportType === 'products'
+          ? [
+              ['Mã đơn hàng', 'Ngày bán', 'Khách hàng', 'SĐT', 'SKU', 'Sản phẩm', 'Đơn vị', 'Số lượng', 'Đơn giá', 'Chiết khấu', 'Thành tiền'],
+              ...ordersToExport.flatMap((order) => {
+                const items = order.sales_order_items?.length ? order.sales_order_items : [null];
+                return items.map((item) => [
+                  order.order_no,
+                  formatDateTime(order.sold_at),
+                  order.customers?.full_name ?? 'Khách lẻ',
+                  order.customers?.phone ?? '',
+                  item?.sku ?? '',
+                  item?.product_name ?? '',
+                  item?.unit_name ?? '',
+                  item ? String(Number(item.quantity || 0)) : '',
+                  item ? String(Number(item.unit_price || 0)) : '',
+                  item ? String(Number(item.discount_amount || 0)) : '',
+                  item ? String(Number(item.line_total || 0)) : '',
+                ]);
+              }),
+            ]
+          : orderExportType === 'details'
+          ? [
+              [
+                'Mã đơn hàng',
+                'Mã hóa đơn',
+                'Ngày bán',
+                'Chi nhánh',
+                'Nguồn',
+                'Khách hàng',
+                'SĐT',
+                'Trạng thái',
+                'Vận chuyển',
+                'Thanh toán',
+                'Tạm tính',
+                'Chiết khấu',
+                'Phí giao hàng',
+                'Thuế',
+                'Tổng tiền',
+                'Đã thanh toán',
+                'Khách phải trả',
+                'Ghi chú',
+              ],
+              ...ordersToExport.map((order) => [
+                order.order_no,
+                order.invoice_no ?? '',
+                formatDateTime(order.sold_at),
+                order.branches?.name ?? '',
+                order.source,
+                order.customers?.full_name ?? 'Khách lẻ',
+                order.customers?.phone ?? '',
+                getOrderStatusMeta(order.status).label,
+                getDeliveryLabel(order.delivery_status),
+                getPaymentStatusMeta(order.payment_status).label,
+                String(Number(order.subtotal || 0)),
+                String(Number(order.discount_amount || 0)),
+                String(Number(order.shipping_fee || 0)),
+                String(Number(order.tax_amount || 0)),
+                String(Number(order.total_amount || 0)),
+                String(Number(order.paid_amount || 0)),
+                String(Math.max(0, Number(order.total_amount || 0) - Number(order.paid_amount || 0))),
+                order.note ?? '',
+              ]),
+            ]
+          : [
+              ['Mã đơn hàng', 'Ngày bán', 'Khách hàng', 'SĐT', 'Trạng thái', 'Thanh toán', 'Tổng tiền'],
+              ...ordersToExport.map((order) => [
                 order.order_no,
                 formatDateTime(order.sold_at),
                 order.customers?.full_name ?? 'Khách lẻ',
                 order.customers?.phone ?? '',
-                item?.sku ?? '',
-                item?.product_name ?? '',
-                item?.unit_name ?? '',
-                item ? String(Number(item.quantity || 0)) : '',
-                item ? String(Number(item.unit_price || 0)) : '',
-                item ? String(Number(item.discount_amount || 0)) : '',
-                item ? String(Number(item.line_total || 0)) : '',
-              ]);
-            }),
-          ]
-        : orderExportType === 'details'
-        ? [
-            [
-              'Mã đơn hàng',
-              'Mã hóa đơn',
-              'Ngày bán',
-              'Chi nhánh',
-              'Nguồn',
-              'Khách hàng',
-              'SĐT',
-              'Trạng thái',
-              'Vận chuyển',
-              'Thanh toán',
-              'Tạm tính',
-              'Chiết khấu',
-              'Phí giao hàng',
-              'Thuế',
-              'Tổng tiền',
-              'Đã thanh toán',
-              'Khách phải trả',
-              'Ghi chú',
-            ],
-            ...ordersToExport.map((order) => [
-              order.order_no,
-              order.invoice_no ?? '',
-              formatDateTime(order.sold_at),
-              order.branches?.name ?? '',
-              order.source,
-              order.customers?.full_name ?? 'Khách lẻ',
-              order.customers?.phone ?? '',
-              getOrderStatusMeta(order.status).label,
-              getDeliveryLabel(order.delivery_status),
-              getPaymentStatusMeta(order.payment_status).label,
-              String(Number(order.subtotal || 0)),
-              String(Number(order.discount_amount || 0)),
-              String(Number(order.shipping_fee || 0)),
-              String(Number(order.tax_amount || 0)),
-              String(Number(order.total_amount || 0)),
-              String(Number(order.paid_amount || 0)),
-              String(Math.max(0, Number(order.total_amount || 0) - Number(order.paid_amount || 0))),
-              order.note ?? '',
-            ]),
-          ]
-        : [
-            ['Mã đơn hàng', 'Ngày bán', 'Khách hàng', 'SĐT', 'Trạng thái', 'Thanh toán', 'Tổng tiền'],
-            ...ordersToExport.map((order) => [
-              order.order_no,
-              formatDateTime(order.sold_at),
-              order.customers?.full_name ?? 'Khách lẻ',
-              order.customers?.phone ?? '',
-              getOrderStatusMeta(order.status).label,
-              getPaymentStatusMeta(order.payment_status).label,
-              String(Number(order.total_amount || 0)),
-            ]),
-          ];
+                getOrderStatusMeta(order.status).label,
+                getPaymentStatusMeta(order.payment_status).label,
+                String(Number(order.total_amount || 0)),
+              ]),
+            ];
 
-    exportRowsToXlsx(rows, `orders-${orderExportType}-${new Date().toISOString().slice(0, 10)}`, 'Đơn hàng');
-    setShowExportModal(false);
-    setInfoMessage(`Đã xuất ${ordersToExport.length} đơn hàng.`);
+      exportRowsToXlsx(rows, `orders-${orderExportType}-${new Date().toISOString().slice(0, 10)}`, 'Đơn hàng');
+      setShowExportModal(false);
+      setInfoMessage(`Đã xuất ${ordersToExport.length} đơn hàng.`);
+    } catch (error: any) {
+      setInfoMessage(error?.message ?? 'Xuất file đơn hàng thất bại.');
+    }
   };
 
   const handleImportOrders = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -867,6 +941,7 @@ export function Orders() {
 
       if (createdOrders.length > 0) {
         setOrders((current) => [...createdOrders, ...current]);
+        setTotalOrders((current) => current + createdOrders.length);
         setSelectedOrderId(createdOrders[0].id);
         setSelectedOrderDetail(createdOrders[0]);
       }
@@ -925,6 +1000,7 @@ export function Orders() {
       });
 
       setOrders((current) => [duplicated, ...current]);
+      setTotalOrders((current) => current + 1);
       setSelectedOrderId(duplicated.id);
       setSelectedOrderDetail(duplicated);
       setInfoMessage(`Đã sao chép đơn hàng sang ${duplicated.order_no}.`);
@@ -1683,64 +1759,52 @@ export function Orders() {
               <div className="grid grid-cols-6 gap-0 border-l border-t border-b border-slate-200 bg-white">
                 <div className="border-r border-slate-200 p-3">
                   <div className="mb-1 flex items-center gap-1 text-[13px] text-slate-500">
-                    Chờ duyệt <span className="font-semibold text-[#0088FF]">{pendingOrders.length}</span>
+                    Chờ duyệt <span className="font-semibold text-[#0088FF]">{pendingOrders.count}</span>
                   </div>
                   <div className="font-semibold text-[#182537]">
-                    {formatCurrency(
-                      pendingOrders.reduce((sum, order) => sum + Number(order.total_amount || 0), 0),
-                    )}
+                    {formatCurrency(pendingOrders.total_amount)}
                   </div>
                 </div>
                 <div className="border-r border-slate-200 p-3">
                   <div className="mb-1 flex items-center gap-1 text-[13px] text-slate-500">
-                    Chờ thanh toán <span className="font-semibold text-[#0088FF]">{unpaidOrders.length}</span>
+                    Chờ thanh toán <span className="font-semibold text-[#0088FF]">{unpaidOrders.count}</span>
                   </div>
                   <div className="font-semibold text-[#182537]">
-                    {formatCurrency(
-                      unpaidOrders.reduce((sum, order) => sum + Number(order.total_amount || 0), 0),
-                    )}
+                    {formatCurrency(unpaidOrders.total_amount)}
                   </div>
                 </div>
                 <div className="border-r border-slate-200 p-3">
                   <div className="mb-1 flex items-center gap-1 text-[13px] text-slate-500">
-                    Chờ đóng gói <span className="font-semibold text-[#0088FF]">{packingOrders.length}</span>
+                    Chờ đóng gói <span className="font-semibold text-[#0088FF]">{packingOrders.count}</span>
                   </div>
                   <div className="font-semibold text-[#182537]">
-                    {formatCurrency(
-                      packingOrders.reduce((sum, order) => sum + Number(order.total_amount || 0), 0),
-                    )}
+                    {formatCurrency(packingOrders.total_amount)}
                   </div>
                 </div>
                 <div className="border-r border-slate-200 p-3">
                   <div className="mb-1 flex items-center gap-1 text-[13px] text-slate-500">
-                    Chờ lấy hàng <span className="font-semibold text-[#0088FF]">{waitingPickupOrders.length}</span>
+                    Chờ lấy hàng <span className="font-semibold text-[#0088FF]">{waitingPickupOrders.count}</span>
                   </div>
                   <div className="font-semibold text-[#182537]">
-                    {formatCurrency(
-                      waitingPickupOrders.reduce((sum, order) => sum + Number(order.total_amount || 0), 0),
-                    )}
+                    {formatCurrency(waitingPickupOrders.total_amount)}
                   </div>
                 </div>
                 <div className="border-r border-slate-200 p-3">
                   <div className="mb-1 flex items-center gap-1 text-[13px] text-slate-500">
-                    Đang giao hàng <span className="font-semibold text-[#0088FF]">{deliveringOrders.length}</span>
+                    Đang giao hàng <span className="font-semibold text-[#0088FF]">{deliveringOrders.count}</span>
                   </div>
                   <div className="font-semibold text-[#182537]">
-                    {formatCurrency(
-                      deliveringOrders.reduce((sum, order) => sum + Number(order.total_amount || 0), 0),
-                    )}
+                    {formatCurrency(deliveringOrders.total_amount)}
                   </div>
                 </div>
                 <div className="group relative flex flex-col justify-between border-r border-slate-200 p-3">
                   <div className="mb-1 flex items-center gap-1 text-[13px] text-slate-500">
                     Chờ giao lại <span className="rounded-full bg-red-100 px-1 text-[10px] text-red-500">!</span>{' '}
-                    <span className="font-semibold text-[#0088FF]">{cancelledDeliveryOrders.length}</span>
+                    <span className="font-semibold text-[#0088FF]">{cancelledDeliveryOrders.count}</span>
                   </div>
                   <div className="flex items-end justify-between font-semibold text-[#182537]">
                     <span>
-                      {formatCurrency(
-                        cancelledDeliveryOrders.reduce((sum, order) => sum + Number(order.total_amount || 0), 0),
-                      )}
+                      {formatCurrency(cancelledDeliveryOrders.total_amount)}
                     </span>
                     <ChevronDown size={14} className="cursor-pointer text-slate-400 group-hover:text-[#0088FF]" />
                   </div>
@@ -1824,7 +1888,7 @@ export function Orders() {
             </div>
           </div>
 
-          {visibleOrders.length === 0 ? (
+          {pagedOrders.length === 0 ? (
             <div className="flex items-center justify-center py-16 text-slate-500">
               <div className="flex flex-col items-center gap-3">
                 <AlertCircle className="h-8 w-8 text-slate-300" />
@@ -1833,7 +1897,7 @@ export function Orders() {
             </div>
           ) : (
             <div className="w-full overflow-x-auto">
-              <table className="w-full text-left">
+              <table className="w-full min-w-[980px] text-left">
                 <thead>
                   <tr className="border-y border-slate-200 bg-slate-50/50 text-[13px] font-semibold text-slate-700">
                     <th className="w-12 border-r border-slate-100 px-4 py-3 text-center">
@@ -1892,9 +1956,9 @@ export function Orders() {
               </table>
             </div>
           )}
-          <div className="flex items-center justify-end border-t border-slate-200 px-5 py-4 text-[13px] text-[#182537]">
-            <div className="mr-6 flex items-center gap-2">
-              <span className="text-slate-600">Hiá»ƒn thá»‹</span>
+          <div className="flex min-h-16 flex-wrap items-center justify-end gap-x-6 gap-y-3 border-t border-slate-200 bg-white px-5 py-4 text-[13px] text-[#182537]">
+            <div className="flex items-center gap-2">
+              <span className="text-slate-600">Hiển thị</span>
               <div className="relative">
                 <select
                   value={pageSize}
@@ -1902,7 +1966,7 @@ export function Orders() {
                     setPageSize(Number(event.target.value));
                     setPage(1);
                   }}
-                  className="appearance-none rounded border border-slate-300 bg-white px-3 py-1 pr-8 text-[#182537] focus:border-[#0088FF] focus:outline-none"
+                  className="h-8 min-w-[68px] appearance-none border border-slate-300 bg-white px-3 pr-8 text-[#182537] transition-colors focus:border-[#0088FF] focus:outline-none"
                 >
                   <option value={20}>20</option>
                   <option value={50}>50</option>
@@ -1910,26 +1974,34 @@ export function Orders() {
                 </select>
                 <ChevronDown size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-500" />
               </div>
-              <span className="text-slate-600">káº¿t quáº£</span>
+              <span className="text-slate-600">kết quả</span>
             </div>
-            <div className="mr-6 text-slate-600">
-              Tá»« {pageStart} Ä‘áº¿n {pageEnd} trÃªn tá»•ng {visibleOrders.length}
+            <div className="text-slate-600">
+              Từ {pageStart} đến {pageEnd} trên tổng {totalOrders}
             </div>
             <div className="flex items-center gap-1">
               <button
+                type="button"
                 onClick={() => setPage((current) => Math.max(1, current - 1))}
                 disabled={safePage === 1}
-                className="flex h-7 w-7 items-center justify-center rounded text-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-7 w-7 items-center justify-center text-slate-400 transition-colors hover:bg-slate-100 hover:text-[#0088FF] disabled:cursor-not-allowed disabled:bg-transparent disabled:text-slate-300"
+                aria-label="Trang trước"
               >
                 <ChevronLeft size={16} />
               </button>
-              <button className="flex h-7 w-7 items-center justify-center rounded bg-[#0088FF] font-medium text-white">
+              <button
+                type="button"
+                className="flex h-7 w-7 items-center justify-center bg-[#0088FF] font-medium text-white"
+                aria-label={`Trang ${safePage}`}
+              >
                 {safePage}
               </button>
               <button
+                type="button"
                 onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
                 disabled={safePage === totalPages}
-                className="flex h-7 w-7 items-center justify-center rounded text-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-7 w-7 items-center justify-center text-slate-400 transition-colors hover:bg-slate-100 hover:text-[#0088FF] disabled:cursor-not-allowed disabled:bg-transparent disabled:text-slate-300"
+                aria-label="Trang sau"
               >
                 <ChevronRight size={16} />
               </button>

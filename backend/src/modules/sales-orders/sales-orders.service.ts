@@ -16,11 +16,16 @@ export class SalesOrdersService {
 
   async findAll(
     query: PaginationDto & {
+      branch_id?: string;
       from_date?: string;
       to_date?: string;
       payment_status?: string;
+      payment_status_in?: string;
       delivery_status?: string;
       delivery_method?: string;
+      status_in?: string;
+      delivery_issue?: string;
+      include_items?: string | boolean;
     },
   ): Promise<PaginatedResult<any>> {
     const {
@@ -28,34 +33,75 @@ export class SalesOrdersService {
       limit = 20,
       search,
       status,
+      status_in,
+      branch_id,
       payment_status,
+      payment_status_in,
       from_date,
       to_date,
       delivery_status,
       delivery_method,
+      delivery_issue,
+      include_items,
     } = query;
     const from = (page - 1) * limit;
     const to = from + limit - 1;
-
-    let q = this.supabase
-      .from('sales_orders')
-      .select(
-        `*, 
+    const shouldIncludeItems = include_items !== false && include_items !== 'false';
+    const selectFields = shouldIncludeItems
+      ? `*, 
         customers(id, full_name, phone), 
         branches(id, name),
         cashier:cashier_id(id, full_name, branch_id),
-        sales_order_items(*, products(name, sku))`,
-        { count: 'exact' },
-      )
+        sales_order_items(*, products(name, sku))`
+      : `id,
+        branch_id,
+        order_no,
+        invoice_no,
+        customer_id,
+        cashier_id,
+        sold_at,
+        source,
+        status,
+        payment_status,
+        subtotal,
+        discount_amount,
+        shipping_fee,
+        tax_amount,
+        total_amount,
+        paid_amount,
+        note,
+        delivery_address,
+        delivery_method,
+        delivery_status,
+        delivery_due_at,
+        created_at,
+        customers(id, full_name, phone), 
+        branches(id, name),
+        cashier:cashier_id(id, full_name, branch_id)`;
+
+    let q = this.supabase
+      .from('sales_orders')
+      .select(selectFields, { count: 'exact' })
       .range(from, to)
       .order('sold_at', { ascending: false });
 
     if (search) {
-      q = q.or(`order_no.ilike.%${search}%,invoice_no.ilike.%${search}%`);
+      const safeSearch = search.trim().replace(/[,%]/g, '');
+      const customerIds = await this.findCustomerIdsBySearch(safeSearch);
+      const orderSearch = `order_no.ilike.%${safeSearch}%,invoice_no.ilike.%${safeSearch}%`;
+      q = customerIds.length > 0
+        ? q.or(`${orderSearch},customer_id.in.(${customerIds.join(',')})`)
+        : q.or(orderSearch);
     }
+    if (branch_id) q = q.eq('branch_id', branch_id);
     if (status) q = q.eq('status', status);
+    if (!status && status_in) q = q.in('status', this.parseCsv(status_in));
     if (payment_status) q = q.eq('payment_status', payment_status);
+    if (!payment_status && payment_status_in) q = q.in('payment_status', this.parseCsv(payment_status_in));
     if (delivery_status) q = q.eq('delivery_status', delivery_status);
+    if (!delivery_status && delivery_issue === 'cancelled_delivery') {
+      q = q.or('status.eq.cancelled,delivery_status.eq.cancelled');
+    }
     if (delivery_method) q = q.eq('delivery_method', delivery_method);
     if (from_date) q = q.gte('sold_at', from_date);
     if (to_date) q = q.lte('sold_at', to_date);
@@ -69,6 +115,64 @@ export class SalesOrdersService {
       page,
       limit,
       totalPages: Math.ceil((count ?? 0) / limit),
+    };
+  }
+
+  async getProcessingSummary(days = 90) {
+    const safeDays = Math.min(365, Math.max(1, Number(days) || 90));
+    const fromDate = new Date();
+    fromDate.setDate(fromDate.getDate() - safeDays);
+
+    const summary = {
+      pending: this.createSummaryBucket(),
+      unpaid: this.createSummaryBucket(),
+      packing: this.createSummaryBucket(),
+      waitingPickup: this.createSummaryBucket(),
+      delivering: this.createSummaryBucket(),
+      cancelledDelivery: this.createSummaryBucket(),
+    };
+
+    const pageSize = 1000;
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await this.supabase
+        .from('sales_orders')
+        .select('status, payment_status, delivery_status, total_amount')
+        .gte('sold_at', fromDate.toISOString())
+        .range(from, from + pageSize - 1);
+
+      if (error) throw new Error(error.message);
+
+      const rows = data ?? [];
+      rows.forEach((order: any) => {
+        if (order.status === 'draft') {
+          this.addToSummaryBucket(summary.pending, order.total_amount);
+        }
+        if (
+          order.status !== 'cancelled' &&
+          (order.payment_status === 'unpaid' || order.payment_status === 'partial')
+        ) {
+          this.addToSummaryBucket(summary.unpaid, order.total_amount);
+        }
+        if (order.status === 'pending' && order.delivery_status === 'pending_packing') {
+          this.addToSummaryBucket(summary.packing, order.total_amount);
+        }
+        if (order.status === 'pending' && order.delivery_status === 'waiting_pick_up') {
+          this.addToSummaryBucket(summary.waitingPickup, order.total_amount);
+        }
+        if (order.status === 'pending' && order.delivery_status === 'delivering') {
+          this.addToSummaryBucket(summary.delivering, order.total_amount);
+        }
+        if (order.status === 'cancelled' || order.delivery_status === 'cancelled') {
+          this.addToSummaryBucket(summary.cancelledDelivery, order.total_amount);
+        }
+      });
+
+      if (rows.length < pageSize) break;
+    }
+
+    return {
+      days: safeDays,
+      ...summary,
     };
   }
 
@@ -309,5 +413,39 @@ export class SalesOrdersService {
     });
 
     return retailGroup?.id;
+  }
+
+  private parseCsv(value: string) {
+    return value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  private createSummaryBucket() {
+    return {
+      count: 0,
+      total_amount: 0,
+    };
+  }
+
+  private addToSummaryBucket(bucket: { count: number; total_amount: number }, amount: unknown) {
+    bucket.count += 1;
+    bucket.total_amount += Number(amount || 0);
+  }
+
+  private async findCustomerIdsBySearch(search: string) {
+    if (!search) {
+      return [];
+    }
+
+    const { data, error } = await this.supabase
+      .from('customers')
+      .select('id')
+      .or(`full_name.ilike.%${search}%,phone.ilike.%${search}%`)
+      .limit(100);
+
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((customer: any) => customer.id).filter(Boolean);
   }
 }

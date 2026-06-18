@@ -63,12 +63,32 @@ export interface SalesOrdersQuery {
   page?: number;
   limit?: number;
   search?: string;
+  branch_id?: string;
   status?: string;
+  status_in?: string;
   payment_status?: string;
+  payment_status_in?: string;
   delivery_status?: DeliveryStatus;
+  delivery_issue?: 'cancelled_delivery';
   delivery_method?: DeliveryTab;
   from_date?: string;
   to_date?: string;
+  include_items?: boolean;
+}
+
+export interface SalesOrderSummaryBucket {
+  count: number;
+  total_amount: number;
+}
+
+export interface SalesOrdersProcessingSummary {
+  days: number;
+  pending: SalesOrderSummaryBucket;
+  unpaid: SalesOrderSummaryBucket;
+  packing: SalesOrderSummaryBucket;
+  waitingPickup: SalesOrderSummaryBucket;
+  delivering: SalesOrderSummaryBucket;
+  cancelledDelivery: SalesOrderSummaryBucket;
 }
 
 export interface CreateSalesOrderPayload {
@@ -124,6 +144,9 @@ export interface UpdateSalesOrderPayload {
 export const salesOrdersService = {
   getAll: (params?: SalesOrdersQuery) =>
     api.get<PaginatedResult<SalesOrder>>('/sales-orders', params as any),
+
+  getProcessingSummary: (days: number) =>
+    api.get<SalesOrdersProcessingSummary>('/sales-orders/processing-summary', { days }),
 
   getOne: (id: string) =>
     api.get<SalesOrder>(`/sales-orders/${id}`),

@@ -14,14 +14,24 @@ export class SalesOrdersController {
   findAll(
     @Query()
     query: PaginationDto & {
+      branch_id?: string;
       from_date?: string;
       to_date?: string;
       payment_status?: string;
+      payment_status_in?: string;
       delivery_status?: string;
       delivery_method?: string;
+      status_in?: string;
+      delivery_issue?: string;
+      include_items?: string | boolean;
     },
   ) {
     return this.salesOrdersService.findAll(query);
+  }
+
+  @Get('processing-summary')
+  getProcessingSummary(@Query('days') days?: string) {
+    return this.salesOrdersService.getProcessingSummary(Number(days));
   }
 
   @Get(':id')
