@@ -47,6 +47,30 @@ type ProductListItem = Product & {
 
 const PRODUCT_FILTERS_KEY = 'duc-huyen-pos.products.filters';
 
+// ─── Module-level cache ───────────────────────────────────────────────────────
+// Giữ dữ liệu giữa các lần chuyển tab (tránh reload API mỗi lần quay lại)
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 phút
+type ProductsCache = {
+  products: Product[];
+  stockMap: Record<string, ProductStockSummary>;
+  categories: ProductCategory[];
+  brands: Brand[];
+  branches: Branch[];
+  statusFilter: string;
+  timestamp: number;
+};
+let productsCache: ProductsCache | null = null;
+
+function isCacheValid(statusFilter: string): boolean {
+  if (!productsCache) return false;
+  if (productsCache.statusFilter !== statusFilter) return false;
+  return Date.now() - productsCache.timestamp < CACHE_TTL_MS;
+}
+
+export function invalidateProductsCache() {
+  productsCache = null;
+}
+
 function formatNumber(value: number) {
   return value.toLocaleString('vi-VN');
 }
@@ -337,13 +361,25 @@ export function Products() {
     let active = true;
 
     async function loadListData() {
+      // Nếu cache còn hợp lệ → dùng luôn, không gọi API
+      if (isCacheValid(statusFilter)) {
+        setProducts(productsCache!.products);
+        setStockMap(productsCache!.stockMap);
+        setCategories(productsCache!.categories);
+        setBrands(productsCache!.brands);
+        setBranches(productsCache!.branches);
+        setIsListLoading(false);
+        setHasLoadedListData(true);
+        return;
+      }
+
       setIsListLoading(true);
       setListError(null);
 
       try {
         const [productsResponse, stockSummary, categoriesResponse, brandsResponse, branchesResponse] = await Promise.all([
           loadAllProducts({
-            search: debouncedSearchTerm || undefined,
+            // Không truyền search vào API — tìm kiếm sẽ được xử lý client-side
             status: statusFilter === 'all' ? undefined : statusFilter,
           }),
           productsService.getStockSummary(),
@@ -360,6 +396,17 @@ export function Products() {
           acc[item.product_id] = item;
           return acc;
         }, {});
+
+        // Lưu vào cache
+        productsCache = {
+          products: productsResponse,
+          stockMap: nextStockMap,
+          categories: categoriesResponse,
+          brands: brandsResponse,
+          branches: branchesResponse,
+          statusFilter,
+          timestamp: Date.now(),
+        };
 
         setProducts(productsResponse);
         setStockMap(nextStockMap);
@@ -384,7 +431,7 @@ export function Products() {
     return () => {
       active = false;
     };
-  }, [debouncedSearchTerm, statusFilter]);
+  }, [statusFilter]);
 
   useEffect(() => {
     setPage(1);
@@ -433,7 +480,20 @@ export function Products() {
   );
 
   const visibleProducts = useMemo(() => {
+    const keywords = debouncedSearchTerm
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((kw) => kw.toLowerCase());
+
     const filtered = productsData.filter((product) => {
+      // Client-side multi-keyword search: mỗi từ phải khớp trong name / sku / barcode
+      if (keywords.length > 0) {
+        const haystack = `${product.name} ${product.sku ?? ''} ${product.barcode ?? ''}`.toLowerCase();
+        if (!keywords.every((kw) => haystack.includes(kw))) {
+          return false;
+        }
+      }
       if (categoryFilterId !== 'all' && product.product_category_id !== categoryFilterId) {
         return false;
       }
@@ -448,7 +508,7 @@ export function Products() {
       const rightTime = new Date(right.created_at).getTime();
       return sortOrder === 'newest' ? rightTime - leftTime : leftTime - rightTime;
     });
-  }, [brandFilterId, categoryFilterId, productsData, sortOrder]);
+  }, [brandFilterId, categoryFilterId, debouncedSearchTerm, productsData, sortOrder]);
 
   const totalPages = Math.max(1, Math.ceil((visibleProducts.length || 1) / pageSize));
   const safePage = Math.min(page, totalPages);
