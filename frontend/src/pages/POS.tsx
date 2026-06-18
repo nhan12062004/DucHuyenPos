@@ -1853,7 +1853,10 @@ export function POS() {
                             type="number"
                             min={1}
                             value={product.qty}
-                            onFocus={() => setActiveCartProductId(product.id)}
+                            onFocus={(event) => {
+                              setActiveCartProductId(product.id);
+                              event.target.select();
+                            }}
                             onChange={(event) =>
                               updateCartProduct(product.id, 'qty', parseNumber(event.target.value))
                             }
