@@ -987,6 +987,9 @@ export function POS() {
   const [editingOrderId, setEditingOrderId] = useState('');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [productSearchResults, setProductSearchResults] = useState<Product[]>([]);
+  const [productSearchLoading, setProductSearchLoading] = useState(false);
+  const [productSearchError, setProductSearchError] = useState<string | null>(null);
 
   const [stockSummary, setStockSummary] = useState<Record<string, ProductStockSummary>>({});
   const [debtSummary, setDebtSummary] = useState<Record<string, CustomerDebtSummary>>({});
@@ -1185,6 +1188,53 @@ export function POS() {
     return () => window.clearTimeout(timeoutId);
   }, [successMessage]);
 
+  useEffect(() => {
+    const query = productQuery.trim();
+    if (!query) {
+      setProductSearchResults([]);
+      setProductSearchLoading(false);
+      setProductSearchError(null);
+      return;
+    }
+
+    let active = true;
+    setProductSearchLoading(true);
+    setProductSearchError(null);
+
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const result = await productsService.getAll({
+          page: 1,
+          limit: 50,
+          status: 'active',
+          search: query,
+        });
+
+        if (!active) {
+          return;
+        }
+
+        setProductSearchResults(result.data);
+      } catch (searchError: any) {
+        if (!active) {
+          return;
+        }
+
+        setProductSearchResults([]);
+        setProductSearchError(searchError?.message ?? 'Không tìm được sản phẩm.');
+      } finally {
+        if (active) {
+          setProductSearchLoading(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [productQuery]);
+
   const selectedCustomer = customers.find((customer) => customer.id === customerId) ?? null;
   const selectedDebt = selectedCustomer ? debtSummary[selectedCustomer.id] : null;
   const hasCustomer = !!selectedCustomer;
@@ -1202,18 +1252,7 @@ export function POS() {
     );
   });
 
-  const filteredProducts = products.filter((product) => {
-    const query = productQuery.trim().toLowerCase();
-    if (!query) {
-      return true;
-    }
-
-    return (
-      product.name.toLowerCase().includes(query) ||
-      product.sku.toLowerCase().includes(query) ||
-      product.barcode?.toLowerCase().includes(query)
-    );
-  });
+  const filteredProducts = productQuery.trim() ? productSearchResults : products;
 
   const handleCustomerSelect = (customer: Customer) => {
     setCustomerId(customer.id);
@@ -1794,7 +1833,16 @@ export function POS() {
                     <PlusCircle size={16} /> Thêm mới sản phẩm
                   </button>
 
-                  {filteredProducts.length === 0 ? (
+                  {productSearchError ? (
+                    <div className="px-4 py-6 text-center text-[13px] text-red-500">
+                      {productSearchError}
+                    </div>
+                  ) : productSearchLoading ? (
+                    <div className="flex items-center justify-center gap-2 px-4 py-6 text-[13px] text-slate-400">
+                      <Loader2 size={14} className="animate-spin" />
+                      Đang tìm sản phẩm...
+                    </div>
+                  ) : filteredProducts.length === 0 ? (
                     <div className="px-4 py-6 text-center text-[13px] text-slate-400">
                       Không tìm thấy sản phẩm phù hợp
                     </div>
