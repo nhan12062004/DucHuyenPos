@@ -15,6 +15,14 @@ export interface Product {
   unit_name: string;
   image_url?: string;
   description?: string;
+  wholesale_price?: number;
+  weight?: number;
+  weight_unit?: string;
+  tags?: string[];
+  tax_applicable?: boolean;
+  warranty_applicable?: boolean;
+  attributes?: ProductAttribute[];
+  unit_conversions?: ProductUnitConversion[];
   sale_price: number;
   cost_price: number;
   reorder_level: number;
@@ -30,6 +38,30 @@ export interface Product {
   default_branch?: { id: string; name: string; is_default?: boolean } | null;
   branch_stocks?: BranchStock[];
 }
+
+export interface ProductAttribute {
+  name: string;
+  value: string;
+}
+
+export interface ProductUnitConversion {
+  unit_name: string;
+  conversion_rate: number;
+  sale_price?: number;
+  barcode?: string;
+}
+
+export interface ProductInitialInventory {
+  branch_id: string;
+  opening_qty: number;
+  opening_cost: number;
+  reorder_point?: number;
+  max_stock?: number;
+}
+
+export type ProductCreatePayload = Partial<Product> & {
+  initial_inventory?: ProductInitialInventory[];
+};
 
 export interface BranchStock {
   branch_id: string;
@@ -81,7 +113,7 @@ export const productsService = {
   getOne: (id: string) =>
     api.get<Product>(`/products/${id}`),
 
-  create: (dto: Partial<Product>) =>
+  create: (dto: ProductCreatePayload) =>
     api.post<Product>('/products', dto),
 
   update: (id: string, dto: Partial<Product>) =>

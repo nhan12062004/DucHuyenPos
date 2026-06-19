@@ -1,7 +1,7 @@
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../supabase/supabase.constants.js';
-import { CreateProductDto, UpdateProductDto } from './dto/product.dto.js';
+import { CreateProductDto, ProductInitialInventoryDto, UpdateProductDto } from './dto/product.dto.js';
 import { PaginationDto, PaginatedResult } from '../../common/dto/pagination.dto.js';
 import { CODE_PREFIXES, generateNextCode, normalizeManualCode } from '../../common/code-generator.js';
 import { ActivityActor, ActivityLogsService } from '../../common/activity-logs.service.js';
@@ -70,15 +70,16 @@ export class ProductsService {
   }
 
   async create(dto: CreateProductDto, actor?: ActivityActor) {
+    const { initial_inventory: initialInventory = [], ...productDto } = dto;
     const sku =
-      normalizeManualCode(dto.sku) ??
+      normalizeManualCode(productDto.sku) ??
       await generateNextCode(this.supabase, {
         table: 'products',
         column: 'sku',
         prefix: CODE_PREFIXES.product,
       });
 
-    let defaultBranchId = dto.default_branch_id;
+    let defaultBranchId = productDto.default_branch_id;
     if (!defaultBranchId) {
       const { data: defaultBranch, error: defaultBranchError } = await this.supabase
         .from('branches')
@@ -97,7 +98,7 @@ export class ProductsService {
     const { data, error } = await this.supabase
       .from('products')
       .insert({
-        ...dto,
+        ...productDto,
         default_branch_id: defaultBranchId,
         sku,
       })
@@ -105,6 +106,8 @@ export class ProductsService {
       .single();
 
     if (error) throw new Error(error.message);
+
+    await this.createInitialInventory(data.id, Number(data.cost_price ?? 0), initialInventory, actor);
 
     await this.activityLogsService.logActivity({
       actor,
@@ -119,6 +122,65 @@ export class ProductsService {
     });
 
     return data;
+  }
+
+  private async createInitialInventory(
+    productId: string,
+    defaultCost: number,
+    initialInventory: ProductInitialInventoryDto[],
+    actor?: ActivityActor,
+  ) {
+    for (const row of initialInventory) {
+      const openingQty = Number(row.opening_qty ?? 0);
+      const openingCost = Number(row.opening_cost ?? defaultCost ?? 0);
+      const reorderPoint = row.reorder_point === undefined ? null : Number(row.reorder_point);
+      const maxStock = row.max_stock === undefined ? null : Number(row.max_stock);
+      const shouldCreateStock =
+        openingQty > 0 ||
+        openingCost > 0 ||
+        reorderPoint !== null ||
+        maxStock !== null;
+
+      if (!shouldCreateStock) {
+        continue;
+      }
+
+      const { error: stockError } = await this.supabase
+        .from('branch_stocks')
+        .upsert(
+          {
+            branch_id: row.branch_id,
+            product_id: productId,
+            on_hand_qty: openingQty,
+            reserved_qty: 0,
+            average_cost: openingCost,
+            reorder_point: reorderPoint,
+            max_stock: maxStock,
+          },
+          { onConflict: 'branch_id,product_id' },
+        );
+
+      if (stockError) throw new Error(stockError.message);
+
+      if (openingQty <= 0) {
+        continue;
+      }
+
+      const { error: transactionError } = await this.supabase
+        .from('inventory_transactions')
+        .insert({
+          branch_id: row.branch_id,
+          product_id: productId,
+          transaction_type: 'opening',
+          reference_type: 'product_create',
+          quantity: openingQty,
+          unit_cost: openingCost,
+          note: 'Khởi tạo kho khi tạo sản phẩm',
+          created_by: actor?.actorId || null,
+        });
+
+      if (transactionError) throw new Error(transactionError.message);
+    }
   }
 
   async update(id: string, dto: UpdateProductDto, actor?: ActivityActor) {

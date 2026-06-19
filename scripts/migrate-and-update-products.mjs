@@ -119,7 +119,8 @@ ALTER TABLE public.products
   ADD COLUMN IF NOT EXISTS warranty_applicable  boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS warranty_policy  text,
   ADD COLUMN IF NOT EXISTS expiry_warning_days  integer,
-  ADD COLUMN IF NOT EXISTS attributes       jsonb NOT NULL DEFAULT '[]'::jsonb;
+  ADD COLUMN IF NOT EXISTS attributes       jsonb NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS unit_conversions jsonb NOT NULL DEFAULT '[]'::jsonb;
 
 -- Thêm các cột còn thiếu vào bảng branch_stocks
 ALTER TABLE public.branch_stocks

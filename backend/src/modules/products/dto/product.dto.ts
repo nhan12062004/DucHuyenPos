@@ -4,9 +4,65 @@ import {
   IsOptional,
   IsBoolean,
   IsIn,
+  IsArray,
+  IsUUID,
   Min,
   MaxLength,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class ProductAttributeDto {
+  @IsString()
+  @MaxLength(80)
+  name: string = '';
+
+  @IsString()
+  @MaxLength(120)
+  value: string = '';
+}
+
+export class ProductUnitConversionDto {
+  @IsString()
+  @MaxLength(50)
+  unit_name: string = '';
+
+  @IsNumber()
+  @Min(0.0001)
+  conversion_rate: number = 1;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  sale_price?: number = 0;
+
+  @IsOptional()
+  @IsString()
+  barcode?: string;
+}
+
+export class ProductInitialInventoryDto {
+  @IsUUID()
+  branch_id: string = '';
+
+  @IsNumber()
+  @Min(0)
+  opening_qty: number = 0;
+
+  @IsNumber()
+  @Min(0)
+  opening_cost: number = 0;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  reorder_point?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  max_stock?: number;
+}
 
 export class CreateProductDto {
   @IsOptional()
@@ -45,6 +101,51 @@ export class CreateProductDto {
   @IsOptional()
   @IsString()
   image_url?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  wholesale_price?: number = 0;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  weight?: number;
+
+  @IsOptional()
+  @IsString()
+  weight_unit?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
+
+  @IsOptional()
+  @IsBoolean()
+  tax_applicable?: boolean = false;
+
+  @IsOptional()
+  @IsBoolean()
+  warranty_applicable?: boolean = false;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProductAttributeDto)
+  attributes?: ProductAttributeDto[] = [];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProductUnitConversionDto)
+  unit_conversions?: ProductUnitConversionDto[] = [];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProductInitialInventoryDto)
+  initial_inventory?: ProductInitialInventoryDto[] = [];
 
   @IsOptional()
   @IsString()
@@ -109,6 +210,45 @@ export class UpdateProductDto {
   @IsOptional()
   @IsString()
   image_url?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  wholesale_price?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  weight?: number;
+
+  @IsOptional()
+  @IsString()
+  weight_unit?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
+
+  @IsOptional()
+  @IsBoolean()
+  tax_applicable?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  warranty_applicable?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProductAttributeDto)
+  attributes?: ProductAttributeDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProductUnitConversionDto)
+  unit_conversions?: ProductUnitConversionDto[];
 
   @IsOptional()
   @IsString()

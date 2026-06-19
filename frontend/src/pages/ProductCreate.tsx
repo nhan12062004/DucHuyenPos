@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ChevronDown, ImagePlus, Info, Loader2, Plus } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ImagePlus, Info, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   productsService,
   type Brand,
-  type Product,
+  type ProductCreatePayload,
   type ProductCategory,
 } from '../services/productsService';
 import { inventoryService, type Branch } from '../services/inventoryService';
@@ -12,6 +12,28 @@ import { inventoryService, type Branch } from '../services/inventoryService';
 type ToggleProps = {
   checked: boolean;
   onChange: (checked: boolean) => void;
+};
+
+type InventoryDraftRow = {
+  branchId: string;
+  openingQty: string;
+  openingCost: string;
+  reorderPoint: string;
+  maxStock: string;
+};
+
+type AttributeDraftRow = {
+  id: string;
+  name: string;
+  value: string;
+};
+
+type ConversionDraftRow = {
+  id: string;
+  unitName: string;
+  conversionRate: string;
+  salePrice: string;
+  barcode: string;
 };
 
 function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
@@ -68,8 +90,39 @@ function parseMoney(value: string) {
   return Number.isFinite(numeric) ? numeric : 0;
 }
 
+function parseDecimal(value: string) {
+  const compactValue = value.replace(/\s/g, '').trim();
+  const commaIndex = compactValue.lastIndexOf(',');
+  const dotIndex = compactValue.lastIndexOf('.');
+  const decimalIndex = Math.max(commaIndex, dotIndex);
+  const normalizedValue =
+    decimalIndex >= 0
+      ? `${compactValue.slice(0, decimalIndex).replace(/[^\d]/g, '')}.${compactValue
+          .slice(decimalIndex + 1)
+          .replace(/[^\d]/g, '')}`
+      : compactValue.replace(/[^\d]/g, '');
+  const parsed = Number(normalizedValue);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function formatDigits(value: string) {
   return value.replace(/[^\d]/g, '');
+}
+
+function formatDecimal(value: string) {
+  return value.replace(/[^\d,.]/g, '');
+}
+
+function draftId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function blankAttributeRow(): AttributeDraftRow {
+  return { id: draftId(), name: '', value: '' };
+}
+
+function blankConversionRow(): ConversionDraftRow {
+  return { id: draftId(), unitName: '', conversionRate: '', salePrice: '', barcode: '' };
 }
 
 const inputClass =
@@ -100,6 +153,9 @@ export function ProductCreate() {
   const [initInventory, setInitInventory] = useState(false);
   const [attributesEnabled, setAttributesEnabled] = useState(false);
   const [conversionEnabled, setConversionEnabled] = useState(false);
+  const [inventoryRows, setInventoryRows] = useState<InventoryDraftRow[]>([]);
+  const [attributeRows, setAttributeRows] = useState<AttributeDraftRow[]>([blankAttributeRow()]);
+  const [conversionRows, setConversionRows] = useState<ConversionDraftRow[]>([blankConversionRow()]);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const [categories, setCategories] = useState<ProductCategory[]>([]);
@@ -129,6 +185,15 @@ export function ProductCreate() {
         setCategories(categoryList);
         setBrands(brandList);
         setBranches(branchList);
+        setInventoryRows(
+          branchList.map((branch) => ({
+            branchId: branch.id,
+            openingQty: '',
+            openingCost: '',
+            reorderPoint: '',
+            maxStock: '',
+          })),
+        );
       })
       .catch(() => {
         if (mounted) {
@@ -161,6 +226,24 @@ export function ProductCreate() {
     setImagePreview(URL.createObjectURL(file));
   };
 
+  const updateInventoryRow = (branchId: string, patch: Partial<Omit<InventoryDraftRow, 'branchId'>>) => {
+    setInventoryRows((current) =>
+      current.map((row) => (row.branchId === branchId ? { ...row, ...patch } : row)),
+    );
+  };
+
+  const updateAttributeRow = (id: string, patch: Partial<Omit<AttributeDraftRow, 'id'>>) => {
+    setAttributeRows((current) =>
+      current.map((row) => (row.id === id ? { ...row, ...patch } : row)),
+    );
+  };
+
+  const updateConversionRow = (id: string, patch: Partial<Omit<ConversionDraftRow, 'id'>>) => {
+    setConversionRows((current) =>
+      current.map((row) => (row.id === id ? { ...row, ...patch } : row)),
+    );
+  };
+
   const handleSave = async (printBarcode = false) => {
     if (!name.trim()) {
       setError('Vui lòng nhập tên sản phẩm.');
@@ -171,6 +254,46 @@ export function ProductCreate() {
     setError(null);
 
     try {
+      const cleanTags = tags
+        .split(/[,;|\n]/)
+        .map((tag) => tag.trim())
+        .filter(Boolean);
+      const cleanAttributes = attributesEnabled
+        ? attributeRows
+            .map((row) => ({ name: row.name.trim(), value: row.value.trim() }))
+            .filter((row) => row.name && row.value)
+        : [];
+      const cleanConversions = conversionEnabled
+        ? conversionRows
+            .map((row) => ({
+              unit_name: row.unitName.trim(),
+              conversion_rate: parseDecimal(row.conversionRate),
+              sale_price: parseMoney(row.salePrice),
+              barcode: row.barcode.trim() || undefined,
+            }))
+            .filter((row) => row.unit_name && row.conversion_rate > 0)
+        : [];
+      const initialInventory = initInventory
+        ? inventoryRows
+            .map((row) => ({
+              branch_id: row.branchId,
+              opening_qty: parseDecimal(row.openingQty),
+              opening_cost: parseMoney(row.openingCost),
+              reorder_point: row.reorderPoint ? parseDecimal(row.reorderPoint) : undefined,
+              max_stock: row.maxStock ? parseDecimal(row.maxStock) : undefined,
+            }))
+            .filter(
+              (row) =>
+                row.opening_qty > 0 ||
+                row.opening_cost > 0 ||
+                row.reorder_point !== undefined ||
+                row.max_stock !== undefined,
+            )
+        : [];
+      const reorderLevel = initialInventory.reduce(
+        (max, row) => Math.max(max, Number(row.reorder_point ?? 0)),
+        0,
+      );
       const descriptionParts = [
         description.trim(),
         weight.trim() ? `Khối lượng: ${weight.trim()}${weightUnit}` : '',
@@ -191,13 +314,22 @@ export function ProductCreate() {
         brand_id: brandId || undefined,
         default_branch_id: defaultBranch?.id,
         description: descriptionParts.join('\n') || undefined,
+        wholesale_price: parseMoney(wholesalePrice),
+        weight: weight.trim() ? parseDecimal(weight) : undefined,
+        weight_unit: weight.trim() ? weightUnit : undefined,
+        tags: cleanTags.length ? cleanTags : undefined,
+        tax_applicable: applyTax,
+        warranty_applicable: applyWarranty,
+        attributes: cleanAttributes,
+        unit_conversions: cleanConversions,
+        initial_inventory: initialInventory,
         sale_price: parseMoney(salePrice),
         cost_price: parseMoney(costPrice),
-        reorder_level: 0,
+        reorder_level: reorderLevel,
         track_inventory: true,
         allow_negative_stock: false,
         status: allowSale ? 'active' : 'inactive',
-      } satisfies Partial<Product>);
+      } satisfies ProductCreatePayload);
 
       navigate('/products', {
         state: {
@@ -407,8 +539,68 @@ export function ProductCreate() {
               Ghi nhận số lượng Tồn kho ban đầu và Giá vốn của sản phẩm tại các Chi nhánh
             </p>
             {initInventory ? (
-              <div className="mt-4 border border-slate-200 bg-slate-50 px-4 py-3 text-[13px] text-slate-600">
-                Chi nhánh mặc định: {defaultBranch?.name ?? 'Chưa có chi nhánh'}
+              <div className="mt-4 overflow-x-auto border border-slate-200">
+                <table className="w-full min-w-[720px] text-left text-[13px]">
+                  <thead className="bg-slate-50 text-[#415166]">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">Chi nhánh</th>
+                      <th className="w-32 px-3 py-2 text-right font-medium">Tồn ban đầu</th>
+                      <th className="w-36 px-3 py-2 text-right font-medium">Giá vốn</th>
+                      <th className="w-32 px-3 py-2 text-right font-medium">Tồn tối thiểu</th>
+                      <th className="w-32 px-3 py-2 text-right font-medium">Tồn tối đa</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {inventoryRows.map((row) => {
+                      const branch = branches.find((item) => item.id === row.branchId);
+
+                      return (
+                        <tr key={row.branchId}>
+                          <td className="px-3 py-2 font-medium text-[#182537]">
+                            {branch?.name ?? 'Chi nhánh'}
+                            {branch?.is_default ? <span className="ml-2 text-[12px] text-[#0088FF]">Mặc định</span> : null}
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              value={row.openingQty}
+                              onChange={(event) =>
+                                updateInventoryRow(row.branchId, { openingQty: formatDecimal(event.target.value) })
+                              }
+                              className={`${inputClass} text-right`}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              value={row.openingCost}
+                              onChange={(event) =>
+                                updateInventoryRow(row.branchId, { openingCost: formatDigits(event.target.value) })
+                              }
+                              className={`${inputClass} text-right`}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              value={row.reorderPoint}
+                              onChange={(event) =>
+                                updateInventoryRow(row.branchId, { reorderPoint: formatDecimal(event.target.value) })
+                              }
+                              className={`${inputClass} text-right`}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              value={row.maxStock}
+                              onChange={(event) =>
+                                updateInventoryRow(row.branchId, { maxStock: formatDecimal(event.target.value) })
+                              }
+                              className={`${inputClass} text-right`}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             ) : null}
           </Panel>
@@ -422,6 +614,45 @@ export function ProductCreate() {
             <p className="mt-3 text-[13px] text-[#415166]">
               Thêm mới thuộc tính giúp sản phẩm có nhiều lựa chọn, như kích cỡ hay màu sắc
             </p>
+            {attributesEnabled ? (
+              <div className="mt-4 space-y-3">
+                {attributeRows.map((row) => (
+                  <div key={row.id} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_32px]">
+                    <input
+                      value={row.name}
+                      onChange={(event) => updateAttributeRow(row.id, { name: event.target.value })}
+                      placeholder="Tên thuộc tính"
+                      className={inputClass}
+                    />
+                    <input
+                      value={row.value}
+                      onChange={(event) => updateAttributeRow(row.id, { value: event.target.value })}
+                      placeholder="Giá trị"
+                      className={inputClass}
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAttributeRows((current) =>
+                          current.length > 1 ? current.filter((item) => item.id !== row.id) : [blankAttributeRow()],
+                        )
+                      }
+                      className="flex h-8 items-center justify-center border border-slate-300 text-slate-500 hover:border-red-300 hover:text-red-500"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setAttributeRows((current) => [...current, blankAttributeRow()])}
+                  className="flex items-center gap-2 text-[13px] font-medium text-[#0088FF] hover:underline"
+                >
+                  <Plus size={14} />
+                  Thêm thuộc tính
+                </button>
+              </div>
+            ) : null}
           </Panel>
 
           <Panel title="Thêm đơn vị quy đổi">
@@ -431,6 +662,67 @@ export function ProductCreate() {
               <Toggle checked={conversionEnabled} onChange={setConversionEnabled} />
             </div>
             <p className="mt-3 text-[13px] text-[#415166]">Tạo và quy đổi các đơn vị tính khác nhau</p>
+            {conversionEnabled ? (
+              <div className="mt-4 space-y-3">
+                <div className="grid gap-3 text-[12px] font-medium text-[#415166] md:grid-cols-[minmax(0,1fr)_120px_140px_minmax(0,1fr)_32px]">
+                  <span>Đơn vị quy đổi</span>
+                  <span className="text-right">Quy đổi</span>
+                  <span className="text-right">Giá bán</span>
+                  <span>Barcode</span>
+                  <span />
+                </div>
+                {conversionRows.map((row) => (
+                  <div key={row.id} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_120px_140px_minmax(0,1fr)_32px]">
+                    <input
+                      value={row.unitName}
+                      onChange={(event) => updateConversionRow(row.id, { unitName: event.target.value })}
+                      placeholder="VD: thùng, hộp"
+                      className={inputClass}
+                    />
+                    <input
+                      value={row.conversionRate}
+                      onChange={(event) =>
+                        updateConversionRow(row.id, { conversionRate: formatDecimal(event.target.value) })
+                      }
+                      placeholder="VD: 12"
+                      className={`${inputClass} text-right`}
+                    />
+                    <input
+                      value={row.salePrice}
+                      onChange={(event) => updateConversionRow(row.id, { salePrice: formatDigits(event.target.value) })}
+                      className={`${inputClass} text-right`}
+                    />
+                    <input
+                      value={row.barcode}
+                      onChange={(event) => updateConversionRow(row.id, { barcode: event.target.value })}
+                      className={inputClass}
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setConversionRows((current) =>
+                          current.length > 1 ? current.filter((item) => item.id !== row.id) : [blankConversionRow()],
+                        )
+                      }
+                      className="flex h-8 items-center justify-center border border-slate-300 text-slate-500 hover:border-red-300 hover:text-red-500"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                ))}
+                <div className="text-[12px] text-slate-500">
+                  Tỷ lệ quy đổi tính theo đơn vị cơ bản: 1 đơn vị quy đổi = số lượng đơn vị cơ bản đã nhập.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setConversionRows((current) => [...current, blankConversionRow()])}
+                  className="flex items-center gap-2 text-[13px] font-medium text-[#0088FF] hover:underline"
+                >
+                  <Plus size={14} />
+                  Thêm đơn vị quy đổi
+                </button>
+              </div>
+            ) : null}
           </Panel>
 
           <div className="flex justify-end gap-3 bg-[#F4F6F8] py-2">
