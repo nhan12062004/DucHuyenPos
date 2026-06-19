@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, ChevronDown, Loader2 } from 'lucide-react';
 import { productsService, type Product, type ProductCategory } from '../services/productsService';
+import { ToastBridge } from './Toast';
 
 interface AddProductModalProps {
   open: boolean;
@@ -109,6 +110,8 @@ export function AddProductModal({ open, onClose, onCreated }: AddProductModalPro
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-[2px]"
     >
       <div className="relative flex max-h-[90vh] w-full max-w-[700px] flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
+        <ToastBridge message={formError} variant="error" onDone={() => setFormError(null)} />
+
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-4">
           <h2 className="text-[16px] font-semibold text-slate-800">Thêm nhanh sản phẩm</h2>
@@ -123,12 +126,6 @@ export function AddProductModal({ open, onClose, onCreated }: AddProductModalPro
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-5 py-5">
-          {formError && (
-            <div className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-600">
-              {formError}
-            </div>
-          )}
-
           {/* Row 1 */}
           <div className="mb-4">
             <label className={labelCls}>

@@ -12,6 +12,7 @@ import { inventoryService, type Branch } from '../services/inventoryService';
 import { productsService, type Product } from '../services/productsService';
 import { purchaseOrdersService, type PurchaseOrder } from '../services/purchaseOrdersService';
 import { suppliersService, type Supplier } from '../services/suppliersService';
+import { ToastBridge } from '../components/Toast';
 
 type ImportLine = {
   product: Product;
@@ -186,19 +187,10 @@ export function PurchaseImport() {
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <ToastBridge message={infoMessage} onDone={() => setInfoMessage(null)} />
+      <ToastBridge message={error} variant="error" onDone={() => setError(null)} />
+
       <div className="space-y-4">
-        {infoMessage ? (
-          <div className="rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-            {infoMessage}
-          </div>
-        ) : null}
-
-        {error ? (
-          <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-            {error}
-          </div>
-        ) : null}
-
         <section className="border border-slate-200 bg-white">
           <div className="border-b border-slate-200 px-5 py-4">
             <h2 className="text-[16px] font-semibold text-[#182537]">Chi tiết phiếu nhập</h2>

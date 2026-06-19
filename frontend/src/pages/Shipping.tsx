@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PageLoader } from '../components/PageLoader';
+import { ToastBridge } from '../components/Toast';
 import { salesOrdersService, type SalesOrder } from '../services/salesOrdersService';
 import {
   DELIVERY_STATUSES,
@@ -275,6 +276,9 @@ export function Shipping() {
 
   return (
     <div className="page-shell page-stack">
+      <ToastBridge message={infoMessage} variant="success" onDone={() => setInfoMessage('')} />
+      <ToastBridge message={error} variant="error" onDone={() => setError('')} />
+
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-[#182537]">Quản lý vận chuyển</h1>
@@ -288,9 +292,6 @@ export function Shipping() {
           <RefreshCcw size={15} /> Tải lại
         </button>
       </div>
-
-      {error ? <div className="border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-600">{error}</div> : null}
-      {infoMessage ? <div className="border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-700">{infoMessage}</div> : null}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
         <div className="ui-card p-4">

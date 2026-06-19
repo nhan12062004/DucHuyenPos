@@ -28,6 +28,7 @@ const Settings = () => <div className="p-8"><h2 className="text-xl font-bold">Cá
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Login } from './pages/Login';
 import { PageLoader } from './components/PageLoader';
+import { ToastProvider } from './components/Toast';
 
 const INITIAL_SIDEBAR_WIDTH = 236;
 const APP_FONT_FAMILY = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
@@ -144,9 +145,11 @@ function AppRoutes() {
 export default function App() {
   return (
     <div className="square-ui">
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </ToastProvider>
     </div>
   );
 }

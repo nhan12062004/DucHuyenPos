@@ -16,6 +16,7 @@ import {
   type BranchStock,
 } from '../services/inventoryService';
 import { PageLoader } from '../components/PageLoader';
+import { ToastBridge } from '../components/Toast';
 
 type InventoryRouteState = {
   branchId?: string;
@@ -183,6 +184,9 @@ export function Inventory() {
 
   return (
     <div className="flex flex-col gap-4">
+      <ToastBridge message={infoMessage} onDone={() => setInfoMessage(null)} />
+      <ToastBridge message={error} variant="error" onDone={() => setError(null)} />
+
       {showCheckModal ? (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/45 px-4 pt-10">
           <div className="flex max-h-[90vh] w-full max-w-[920px] flex-col bg-white shadow-2xl">
@@ -266,18 +270,6 @@ export function Inventory() {
               </button>
             </div>
           </div>
-        </div>
-      ) : null}
-
-      {infoMessage ? (
-        <div className="rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-          {infoMessage}
-        </div>
-      ) : null}
-
-      {error ? (
-        <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-          {error}
         </div>
       ) : null}
 

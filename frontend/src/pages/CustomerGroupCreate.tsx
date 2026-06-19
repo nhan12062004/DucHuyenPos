@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { customersService } from '../services/customersService';
+import { ToastBridge } from '../components/Toast';
 
 type GroupType = 'fixed' | 'dynamic';
 type ConditionId = 'profile' | 'purchase' | 'points';
@@ -97,6 +98,8 @@ export function CustomerGroupCreate() {
 
   return (
     <div className="min-h-full bg-[#F5F6F8]">
+      <ToastBridge message={error} variant="error" onDone={() => setError(null)} />
+
       <div className="sticky top-0 z-20 flex h-[56px] items-center justify-between border-b border-slate-200 bg-white px-6 shadow-sm">
         <button
           type="button"
@@ -127,12 +130,6 @@ export function CustomerGroupCreate() {
       </div>
 
       <div className="px-6 py-5">
-        {error ? (
-          <div className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-            {error}
-          </div>
-        ) : null}
-
         {isFixedGroup ? (
           <div className="grid gap-4 xl:grid-cols-[minmax(520px,1fr)_minmax(480px,1fr)]">
             <div className="flex flex-col gap-4">

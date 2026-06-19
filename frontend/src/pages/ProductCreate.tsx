@@ -8,6 +8,7 @@ import {
   type ProductCategory,
 } from '../services/productsService';
 import { inventoryService, type Branch } from '../services/inventoryService';
+import { ToastBridge } from '../components/Toast';
 
 type ToggleProps = {
   checked: boolean;
@@ -348,6 +349,8 @@ export function ProductCreate() {
 
   return (
     <div className="min-h-full bg-[#F4F6F8] pb-6 text-[#182537]">
+      <ToastBridge message={error} variant="error" onDone={() => setError(null)} />
+
       <div className="sticky top-0 z-30 flex h-[52px] items-center justify-between border-b border-slate-200 bg-white px-6 shadow-sm">
         <button
           type="button"
@@ -388,12 +391,6 @@ export function ProductCreate() {
 
       <div className="mx-auto grid max-w-[1120px] gap-4 px-6 py-5 xl:grid-cols-[minmax(0,1fr)_330px]">
         <div className="space-y-4">
-          {error ? (
-            <div className="border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-600">
-              {error}
-            </div>
-          ) : null}
-
           <Panel
             title="Hình thức quản lý"
             action={

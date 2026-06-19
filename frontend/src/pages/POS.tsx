@@ -37,6 +37,7 @@ import { useAuth } from '../context/AuthContext';
 import { cn } from '../utils/cn';
 import { getDeliveryStatusFromTab, parseLegacyDeliveryTab } from '../utils/delivery';
 import { AddProductModal } from '../components/AddProductModal';
+import { ToastBridge } from '../components/Toast';
 
 type CartProduct = {
   id: string;
@@ -628,6 +629,8 @@ function AddCustomerModal({ open, onClose, onCreated }: AddCustomerModalProps) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px]"
     >
       <div className="relative flex max-h-[90vh] w-full max-w-[560px] flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
+        <ToastBridge message={formError} variant="error" onDone={() => setFormError(null)} />
+
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-4">
           <h2 className="text-[15px] font-semibold text-slate-800">Thêm mới khách hàng</h2>
@@ -642,12 +645,6 @@ function AddCustomerModal({ open, onClose, onCreated }: AddCustomerModalProps) {
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          {formError && (
-            <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-600">
-              {formError}
-            </div>
-          )}
-
           {/* Row 1: Name + Phone */}
           <div className="mb-4 grid grid-cols-2 gap-4">
             <div>
@@ -1440,7 +1437,9 @@ export function POS() {
 
   return (
     <>
-      {successMessage ? (
+      <ToastBridge message={successMessage} variant="success" onDone={() => setSuccessMessage(null)} />
+      <ToastBridge message={error} variant="error" onDone={() => setError(null)} />
+      {false && successMessage ? (
         <div className="fixed right-5 top-5 z-[70] flex max-w-[360px] items-start gap-3 border border-emerald-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-xl shadow-slate-200/80">
           <CheckCircle size={18} className="mt-0.5 shrink-0 text-emerald-500" />
           <div className="font-medium">{successMessage}</div>
@@ -1456,7 +1455,7 @@ export function POS() {
       ) : null}
       <div className="min-h-full bg-[#F4F6F8] pb-20 font-sans text-sm">
       <div className="mx-auto max-w-[1400px] space-y-6 p-4 md:p-6">
-        {error ? (
+        {false && error ? (
           <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
             {error}
           </div>

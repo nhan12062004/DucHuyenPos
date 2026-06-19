@@ -22,6 +22,7 @@ import {
   type CustomerGroup,
 } from '../services/customersService';
 import { PageLoader } from '../components/PageLoader';
+import { ToastBridge } from '../components/Toast';
 import {
   salesOrdersService,
   type SalesOrder,
@@ -698,6 +699,9 @@ export function Customers() {
 
     return (
       <div className="flex flex-col gap-4">
+        <ToastBridge message={infoMessage} onDone={() => setInfoMessage(null)} />
+        <ToastBridge message={detailError} variant="error" onDone={() => setDetailError(null)} />
+
         <div className="flex flex-wrap items-center justify-between gap-4">
           <button
             onClick={() => setSelectedCustomerId(null)}
@@ -730,13 +734,13 @@ export function Customers() {
         </div>
 
         <div className="flex flex-col gap-5">
-          {infoMessage ? (
+          {false && infoMessage ? (
             <div className="mb-4 rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
               {infoMessage}
             </div>
           ) : null}
 
-          {detailError ? (
+          {false && detailError ? (
             <div className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
               {detailError}
             </div>
@@ -1047,6 +1051,9 @@ export function Customers() {
 
   return (
     <div className="customer-list-page -mx-2 -my-2 flex min-h-[calc(100vh-64px)] flex-col bg-[#f3f5f7] text-[13px]">
+      <ToastBridge message={infoMessage} onDone={() => setInfoMessage(null)} />
+      <ToastBridge message={listError} variant="error" onDone={() => setListError(null)} />
+
       {showExportModal ? (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/45 px-4 pt-20">
           <div className="w-full max-w-[460px] bg-white shadow-2xl">
@@ -1146,13 +1153,13 @@ export function Customers() {
       </div>
 
       <div className="flex flex-col gap-3 px-3 py-2">
-      {infoMessage ? (
+      {false && infoMessage ? (
         <div className="rounded-[3px] border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-700">
           {infoMessage}
         </div>
       ) : null}
 
-      {listError ? (
+      {false && listError ? (
         <div className="rounded-[3px] border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600">
           {listError}
         </div>

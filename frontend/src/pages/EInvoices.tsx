@@ -9,6 +9,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { PageLoader } from '../components/PageLoader';
+import { ToastBridge } from '../components/Toast';
 import { invoicesService, type Invoice, type InvoiceStatus } from '../services/invoicesService';
 import { salesOrdersService, type SalesOrder } from '../services/salesOrdersService';
 
@@ -197,17 +198,8 @@ export function EInvoices() {
 
   return (
     <div className="flex flex-col gap-4">
-      {infoMessage ? (
-        <div className="rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-          {infoMessage}
-        </div>
-      ) : null}
-
-      {error ? (
-        <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-          {error}
-        </div>
-      ) : null}
+      <ToastBridge message={infoMessage} onDone={() => setInfoMessage(null)} />
+      <ToastBridge message={error} variant="error" onDone={() => setError(null)} />
 
       <div className="grid gap-4 lg:grid-cols-4">
         <div className="border border-slate-200 bg-white p-4">

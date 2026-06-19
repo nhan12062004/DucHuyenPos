@@ -7,6 +7,7 @@ import {
   type CustomerDebtSummary,
 } from '../services/customersService';
 import { PageLoader } from '../components/PageLoader';
+import { ToastBridge } from '../components/Toast';
 
 type DebtsRouteState = {
   searchTerm?: string;
@@ -132,20 +133,11 @@ export function Debts() {
 
   return (
     <div className="flex flex-col md:flex-row gap-6">
+      <ToastBridge message={infoMessage} onDone={() => setInfoMessage(null)} />
+      <ToastBridge message={error} variant="error" onDone={() => setError(null)} />
+
       <div className="flex-1 ui-card overflow-hidden flex flex-col">
         <div className="p-5 border-b border-slate-100 shrink-0 bg-white">
-          {infoMessage ? (
-            <div className="mb-4 rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-              {infoMessage}
-            </div>
-          ) : null}
-
-          {error ? (
-            <div className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-              {error}
-            </div>
-          ) : null}
-
           <div className="flex flex-wrap justify-between items-center gap-4">
             <h2 className="text-lg font-bold text-slate-800">Danh sách khách nợ</h2>
             <div className="relative w-full max-w-sm">

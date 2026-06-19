@@ -27,6 +27,7 @@ import {
 } from '../services/productsService';
 import { inventoryService, type Branch } from '../services/inventoryService';
 import { PageLoader } from '../components/PageLoader';
+import { ToastBridge } from '../components/Toast';
 import { exportRowsToXlsx } from '../utils/excel';
 import { invalidatePosCache } from './POS';
 
@@ -918,14 +919,17 @@ export function Products() {
 
     return (
       <div className="-mx-6 -my-6 flex min-h-full flex-col bg-[#f3f4f6] lg:-mx-7 xl:-mx-8">
+        <ToastBridge message={infoMessage} onDone={() => setInfoMessage(null)} />
+        <ToastBridge message={detailError} variant="error" onDone={() => setDetailError(null)} />
+
         <div className="custom-scrollbar flex-1 overflow-auto px-6 pb-20 pt-4 lg:px-7 xl:px-8">
-          {infoMessage ? (
+          {false && infoMessage ? (
             <div className="mb-4 rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
               {infoMessage}
             </div>
           ) : null}
 
-          {detailError ? (
+          {false && detailError ? (
             <div className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
               {detailError}
             </div>
@@ -1178,6 +1182,9 @@ export function Products() {
 
   return (
     <div className="flex flex-col gap-4">
+      <ToastBridge message={infoMessage} onDone={() => setInfoMessage(null)} />
+      <ToastBridge message={listError} variant="error" onDone={() => setListError(null)} />
+
       {showExportModal ? (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/45 px-4 pt-20">
           <div className="w-full max-w-[460px] bg-white shadow-2xl">
@@ -1299,13 +1306,13 @@ export function Products() {
       </div>
 
       <div className="flex flex-col gap-5">
-        {infoMessage ? (
+        {false && infoMessage ? (
           <div className="rounded-lg border border-blue-200 bg-blue-50 px-5 py-4 text-sm text-blue-700">
             {infoMessage}
           </div>
         ) : null}
 
-        {listError ? (
+        {false && listError ? (
           <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-600">
             {listError}
           </div>

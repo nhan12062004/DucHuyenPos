@@ -8,6 +8,7 @@ import {
 } from '../services/customersService';
 import { PageLoader } from '../components/PageLoader';
 import { CustomerGroupTypeModal } from '../components/CustomerGroupTypeModal';
+import { ToastBridge } from '../components/Toast';
 
 type GroupRow = CustomerGroup & {
   count: number;
@@ -168,6 +169,8 @@ export function CustomerGroups() {
 
   return (
     <div className="flex flex-col gap-4">
+      <ToastBridge message={error} variant="error" onDone={() => setError(null)} />
+
       <div className="flex justify-end">
         <button
           type="button"
@@ -179,12 +182,6 @@ export function CustomerGroups() {
       </div>
 
       <div className="ui-card overflow-hidden">
-        {error ? (
-          <div className="border-b border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
-            {error}
-          </div>
-        ) : null}
-
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>

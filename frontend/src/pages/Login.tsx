@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Logo } from '../components/Logo';
-import { ArrowLeft, CheckCircle2, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { ToastBridge } from '../components/Toast';
 
 type AuthMode = 'login' | 'register' | 'forgot' | 'check-email';
 
@@ -91,13 +92,9 @@ export function Login() {
     </div>
   );
 
-  const ErrorAlert = () =>
-    error ? (
-      <div className="flex items-start gap-2 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-        <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-        <span>{error}</span>
-      </div>
-    ) : null;
+  const ErrorAlert = () => (
+    <ToastBridge message={error} variant="error" onDone={() => setError(null)} />
+  );
 
   // ─── Kiểm tra email ─────────────────────────────────────────────────────────
   if (mode === 'check-email') {

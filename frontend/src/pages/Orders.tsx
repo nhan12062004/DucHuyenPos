@@ -33,6 +33,7 @@ import {
 import { productsService, type Product } from '../services/productsService';
 import { inventoryService, type Branch } from '../services/inventoryService';
 import { PageLoader } from '../components/PageLoader';
+import { ToastBridge } from '../components/Toast';
 import { getDeliveryLabel, getDeliveryStatusFromTab, parseLegacyDeliveryTab } from '../utils/delivery';
 import { exportRowsToXlsx } from '../utils/excel';
 
@@ -1145,7 +1146,10 @@ export function Orders() {
 
     return (
       <div className="flex flex-col gap-4">
-        {infoMessage ? (
+        <ToastBridge message={infoMessage} onDone={() => setInfoMessage(null)} />
+        <ToastBridge message={detailError} variant="error" onDone={() => setDetailError(null)} />
+
+        {false && infoMessage ? (
           <div className="fixed right-5 top-5 z-[70] flex max-w-[380px] items-start gap-3 border border-blue-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-xl shadow-slate-200/80">
             <CheckCircle size={18} className="mt-0.5 shrink-0 text-emerald-500" />
             <div className="font-medium">{infoMessage}</div>
@@ -1190,7 +1194,7 @@ export function Orders() {
         </div>
 
         <div className="flex flex-col gap-5">
-          {detailError ? (
+          {false && detailError ? (
             <div className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
               {detailError}
             </div>
@@ -1627,7 +1631,10 @@ export function Orders() {
 
   return (
     <div className="flex flex-col gap-4">
-      {infoMessage ? (
+      <ToastBridge message={infoMessage} onDone={() => setInfoMessage(null)} />
+      <ToastBridge message={listError} variant="error" onDone={() => setListError(null)} />
+
+      {false && infoMessage ? (
         <div className="fixed right-5 top-5 z-[70] flex max-w-[380px] items-start gap-3 border border-blue-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-xl shadow-slate-200/80">
           <CheckCircle size={18} className="mt-0.5 shrink-0 text-emerald-500" />
           <div className="font-medium">{infoMessage}</div>
@@ -1781,7 +1788,7 @@ export function Orders() {
       </div>
 
       <div className="flex flex-col gap-5">
-        {listError ? (
+        {false && listError ? (
           <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-600">
             {listError}
           </div>
