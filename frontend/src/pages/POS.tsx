@@ -131,6 +131,33 @@ function parseNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function formatQuantity(value: number) {
+  return value.toLocaleString('vi-VN', {
+    maximumFractionDigits: 2,
+  });
+}
+
+function parseQuantity(value: string) {
+  const compactValue = value.replace(/\s/g, '').trim();
+  const commaIndex = compactValue.lastIndexOf(',');
+  const dotIndex = compactValue.lastIndexOf('.');
+  const decimalIndex = Math.max(commaIndex, dotIndex);
+
+  const normalizedValue =
+    decimalIndex >= 0
+      ? `${compactValue.slice(0, decimalIndex).replace(/[^\d]/g, '')}.${compactValue
+          .slice(decimalIndex + 1)
+          .replace(/[^\d]/g, '')}`
+      : compactValue.replace(/[^\d]/g, '');
+
+  const parsed = Number(normalizedValue);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeQuantity(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
 function MoneyInput({
   value,
   onChange,
@@ -174,6 +201,52 @@ function MoneyInput({
       onBlur={() => {
         setIsFocused(false);
         setDraftValue(formatNumber(parseNumber(draftValue)));
+      }}
+      className={className}
+    />
+  );
+}
+
+function QuantityInput({
+  value,
+  onChange,
+  className,
+  onFocus,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  className?: string;
+  onFocus?: () => void;
+}) {
+  const [draftValue, setDraftValue] = useState(formatQuantity(value));
+  const [isFocused, setIsFocused] = useState(false);
+
+  useEffect(() => {
+    if (!isFocused) {
+      setDraftValue(formatQuantity(value));
+    }
+  }, [isFocused, value]);
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={draftValue}
+      onFocus={(event) => {
+        setIsFocused(true);
+        onFocus?.();
+        event.currentTarget.select();
+      }}
+      onChange={(event) => {
+        const nextDraft = event.target.value.replace(/[^\d,.]/g, '');
+        setDraftValue(nextDraft);
+        onChange(parseQuantity(nextDraft));
+      }}
+      onBlur={() => {
+        const nextValue = Math.max(0.01, normalizeQuantity(parseQuantity(draftValue)));
+        setIsFocused(false);
+        setDraftValue(formatQuantity(nextValue));
+        onChange(nextValue);
       }}
       className={className}
     />
@@ -1190,7 +1263,7 @@ export function POS() {
         }
 
         if (field === 'qty') {
-          return { ...item, qty: Math.max(1, value) };
+          return { ...item, qty: Math.max(0.01, value) };
         }
 
         return { ...item, [field]: Math.max(0, value) };
@@ -1886,7 +1959,7 @@ export function POS() {
                           <div className="text-[12px] text-blue-500">{product.code}</div>
                         </td>
                         <td className={cn('px-2 py-4 text-center', isActive && 'border-y border-blue-400')}>
-                          <MoneyInput
+                          <QuantityInput
                             value={product.qty}
                             onFocus={() => setActiveCartProductId(product.id)}
                             onChange={(value) => updateCartProduct(product.id, 'qty', value)}
