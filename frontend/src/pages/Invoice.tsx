@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Printer } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Logo } from '../components/Logo';
@@ -8,10 +8,15 @@ import { salesOrdersService, type SalesOrder } from '../services/salesOrdersServ
 const STORE_NAME = 'Vật tư Điện Nước Đức Huyền';
 const STORE_ADDRESS = '277 Nguyễn Thị Duệ, Việt Hòa, TP. Hải Phòng';
 const STORE_PHONE = '0989 245 272 - 0904 538 786';
-const SINGLE_PAGE_ITEM_LIMIT = 10;
-const FIRST_PAGE_ITEM_LIMIT = 16;
-const CONTINUATION_PAGE_ITEM_LIMIT = 16;
-const LAST_PAGE_ITEM_LIMIT = 12;
+
+type InvoiceItem = NonNullable<SalesOrder['sales_order_items']>[number];
+
+interface InvoicePage {
+  items: InvoiceItem[];
+  startIndex: number;
+  showHeader: boolean;
+  showSummary: boolean;
+}
 
 function formatCurrency(value: number) {
   return value.toLocaleString('vi-VN');
@@ -42,15 +47,25 @@ function getPdfFileName(invoiceNo: string) {
   return `Hoa_don_${safeInvoiceNo}`;
 }
 
+function getOuterHeight(element: Element | null) {
+  if (!element) return 0;
+
+  const rect = element.getBoundingClientRect();
+  const styles = window.getComputedStyle(element);
+  return rect.height + parseFloat(styles.marginTop || '0') + parseFloat(styles.marginBottom || '0');
+}
+
 export function Invoice() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get('orderId');
   const shouldAutoPrint = searchParams.get('autoPrint') === '1';
   const hasAutoPrintedRef = useRef(false);
+  const measureRef = useRef<HTMLDivElement>(null);
   const [order, setOrder] = useState<SalesOrder | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [invoicePages, setInvoicePages] = useState<InvoicePage[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -91,51 +106,103 @@ export function Invoice() {
   const paidAmount = Number(order?.paid_amount ?? 0);
   const debtAmount = useMemo(() => Math.max(0, totalAmount - paidAmount), [paidAmount, totalAmount]);
   const invoiceNo = order?.invoice_no ?? order?.order_no ?? '---';
-  const invoicePages = useMemo(() => {
+  const fallbackInvoicePages = useMemo<InvoicePage[]>(() => {
     if (!items.length) {
       return [{ items: [], startIndex: 0, showHeader: true, showSummary: true }];
     }
 
-    if (items.length <= SINGLE_PAGE_ITEM_LIMIT) {
-      return [{ items, startIndex: 0, showHeader: true, showSummary: true }];
+    return [{ items, startIndex: 0, showHeader: true, showSummary: true }];
+  }, [items]);
+
+  useLayoutEffect(() => {
+    if (!order) return;
+
+    const measure = measureRef.current;
+    if (!measure) {
+      setInvoicePages(fallbackInvoicePages);
+      return;
     }
 
-    const pages: Array<{
-      items: typeof items;
-      startIndex: number;
-      showHeader: boolean;
-      showSummary: boolean;
-    }> = [];
+    if (!items.length) {
+      setInvoicePages(fallbackInvoicePages);
+      return;
+    }
+
+    const paper = measure.querySelector<HTMLElement>('[data-measure="paper"]');
+    const paperStyles = paper ? window.getComputedStyle(paper) : null;
+    const paperHeight = paperStyles ? parseFloat(paperStyles.minHeight || '0') : 0;
+    const paddingTop = paperStyles ? parseFloat(paperStyles.paddingTop || '0') : 0;
+    const paddingBottom = paperStyles ? parseFloat(paperStyles.paddingBottom || '0') : 0;
+    const availableHeight = Math.max(0, paperHeight - paddingTop - paddingBottom);
+
+    const firstHeaderHeight = getOuterHeight(measure.querySelector('[data-measure="first-header"]'));
+    const continuationHeaderHeight = getOuterHeight(measure.querySelector('[data-measure="continuation-header"]'));
+    const orderHeaderHeight = getOuterHeight(measure.querySelector('[data-measure="order-header"]'));
+    const summaryHeight =
+      getOuterHeight(measure.querySelector('[data-measure="summary"]')) +
+      getOuterHeight(measure.querySelector('[data-measure="signatures"]'));
+    const measuredRows = measure.querySelectorAll('[data-measure-row]') as NodeListOf<Element>;
+    const rowHeights = Array.from(measuredRows).map((row) => getOuterHeight(row));
+
+    if (!availableHeight || !rowHeights.length) {
+      setInvoicePages(fallbackInvoicePages);
+      return;
+    }
+
+    const nextPages: InvoicePage[] = [];
     let cursor = 0;
+    let pageIndex = 0;
 
-    pages.push({
-      items: items.slice(cursor, cursor + FIRST_PAGE_ITEM_LIMIT),
-      startIndex: cursor,
-      showHeader: true,
-      showSummary: false,
-    });
-    cursor += FIRST_PAGE_ITEM_LIMIT;
+    while (cursor < items.length) {
+      const showHeader = pageIndex === 0;
+      const fixedHeight = (showHeader ? firstHeaderHeight : continuationHeaderHeight) + orderHeaderHeight;
+      const availableForRows = Math.max(0, availableHeight - fixedHeight);
+      const availableForLastPageRows = Math.max(0, availableForRows - summaryHeight);
 
-    while (items.length - cursor > LAST_PAGE_ITEM_LIMIT) {
-      const pageSize = Math.min(CONTINUATION_PAGE_ITEM_LIMIT, items.length - cursor);
-      pages.push({
-        items: items.slice(cursor, cursor + pageSize),
+      const remainingHeight = items.slice(cursor).reduce((sum, _item, index) => sum + (rowHeights[cursor + index] ?? 0), 0);
+      if (remainingHeight <= availableForLastPageRows) {
+        nextPages.push({
+          items: items.slice(cursor),
+          startIndex: cursor,
+          showHeader,
+          showSummary: true,
+        });
+        break;
+      }
+
+      let usedHeight = 0;
+      let end = cursor;
+      while (end < items.length && usedHeight + (rowHeights[end] ?? 0) <= availableForRows) {
+        usedHeight += rowHeights[end] ?? 0;
+        end += 1;
+      }
+
+      if (end === cursor) end += 1;
+
+      nextPages.push({
+        items: items.slice(cursor, end),
         startIndex: cursor,
-        showHeader: false,
+        showHeader,
         showSummary: false,
       });
-      cursor += pageSize;
+
+      cursor = end;
+      pageIndex += 1;
     }
 
-    pages.push({
-      items: items.slice(cursor),
-      startIndex: cursor,
-      showHeader: false,
-      showSummary: true,
-    });
+    if (nextPages.length && !nextPages[nextPages.length - 1].showSummary) {
+      nextPages.push({
+        items: [],
+        startIndex: items.length,
+        showHeader: false,
+        showSummary: true,
+      });
+    }
 
-    return pages;
-  }, [items]);
+    setInvoicePages(nextPages.length ? nextPages : fallbackInvoicePages);
+  }, [fallbackInvoicePages, items, order]);
+
+  const renderedInvoicePages = invoicePages.length ? invoicePages : fallbackInvoicePages;
 
   const handlePrintInvoice = useCallback(() => {
     const previousTitle = document.title;
@@ -161,13 +228,13 @@ export function Invoice() {
   }, [invoiceNo]);
 
   useEffect(() => {
-    if (!shouldAutoPrint || isLoading || !order || hasAutoPrintedRef.current) return;
+    if (!shouldAutoPrint || isLoading || !order || !invoicePages.length || hasAutoPrintedRef.current) return;
 
     hasAutoPrintedRef.current = true;
     const timer = window.setTimeout(handlePrintInvoice, 600);
 
     return () => window.clearTimeout(timer);
-  }, [handlePrintInvoice, isLoading, order, shouldAutoPrint]);
+  }, [handlePrintInvoice, invoicePages.length, isLoading, order, shouldAutoPrint]);
 
   const handleBack = () => {
     navigate('/orders', {
@@ -218,7 +285,7 @@ export function Invoice() {
       </div>
 
       <div className="invoice-pages mx-auto">
-        {invoicePages.map((page, pageIndex) => (
+        {renderedInvoicePages.map((page, pageIndex) => (
           <main key={pageIndex} className="invoice-paper bg-white shadow-[0_22px_70px_rgba(15,23,42,0.18)]">
             {page.showHeader ? (
               <>
@@ -276,7 +343,7 @@ export function Invoice() {
             ) : (
               <header className="invoice-continuation-header">
                 <strong>#{invoiceNo}</strong>
-                <span>Trang {pageIndex + 1}/{invoicePages.length}</span>
+                <span>Trang {pageIndex + 1}/{renderedInvoicePages.length}</span>
               </header>
             )}
 
@@ -374,6 +441,148 @@ export function Invoice() {
         ))}
       </div>
 
+      <div ref={measureRef} className="invoice-measure" aria-hidden="true">
+        <main className="invoice-paper bg-white" data-measure="paper">
+          <div data-measure="first-header">
+            <header className="invoice-hero">
+              <div className="invoice-store">
+                <Logo className="invoice-logo" />
+                <div className="invoice-store-copy">
+                  <h1>{STORE_NAME}</h1>
+                  <p>{STORE_ADDRESS}</p>
+                  <p>Hotline: {STORE_PHONE}</p>
+                </div>
+              </div>
+            </header>
+
+            <div className="invoice-rule" />
+
+            <section className="invoice-meta-grid">
+              <div>
+                <h3>THÔNG TIN KHÁCH HÀNG</h3>
+                <dl>
+                  <div>
+                    <dt>Khách hàng:</dt>
+                    <dd>{order.customers?.full_name ?? 'Khách lẻ'}</dd>
+                  </div>
+                  <div>
+                    <dt>Điện thoại:</dt>
+                    <dd>{order.customers?.phone ?? '---'}</dd>
+                  </div>
+                  <div>
+                    <dt>Địa chỉ:</dt>
+                    <dd>{order.delivery_address ?? order.customers?.address ?? '---'}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              <div className="invoice-transaction">
+                <h3>CHI TIẾT GIAO DỊCH</h3>
+                <dl>
+                  <div>
+                    <dt>Mã hóa đơn:</dt>
+                    <dd>#{invoiceNo}</dd>
+                  </div>
+                  <div>
+                    <dt>Ngày tạo:</dt>
+                    <dd>{formatDateTime(order.sold_at)}</dd>
+                  </div>
+                  <div>
+                    <dt>Thu ngân:</dt>
+                    <dd>{order.cashier?.full_name ?? '---'}</dd>
+                  </div>
+                </dl>
+              </div>
+            </section>
+          </div>
+
+          <header className="invoice-continuation-header" data-measure="continuation-header">
+            <strong>#{invoiceNo}</strong>
+            <span>Trang 2/2</span>
+          </header>
+
+          <section className="invoice-order-section" data-measure="order-header">
+            <h3>ĐƠN HÀNG</h3>
+            <table className="invoice-items">
+              <thead>
+                <tr>
+                  <th>STT</th>
+                  <th>TÊN HÀNG HÓA</th>
+                  <th>ĐVT</th>
+                  <th>SL</th>
+                  <th>ĐƠN GIÁ</th>
+                  <th>THÀNH TIỀN</th>
+                </tr>
+              </thead>
+            </table>
+          </section>
+
+          <table className="invoice-items">
+            <tbody>
+              {items.map((item, index) => (
+                <tr key={item.id ?? `${item.product_id}-${index}`} data-measure-row>
+                  <td>{index + 1}</td>
+                  <td>
+                    <strong>{item.product_name}</strong>
+                  </td>
+                  <td>{item.unit_name || 'Cái'}</td>
+                  <td>{formatCurrency(Number(item.quantity ?? 0))}</td>
+                  <td>{formatCurrency(Number(item.unit_price ?? 0))}</td>
+                  <td>{formatCurrency(getLineTotal(item))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <section className="invoice-summary" data-measure="summary">
+            <div className="invoice-summary-row">
+              <span>Tổng tiền hàng:</span>
+              <strong>{formatCurrency(subtotal)} đ</strong>
+            </div>
+            <div className="invoice-summary-row">
+              <span>Chiết khấu / Giảm giá:</span>
+              <strong>{discountAmount ? `- ${formatCurrency(discountAmount)} đ` : '0 đ'}</strong>
+            </div>
+            {shippingFee > 0 ? (
+              <div className="invoice-summary-row">
+                <span>Phí giao hàng:</span>
+                <strong>{formatCurrency(shippingFee)} đ</strong>
+              </div>
+            ) : null}
+            {taxAmount > 0 ? (
+              <div className="invoice-summary-row">
+                <span>Thuế:</span>
+                <strong>{formatCurrency(taxAmount)} đ</strong>
+              </div>
+            ) : null}
+            <div className="invoice-grand-total">
+              <span>TỔNG CỘNG:</span>
+              <strong>{formatCurrency(totalAmount)} đ</strong>
+            </div>
+            <div className="invoice-summary-row paid">
+              <span>Khách đã thanh toán:</span>
+              <strong>{formatCurrency(paidAmount)} đ</strong>
+            </div>
+            <div className="invoice-debt">
+              <span>GHI NỢ:</span>
+              <strong>{formatCurrency(debtAmount)} đ</strong>
+            </div>
+          </section>
+
+          <section className="invoice-signatures" data-measure="signatures">
+            <div>
+              <strong>NGƯỜI MUA HÀNG</strong>
+              <span>(Ký, ghi rõ họ tên)</span>
+            </div>
+            <div>
+              <strong>NGƯỜI BÁN HÀNG</strong>
+              <span>(Ký, ghi rõ họ tên)</span>
+              <em>{order.cashier?.full_name ?? ''}</em>
+            </div>
+          </section>
+        </main>
+      </div>
+
       <style>{`
         @page {
           size: A5 portrait;
@@ -393,6 +602,21 @@ export function Invoice() {
           padding: 11mm 10mm 9mm;
           font-size: 10.5px;
           line-height: 1.32;
+        }
+
+        .invoice-measure {
+          position: absolute;
+          left: -10000px;
+          top: 0;
+          width: 148mm;
+          visibility: hidden;
+          pointer-events: none;
+          overflow: hidden;
+          z-index: -1;
+        }
+
+        .invoice-measure .invoice-paper {
+          box-shadow: none;
         }
 
         .invoice-continuation-header {
@@ -750,6 +974,10 @@ export function Invoice() {
           }
 
           .invoice-actions {
+            display: none !important;
+          }
+
+          .invoice-measure {
             display: none !important;
           }
 
