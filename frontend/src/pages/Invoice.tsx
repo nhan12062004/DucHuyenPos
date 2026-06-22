@@ -767,13 +767,15 @@ export function Invoice() {
 
           .invoice-paper {
             width: 148mm !important;
-            min-height: 210mm !important;
+            min-height: auto !important;
             height: auto !important;
             box-sizing: border-box !important;
             box-shadow: none !important;
             margin: 0 !important;
             padding: 11mm 10mm 9mm !important;
             overflow: visible !important;
+            break-inside: avoid;
+            page-break-inside: avoid;
             break-after: page;
             page-break-after: always;
             print-color-adjust: exact;
