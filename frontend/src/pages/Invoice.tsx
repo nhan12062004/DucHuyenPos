@@ -138,6 +138,7 @@ export function Invoice() {
     const firstHeaderHeight = getOuterHeight(measure.querySelector('[data-measure="first-header"]'));
     const continuationHeaderHeight = getOuterHeight(measure.querySelector('[data-measure="continuation-header"]'));
     const orderHeaderHeight = getOuterHeight(measure.querySelector('[data-measure="order-header"]'));
+    const footerHeight = getOuterHeight(measure.querySelector('[data-measure="footer"]'));
     const summaryHeight =
       getOuterHeight(measure.querySelector('[data-measure="summary"]')) +
       getOuterHeight(measure.querySelector('[data-measure="signatures"]'));
@@ -155,7 +156,7 @@ export function Invoice() {
 
     while (cursor < items.length) {
       const showHeader = pageIndex === 0;
-      const fixedHeight = (showHeader ? firstHeaderHeight : continuationHeaderHeight) + orderHeaderHeight;
+      const fixedHeight = (showHeader ? firstHeaderHeight : continuationHeaderHeight) + orderHeaderHeight + footerHeight;
       const availableForRows = Math.max(0, availableHeight - fixedHeight);
       const availableForLastPageRows = Math.max(0, availableForRows - summaryHeight);
 
@@ -286,7 +287,10 @@ export function Invoice() {
 
       <div className="invoice-pages mx-auto">
         {renderedInvoicePages.map((page, pageIndex) => (
-          <main key={pageIndex} className="invoice-paper bg-white shadow-[0_22px_70px_rgba(15,23,42,0.18)]">
+          <main
+            key={pageIndex}
+            className={`invoice-paper bg-white shadow-[0_22px_70px_rgba(15,23,42,0.18)] ${page.showHeader ? '' : 'invoice-paper-compact'}`}
+          >
             {page.showHeader ? (
               <>
         <header className="invoice-hero">
@@ -341,10 +345,7 @@ export function Invoice() {
         </section>
               </>
             ) : (
-              <header className="invoice-continuation-header">
-                <strong>#{invoiceNo}</strong>
-                <span>Trang {pageIndex + 1}/{renderedInvoicePages.length}</span>
-              </header>
+              <div className="invoice-continuation-spacer" />
             )}
 
             {page.items.length || pageIndex === 0 ? (
@@ -437,6 +438,10 @@ export function Invoice() {
         </section>
           </>
         ) : null}
+            <footer className="invoice-page-footer">
+              <strong>#{invoiceNo}</strong>
+              <span>Trang {pageIndex + 1}/{renderedInvoicePages.length}</span>
+            </footer>
           </main>
         ))}
       </div>
@@ -496,10 +501,7 @@ export function Invoice() {
             </section>
           </div>
 
-          <header className="invoice-continuation-header" data-measure="continuation-header">
-            <strong>#{invoiceNo}</strong>
-            <span>Trang 2/2</span>
-          </header>
+          <div className="invoice-continuation-spacer" data-measure="continuation-header" />
 
           <section className="invoice-order-section" data-measure="order-header">
             <h3>ĐƠN HÀNG</h3>
@@ -580,6 +582,11 @@ export function Invoice() {
               <em>{order.cashier?.full_name ?? ''}</em>
             </div>
           </section>
+
+          <footer className="invoice-page-footer" data-measure="footer">
+            <strong>#{invoiceNo}</strong>
+            <span>Trang 1/1</span>
+          </footer>
         </main>
       </div>
 
@@ -599,9 +606,14 @@ export function Invoice() {
           width: 148mm;
           min-height: 210mm;
           box-sizing: border-box;
-          padding: 11mm 10mm 9mm;
+          position: relative;
+          padding: 11mm 10mm 15mm;
           font-size: 10.5px;
           line-height: 1.32;
+        }
+
+        .invoice-paper-compact {
+          padding-top: 4mm;
         }
 
         .invoice-measure {
@@ -619,22 +631,28 @@ export function Invoice() {
           box-shadow: none;
         }
 
-        .invoice-continuation-header {
+        .invoice-continuation-spacer {
+          height: 0;
+        }
+
+        .invoice-page-footer {
+          position: absolute;
+          left: 10mm;
+          right: 10mm;
+          bottom: 6mm;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          border-bottom: 2px solid #111827;
-          padding-bottom: 4mm;
-          color: #0f172a;
-          font-size: 10px;
+          color: #334155;
+          font-size: 9px;
         }
 
-        .invoice-continuation-header strong {
+        .invoice-page-footer strong {
+          color: #0f172a;
           font-weight: 700;
         }
 
-        .invoice-continuation-header span {
-          color: #475569;
+        .invoice-page-footer span {
           font-weight: 600;
         }
 
@@ -995,7 +1013,7 @@ export function Invoice() {
             box-sizing: border-box !important;
             box-shadow: none !important;
             margin: 0 !important;
-            padding: 11mm 10mm 9mm !important;
+            padding: 11mm 10mm 15mm !important;
             overflow: visible !important;
             break-inside: avoid;
             page-break-inside: avoid;
@@ -1003,6 +1021,10 @@ export function Invoice() {
             page-break-after: always;
             print-color-adjust: exact;
             -webkit-print-color-adjust: exact;
+          }
+
+          .invoice-paper-compact {
+            padding-top: 4mm !important;
           }
 
           .invoice-paper + .invoice-paper {
