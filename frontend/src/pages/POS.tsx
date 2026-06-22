@@ -983,6 +983,9 @@ export function POS() {
   const [paidAmount, setPaidAmount] = useState(0);
   const [editingOrderId, setEditingOrderId] = useState('');
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customerSearchResults, setCustomerSearchResults] = useState<Customer[]>([]);
+  const [customerSearchLoading, setCustomerSearchLoading] = useState(false);
+  const [customerSearchError, setCustomerSearchError] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [productSearchResults, setProductSearchResults] = useState<Product[]>([]);
   const [productSearchLoading, setProductSearchLoading] = useState(false);
@@ -1126,6 +1129,26 @@ export function POS() {
 
         setEditingOrderId(order.id);
         setCustomerId(order.customer_id ?? '');
+        if (order.customers) {
+          setCustomers((current) => {
+            if (current.some((customer) => customer.id === order.customers?.id)) {
+              return current;
+            }
+
+            const orderCustomer: Customer = {
+              id: order.customers.id,
+              code: order.customers.id,
+              full_name: order.customers.full_name,
+              phone: order.customers.phone,
+              address: order.customers.address,
+              status: 'active',
+              created_at: order.created_at,
+              updated_at: order.created_at,
+            };
+
+            return [orderCustomer, ...current];
+          });
+        }
         setBranchId(order.branch_id);
         setCashierId(order.cashier_id ?? user?.id ?? '');
         setSource(order.source);
@@ -1232,11 +1255,58 @@ export function POS() {
     };
   }, [productQuery]);
 
+  useEffect(() => {
+    const query = customerQuery.trim();
+    if (!query) {
+      setCustomerSearchResults([]);
+      setCustomerSearchLoading(false);
+      setCustomerSearchError(null);
+      return;
+    }
+
+    let active = true;
+    setCustomerSearchLoading(true);
+    setCustomerSearchError(null);
+
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const result = await customersService.getAll({
+          page: 1,
+          limit: 50,
+          status: 'active',
+          search: query,
+        });
+
+        if (!active) {
+          return;
+        }
+
+        setCustomerSearchResults(result.data);
+      } catch (searchError: any) {
+        if (!active) {
+          return;
+        }
+
+        setCustomerSearchResults([]);
+        setCustomerSearchError(searchError?.message ?? 'Không tìm được khách hàng.');
+      } finally {
+        if (active) {
+          setCustomerSearchLoading(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [customerQuery]);
+
   const selectedCustomer = customers.find((customer) => customer.id === customerId) ?? null;
   const selectedDebt = selectedCustomer ? debtSummary[selectedCustomer.id] : null;
   const hasCustomer = !!selectedCustomer;
 
-  const filteredCustomers = customers.filter((customer) => {
+  const localFilteredCustomers = customers.filter((customer) => {
     const query = customerQuery.trim().toLowerCase();
     if (!query) {
       return true;
@@ -1248,10 +1318,14 @@ export function POS() {
       customer.phone?.toLowerCase().includes(query)
     );
   });
+  const filteredCustomers = customerQuery.trim() ? customerSearchResults : localFilteredCustomers;
 
   const filteredProducts = productQuery.trim() ? productSearchResults : products;
 
   const handleCustomerSelect = (customer: Customer) => {
+    setCustomers((current) => (
+      current.some((item) => item.id === customer.id) ? current : [customer, ...current]
+    ));
     setCustomerId(customer.id);
     setCustomerQuery('');
     setSuccessMessage(null);
@@ -1525,7 +1599,16 @@ export function POS() {
                             Thêm mới khách hàng
                           </button>
                           
-                          {filteredCustomers.length === 0 && customerQuery.trim() ? (
+                          {customerSearchLoading ? (
+                            <div className="flex items-center justify-center gap-2 px-4 py-6 text-[13px] text-slate-400">
+                              <Loader2 size={16} className="animate-spin" />
+                              Đang tìm khách hàng...
+                            </div>
+                          ) : customerSearchError ? (
+                            <div className="px-4 py-6 text-center text-[13px] text-red-500">
+                              {customerSearchError}
+                            </div>
+                          ) : filteredCustomers.length === 0 && customerQuery.trim() ? (
                             <div className="px-4 py-6 text-center text-[13px] text-slate-400">
                               Không tìm thấy khách hàng phù hợp
                             </div>
