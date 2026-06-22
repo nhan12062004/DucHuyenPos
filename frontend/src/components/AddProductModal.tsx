@@ -9,6 +9,10 @@ interface AddProductModalProps {
   onCreated: (product: Product) => void;
 }
 
+const getPriceDigits = (value: string) => value.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '');
+
+const formatPriceInput = (value: string) => getPriceDigits(value).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
 export function AddProductModal({ open, onClose, onCreated }: AddProductModalProps) {
   const backdropRef = useRef<HTMLDivElement>(null);
 
@@ -22,6 +26,7 @@ export function AddProductModal({ open, onClose, onCreated }: AddProductModalPro
   const [salePrice, setSalePrice] = useState('');
   const [costPrice, setCostPrice] = useState('');
   const [stockCount, setStockCount] = useState('');
+  const [focusedPriceField, setFocusedPriceField] = useState<'cost' | 'sale' | null>(null);
 
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
@@ -54,11 +59,11 @@ export function AddProductModal({ open, onClose, onCreated }: AddProductModalPro
     }
   }, [open]);
 
-  if (!open) return null;
-
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === backdropRef.current) onClose();
   };
+
+  if (!open) return null;
 
   const handleSubmit = async () => {
     if (!name.trim()) {
@@ -75,8 +80,8 @@ export function AddProductModal({ open, onClose, onCreated }: AddProductModalPro
         barcode: barcode.trim() || undefined,
         unit_name: unitName.trim() || 'Mặc định',
         product_category_id: categoryId || undefined,
-        sale_price: Number(salePrice.replace(/,/g, '')) || 0,
-        cost_price: Number(costPrice.replace(/,/g, '')) || 0,
+        sale_price: Number(salePrice) || 0,
+        cost_price: Number(costPrice) || 0,
         track_inventory: true, // Typically true for POS
         allow_negative_stock: false,
         status: 'active',
@@ -198,8 +203,17 @@ export function AddProductModal({ open, onClose, onCreated }: AddProductModalPro
                 </label>
                 <input
                   type="text"
-                  value={costPrice}
-                  onChange={(e) => setCostPrice(e.target.value.replace(/[^0-9]/g, ''))}
+                  inputMode="numeric"
+                  value={focusedPriceField === 'cost' ? costPrice : formatPriceInput(costPrice)}
+                  onChange={(e) => setCostPrice(getPriceDigits(e.target.value))}
+                  onFocus={() => {
+                    setFocusedPriceField('cost');
+                    if (costPrice === '0') setCostPrice('');
+                  }}
+                  onBlur={() => {
+                    setFocusedPriceField(null);
+                    if (!costPrice) setCostPrice('0');
+                  }}
                   className="w-full rounded border border-slate-300 px-3 py-2 text-right text-[13px] text-slate-800 transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </div>
@@ -244,8 +258,17 @@ export function AddProductModal({ open, onClose, onCreated }: AddProductModalPro
                 <label className={labelCls}>Giá bán lẻ</label>
                 <input
                   type="text"
-                  value={salePrice}
-                  onChange={(e) => setSalePrice(e.target.value.replace(/[^0-9]/g, ''))}
+                  inputMode="numeric"
+                  value={focusedPriceField === 'sale' ? salePrice : formatPriceInput(salePrice)}
+                  onChange={(e) => setSalePrice(getPriceDigits(e.target.value))}
+                  onFocus={() => {
+                    setFocusedPriceField('sale');
+                    if (salePrice === '0') setSalePrice('');
+                  }}
+                  onBlur={() => {
+                    setFocusedPriceField(null);
+                    if (!salePrice) setSalePrice('0');
+                  }}
                   className="w-full rounded border border-slate-300 px-3 py-2 text-right text-[13px] text-slate-800 transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </div>

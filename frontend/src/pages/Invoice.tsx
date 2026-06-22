@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Printer } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Logo } from '../components/Logo';
@@ -8,6 +8,10 @@ import { salesOrdersService, type SalesOrder } from '../services/salesOrdersServ
 const STORE_NAME = 'Vật tư Điện Nước Đức Huyền';
 const STORE_ADDRESS = '277 Nguyễn Thị Duệ, Việt Hòa, TP. Hải Phòng';
 const STORE_PHONE = '0989 245 272 - 0904 538 786';
+const SINGLE_PAGE_ITEM_LIMIT = 12;
+const FIRST_PAGE_ITEM_LIMIT = 20;
+const CONTINUATION_PAGE_ITEM_LIMIT = 28;
+const LAST_PAGE_ITEM_LIMIT = 12;
 
 function formatCurrency(value: number) {
   return value.toLocaleString('vi-VN');
@@ -31,6 +35,11 @@ function formatDateTime(value?: string) {
 function getLineTotal(item: NonNullable<SalesOrder['sales_order_items']>[number]) {
   return Number(item.line_total ?? 0) ||
     Number(item.quantity ?? 0) * Number(item.unit_price ?? 0) - Number(item.discount_amount ?? 0);
+}
+
+function getPdfFileName(invoiceNo: string) {
+  const safeInvoiceNo = invoiceNo.replace(/[^a-zA-Z0-9_-]/g, '_');
+  return `Hoa_don_${safeInvoiceNo}`;
 }
 
 export function Invoice() {
@@ -73,21 +82,6 @@ export function Invoice() {
     };
   }, [orderId]);
 
-  useEffect(() => {
-    if (!shouldAutoPrint || isLoading || !order || hasAutoPrintedRef.current) return;
-
-    hasAutoPrintedRef.current = true;
-    const timer = window.setTimeout(() => {
-      window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => {
-          window.print();
-        });
-      });
-    }, 600);
-
-    return () => window.clearTimeout(timer);
-  }, [isLoading, order, shouldAutoPrint]);
-
   const items = order?.sales_order_items ?? [];
   const subtotal = Number(order?.subtotal ?? 0);
   const discountAmount = Number(order?.discount_amount ?? 0);
@@ -97,6 +91,88 @@ export function Invoice() {
   const paidAmount = Number(order?.paid_amount ?? 0);
   const debtAmount = useMemo(() => Math.max(0, totalAmount - paidAmount), [paidAmount, totalAmount]);
   const invoiceNo = order?.invoice_no ?? order?.order_no ?? '---';
+  const invoicePages = useMemo(() => {
+    if (!items.length) {
+      return [{ items: [], startIndex: 0, showHeader: true, showSummary: true }];
+    }
+
+    if (items.length <= SINGLE_PAGE_ITEM_LIMIT) {
+      return [{ items, startIndex: 0, showHeader: true, showSummary: true }];
+    }
+
+    const pages: Array<{
+      items: typeof items;
+      startIndex: number;
+      showHeader: boolean;
+      showSummary: boolean;
+    }> = [];
+    let cursor = 0;
+
+    pages.push({
+      items: items.slice(cursor, cursor + FIRST_PAGE_ITEM_LIMIT),
+      startIndex: cursor,
+      showHeader: true,
+      showSummary: false,
+    });
+    cursor += FIRST_PAGE_ITEM_LIMIT;
+
+    while (items.length - cursor > LAST_PAGE_ITEM_LIMIT) {
+      const remaining = items.length - cursor;
+      const pageSize = Math.min(
+        CONTINUATION_PAGE_ITEM_LIMIT,
+        Math.max(LAST_PAGE_ITEM_LIMIT, remaining - LAST_PAGE_ITEM_LIMIT),
+      );
+
+      pages.push({
+        items: items.slice(cursor, cursor + pageSize),
+        startIndex: cursor,
+        showHeader: false,
+        showSummary: false,
+      });
+      cursor += pageSize;
+    }
+
+    pages.push({
+      items: items.slice(cursor),
+      startIndex: cursor,
+      showHeader: false,
+      showSummary: true,
+    });
+
+    return pages;
+  }, [items]);
+
+  const handlePrintInvoice = useCallback(() => {
+    const previousTitle = document.title;
+    const pdfTitle = getPdfFileName(invoiceNo);
+    let restored = false;
+
+    const restoreTitle = () => {
+      if (restored) return;
+      restored = true;
+      document.title = previousTitle;
+      window.removeEventListener('afterprint', restoreTitle);
+    };
+
+    document.title = pdfTitle;
+    window.addEventListener('afterprint', restoreTitle);
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        window.print();
+        window.setTimeout(restoreTitle, 1500);
+      });
+    });
+  }, [invoiceNo]);
+
+  useEffect(() => {
+    if (!shouldAutoPrint || isLoading || !order || hasAutoPrintedRef.current) return;
+
+    hasAutoPrintedRef.current = true;
+    const timer = window.setTimeout(handlePrintInvoice, 600);
+
+    return () => window.clearTimeout(timer);
+  }, [handlePrintInvoice, isLoading, order, shouldAutoPrint]);
 
   const handleBack = () => {
     navigate('/orders', {
@@ -138,7 +214,7 @@ export function Invoice() {
         </button>
         <button
           type="button"
-          onClick={() => window.print()}
+          onClick={handlePrintInvoice}
           className="flex h-10 items-center gap-2 bg-[#111827] px-5 text-sm font-semibold text-white shadow-sm hover:bg-black"
         >
           <Printer size={17} />
@@ -146,7 +222,11 @@ export function Invoice() {
         </button>
       </div>
 
-      <main className="invoice-paper mx-auto bg-white shadow-[0_22px_70px_rgba(15,23,42,0.18)]">
+      <div className="invoice-pages mx-auto">
+        {invoicePages.map((page, pageIndex) => (
+          <main key={pageIndex} className="invoice-paper bg-white shadow-[0_22px_70px_rgba(15,23,42,0.18)]">
+            {page.showHeader ? (
+              <>
         <header className="invoice-hero">
           <div className="invoice-store">
             <Logo className="invoice-logo" />
@@ -197,9 +277,17 @@ export function Invoice() {
             </dl>
           </div>
         </section>
+              </>
+            ) : (
+              <header className="invoice-continuation-header">
+                <strong>#{invoiceNo}</strong>
+                <span>Trang {pageIndex + 1}/{invoicePages.length}</span>
+              </header>
+            )}
 
+            {page.items.length || pageIndex === 0 ? (
         <section className="invoice-order-section">
-          <h3>ĐƠN HÀNG</h3>
+          <h3>{pageIndex === 0 ? 'ĐƠN HÀNG' : 'ĐƠN HÀNG (tiếp)'}</h3>
           <table className="invoice-items">
             <thead>
               <tr>
@@ -212,10 +300,10 @@ export function Invoice() {
               </tr>
             </thead>
             <tbody>
-              {items.length ? (
-                items.map((item, index) => (
-                  <tr key={item.id ?? `${item.product_id}-${index}`}>
-                    <td>{index + 1}</td>
+              {page.items.length ? (
+                page.items.map((item, index) => (
+                  <tr key={item.id ?? `${item.product_id}-${page.startIndex + index}`}>
+                    <td>{page.startIndex + index + 1}</td>
                   <td>
                     <strong>{item.product_name}</strong>
                   </td>
@@ -235,7 +323,10 @@ export function Invoice() {
             </tbody>
           </table>
         </section>
+            ) : null}
 
+        {page.showSummary ? (
+          <>
         <section className="invoice-summary">
           <div className="invoice-summary-row">
             <span>Tổng tiền hàng:</span>
@@ -282,12 +373,22 @@ export function Invoice() {
             <em>{order.cashier?.full_name ?? ''}</em>
           </div>
         </section>
-      </main>
+          </>
+        ) : null}
+          </main>
+        ))}
+      </div>
 
       <style>{`
         @page {
           size: A5 portrait;
           margin: 0;
+        }
+
+        .invoice-pages {
+          width: 148mm;
+          display: grid;
+          gap: 18px;
         }
 
         .invoice-paper {
@@ -297,6 +398,25 @@ export function Invoice() {
           padding: 11mm 10mm 9mm;
           font-size: 10.5px;
           line-height: 1.32;
+        }
+
+        .invoice-continuation-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          border-bottom: 2px solid #111827;
+          padding-bottom: 4mm;
+          color: #0f172a;
+          font-size: 10px;
+        }
+
+        .invoice-continuation-header strong {
+          font-weight: 700;
+        }
+
+        .invoice-continuation-header span {
+          color: #475569;
+          font-weight: 600;
         }
 
         .invoice-hero {
@@ -416,6 +536,7 @@ export function Invoice() {
         .invoice-items {
           width: 100%;
           border-collapse: collapse;
+          break-inside: auto;
           page-break-inside: auto;
         }
 
@@ -613,6 +734,18 @@ export function Invoice() {
           body,
           #root {
             background: white !important;
+            height: auto !important;
+            overflow: visible !important;
+          }
+
+          .square-ui,
+          .square-ui > div,
+          .square-ui main,
+          .square-ui main > div {
+            display: block !important;
+            height: auto !important;
+            min-height: auto !important;
+            overflow: visible !important;
           }
 
           .invoice-screen {
@@ -625,23 +758,50 @@ export function Invoice() {
             display: none !important;
           }
 
+          .invoice-pages {
+            display: block !important;
+            width: 148mm !important;
+            gap: 0 !important;
+            margin: 0 auto !important;
+          }
+
           .invoice-paper {
             width: 148mm !important;
-            min-height: auto !important;
+            min-height: 210mm !important;
             height: auto !important;
             box-sizing: border-box !important;
             box-shadow: none !important;
             margin: 0 !important;
             padding: 11mm 10mm 9mm !important;
             overflow: visible !important;
+            break-after: page;
+            page-break-after: always;
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+          }
+
+          .invoice-paper + .invoice-paper {
+            break-before: page;
+            page-break-before: always;
+          }
+
+          .invoice-paper:last-child {
+            break-after: auto;
+            page-break-after: auto;
           }
 
           .invoice-meta-grid,
-          .invoice-order-section,
           .invoice-summary,
           .invoice-signatures {
             break-inside: avoid;
             page-break-inside: avoid;
+          }
+
+          .invoice-order-section,
+          .invoice-items,
+          .invoice-items tbody {
+            break-inside: auto;
+            page-break-inside: auto;
           }
 
           .invoice-items thead {
