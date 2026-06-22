@@ -8,9 +8,9 @@ import { salesOrdersService, type SalesOrder } from '../services/salesOrdersServ
 const STORE_NAME = 'Vật tư Điện Nước Đức Huyền';
 const STORE_ADDRESS = '277 Nguyễn Thị Duệ, Việt Hòa, TP. Hải Phòng';
 const STORE_PHONE = '0989 245 272 - 0904 538 786';
-const SINGLE_PAGE_ITEM_LIMIT = 12;
-const FIRST_PAGE_ITEM_LIMIT = 20;
-const CONTINUATION_PAGE_ITEM_LIMIT = 28;
+const SINGLE_PAGE_ITEM_LIMIT = 10;
+const FIRST_PAGE_ITEM_LIMIT = 16;
+const CONTINUATION_PAGE_ITEM_LIMIT = 16;
 const LAST_PAGE_ITEM_LIMIT = 12;
 
 function formatCurrency(value: number) {
@@ -117,12 +117,7 @@ export function Invoice() {
     cursor += FIRST_PAGE_ITEM_LIMIT;
 
     while (items.length - cursor > LAST_PAGE_ITEM_LIMIT) {
-      const remaining = items.length - cursor;
-      const pageSize = Math.min(
-        CONTINUATION_PAGE_ITEM_LIMIT,
-        Math.max(LAST_PAGE_ITEM_LIMIT, remaining - LAST_PAGE_ITEM_LIMIT),
-      );
-
+      const pageSize = Math.min(CONTINUATION_PAGE_ITEM_LIMIT, items.length - cursor);
       pages.push({
         items: items.slice(cursor, cursor + pageSize),
         startIndex: cursor,
