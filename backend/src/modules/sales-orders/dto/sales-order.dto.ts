@@ -5,8 +5,9 @@ import { Type } from 'class-transformer';
 import { DELIVERY_METHODS, DELIVERY_STATUSES } from '../delivery-fields.js';
 
 export class CreateSalesOrderItemDto {
+  @IsOptional()
   @IsUUID()
-  product_id: string = '';
+  product_id?: string | null;
 
   @IsString()
   product_name: string = '';

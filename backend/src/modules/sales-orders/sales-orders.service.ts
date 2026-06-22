@@ -231,7 +231,7 @@ export class SalesOrdersService {
 
     const itemsToInsert = items.map((item) => ({
       sales_order_id: order.id,
-      product_id: item.product_id,
+      product_id: item.product_id || null,
       product_name: item.product_name,
       sku: item.sku,
       unit_name: item.unit_name ?? 'cái',
@@ -316,7 +316,7 @@ export class SalesOrdersService {
       if (items.length > 0) {
         const itemsToInsert = items.map((item) => ({
           sales_order_id: id,
-          product_id: item.product_id,
+          product_id: item.product_id || null,
           product_name: item.product_name,
           sku: item.sku,
           unit_name: item.unit_name ?? 'cái',

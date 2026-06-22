@@ -7,7 +7,7 @@ import type { DeliveryStatus, DeliveryTab } from '../utils/delivery';
 export interface SalesOrderItem {
   id: string;
   sales_order_id: string;
-  product_id: string;
+  product_id?: string | null;
   product_name: string;
   sku?: string;
   unit_name: string;
@@ -109,7 +109,7 @@ export interface CreateSalesOrderPayload {
   delivery_status?: DeliveryStatus;
   delivery_due_at?: string | null;
   items: {
-    product_id: string;
+    product_id?: string | null;
     product_name: string;
     sku?: string;
     unit_name?: string;

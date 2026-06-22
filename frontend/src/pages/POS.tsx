@@ -41,6 +41,8 @@ import { ToastBridge } from '../components/Toast';
 
 type CartProduct = {
   id: string;
+  productId?: string | null;
+  isTemporary?: boolean;
   name: string;
   subName: string;
   code: string;
@@ -55,6 +57,22 @@ type DeliveryTab =
   | 'van_chuyen_ngoai'
   | 'nhan_tai_cua_hang'
   | 'giao_hang_sau';
+
+type TemporaryProductInput = {
+  name: string;
+  qty: number;
+  price: number;
+  unitName: string;
+};
+
+function createTemporaryProductRow(): TemporaryProductInput {
+  return {
+    name: '',
+    qty: 1,
+    price: 0,
+    unitName: 'cái',
+  };
+}
 
 const DELIVERY_MODE_TOKEN = '__DELIVERY_MODE__';
 
@@ -132,6 +150,10 @@ function parseNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function getPriceDigits(value: string) {
+  return value.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '');
+}
+
 function formatQuantity(value: number) {
   return value.toLocaleString('vi-VN', {
     maximumFractionDigits: 2,
@@ -202,6 +224,56 @@ function MoneyInput({
       onBlur={() => {
         setIsFocused(false);
         setDraftValue(formatNumber(parseNumber(draftValue)));
+      }}
+      className={className}
+    />
+  );
+}
+
+function TemporaryPriceInput({
+  value,
+  onChange,
+  className,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  className?: string;
+}) {
+  const [draftValue, setDraftValue] = useState(formatNumber(value));
+  const [isFocused, setIsFocused] = useState(false);
+
+  useEffect(() => {
+    if (!isFocused) {
+      setDraftValue(formatNumber(value));
+    }
+  }, [isFocused, value]);
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={isFocused ? draftValue : formatNumber(value)}
+      onFocus={(event) => {
+        setIsFocused(true);
+        if (value === 0) {
+          setDraftValue('');
+          return;
+        }
+
+        setDraftValue(String(Math.round(value)));
+        event.currentTarget.select();
+      }}
+      onChange={(event) => {
+        const nextDraft = getPriceDigits(event.target.value);
+        setDraftValue(nextDraft);
+        onChange(Number(nextDraft) || 0);
+      }}
+      onBlur={() => {
+        setIsFocused(false);
+        if (!draftValue) {
+          onChange(0);
+          setDraftValue('0');
+        }
       }}
       className={className}
     />
@@ -928,6 +1000,180 @@ function AddCustomerModal({ open, onClose, onCreated }: AddCustomerModalProps) {
   );
 }
 
+interface TemporaryProductsModalProps {
+  open: boolean;
+  onClose: () => void;
+  onAdd: (items: TemporaryProductInput[]) => void;
+}
+
+function TemporaryProductsModal({ open, onClose, onAdd }: TemporaryProductsModalProps) {
+  const [rows, setRows] = useState<TemporaryProductInput[]>(() => [createTemporaryProductRow()]);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setRows([createTemporaryProductRow()]);
+      setFormError(null);
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  const updateRow = (index: number, patch: Partial<TemporaryProductInput>) => {
+    setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
+    setFormError(null);
+  };
+
+  const addRow = () => {
+    setRows((current) => [...current, createTemporaryProductRow()]);
+  };
+
+  const removeRow = (index: number) => {
+    setRows((current) =>
+      current.length > 1 ? current.filter((_, rowIndex) => rowIndex !== index) : [createTemporaryProductRow()],
+    );
+    setFormError(null);
+  };
+
+  const handleSubmit = () => {
+    const items = rows
+      .map((row) => ({
+        name: row.name.trim(),
+        qty: Math.max(0.01, Number(row.qty) || 1),
+        price: Math.max(0, Number(row.price) || 0),
+        unitName: row.unitName.trim() || 'cái',
+      }))
+      .filter((item) => item.name);
+
+    if (!items.length) {
+      setFormError('Vui lòng nhập ít nhất một sản phẩm tạm.');
+      return;
+    }
+
+    onAdd(items);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4 backdrop-blur-[2px]">
+      <div className="relative flex max-h-[90vh] w-full max-w-[760px] flex-col overflow-hidden rounded-lg bg-white shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-4">
+          <h2 className="text-[16px] font-semibold text-slate-800">Thêm hàng tạm</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-5">
+          <div className="overflow-x-auto rounded border border-slate-200">
+            <table className="w-full min-w-[680px] text-left text-[13px]">
+              <thead className="bg-slate-50 text-[12px] font-semibold uppercase text-slate-500">
+                <tr>
+                  <th className="w-12 px-3 py-2 text-center">STT</th>
+                  <th className="px-3 py-2">Tên hàng hóa <span className="text-red-500">*</span></th>
+                  <th className="w-28 px-3 py-2 text-right">Số lượng</th>
+                  <th className="w-36 px-3 py-2 text-right">Đơn giá</th>
+                  <th className="w-28 px-3 py-2">ĐVT</th>
+                  <th className="w-12 px-3 py-2" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {rows.map((row, index) => (
+                  <tr key={index} className="bg-white">
+                    <td className="px-3 py-2 text-center text-slate-500">{index + 1}</td>
+                    <td className="px-3 py-2">
+                      <input
+                        autoFocus={index === 0}
+                        type="text"
+                        value={row.name}
+                        onChange={(event) => updateRow(index, { name: event.target.value })}
+                        placeholder="Nhập tên hàng"
+                        className="w-full rounded border border-slate-300 px-3 py-2 text-[13px] text-slate-800 placeholder-slate-400 transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={row.qty}
+                        onChange={(event) => updateRow(index, { qty: Math.max(0.01, Number(event.target.value) || 1) })}
+                        onFocus={(event) => event.currentTarget.select()}
+                        className="w-full rounded border border-slate-300 px-3 py-2 text-right text-[13px] text-slate-800 transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <TemporaryPriceInput
+                        value={row.price}
+                        onChange={(price) => updateRow(index, { price })}
+                        className="w-full rounded border border-slate-300 px-3 py-2 text-right text-[13px] text-slate-800 transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="text"
+                        value={row.unitName}
+                        onChange={(event) => updateRow(index, { unitName: event.target.value })}
+                        placeholder="cái"
+                        className="w-full rounded border border-slate-300 px-3 py-2 text-[13px] text-slate-800 placeholder-slate-400 transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <button
+                        type="button"
+                        onClick={() => removeRow(index)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500"
+                        title="Xóa dòng"
+                      >
+                        <X size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <button
+            type="button"
+            onClick={addRow}
+            className="mt-3 inline-flex items-center gap-2 rounded border border-blue-400 bg-white px-4 py-2 text-[13px] font-medium text-blue-600 transition-colors hover:bg-blue-50"
+          >
+            <PlusCircle size={16} />
+            Thêm dòng
+          </button>
+
+          {formError ? <div className="text-[13px] text-red-500">{formError}</div> : null}
+          <div className="mt-3 rounded bg-slate-50 px-3 py-2 text-[12px] text-slate-500">
+            Hàng tạm chỉ lưu theo đơn hàng, không tạo vào danh mục sản phẩm và không theo dõi tồn kho.
+          </div>
+        </div>
+
+        <div className="flex shrink-0 justify-end gap-3 border-t border-slate-100 p-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded border border-blue-500 bg-white px-6 py-2 text-[14px] font-medium text-blue-500 transition-colors hover:bg-blue-50"
+          >
+            Thoát
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            className="rounded bg-[#0088ff] px-6 py-2 text-[14px] font-medium text-white transition-colors hover:bg-blue-600"
+          >
+            Thêm vào đơn
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── POS ─────────────────────────────────────────────────────────────────────
 
 // ─── Module-level cache ───────────────────────────────────────────────────────
@@ -1001,6 +1247,7 @@ export function POS() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
+  const [isTemporaryProductsOpen, setIsTemporaryProductsOpen] = useState(false);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -1166,9 +1413,10 @@ export function POS() {
             parseLegacyDeliveryTab(order.note, order.status) ??
             (order.status === 'completed' ? 'nhan_tai_cua_hang' : parsedNote.deliveryTab),
         );
-        setCartProducts(
-          (order.sales_order_items ?? []).map((item) => ({
-            id: item.product_id,
+        const hydratedCartProducts = (order.sales_order_items ?? []).map((item) => ({
+            id: item.product_id ?? `temp-${item.id}`,
+            productId: item.product_id ?? null,
+            isTemporary: !item.product_id,
             name: item.product_name,
             subName: item.unit_name || 'Mặc định',
             code: item.sku ?? '',
@@ -1176,9 +1424,9 @@ export function POS() {
             price: Number(item.unit_price ?? 0),
             discount: Number(item.discount_amount ?? 0),
             unitName: item.unit_name || 'cái',
-          })),
-        );
-        setActiveCartProductId(order.sales_order_items?.[0]?.product_id ?? '');
+          }));
+        setCartProducts(hydratedCartProducts);
+        setActiveCartProductId(hydratedCartProducts[0]?.id ?? '');
       } catch (loadError: any) {
         if (!active) {
           return;
@@ -1345,6 +1593,8 @@ export function POS() {
         ...current,
         {
           id: product.id,
+          productId: product.id,
+          isTemporary: false,
           name: product.name,
           subName: product.unit_name || 'Mặc định',
           code: product.sku,
@@ -1358,6 +1608,27 @@ export function POS() {
     setIsDropdownOpen(false);
     setProductQuery('');
     setSuccessMessage(null);
+    setError(null);
+  };
+
+  const handleTemporaryProductsAdd = (items: TemporaryProductInput[]) => {
+    const createdAt = Date.now();
+    const temporaryProducts: CartProduct[] = items.map((item, index) => ({
+      id: `temp-${createdAt}-${index}`,
+      productId: null,
+      isTemporary: true,
+      name: item.name,
+      subName: item.unitName,
+      code: 'Hàng tạm',
+      qty: item.qty,
+      price: item.price,
+      discount: 0,
+      unitName: item.unitName,
+    }));
+
+    setCartProducts((current) => [...current, ...temporaryProducts]);
+    setActiveCartProductId(temporaryProducts[0]?.id ?? activeCartProductId);
+    setSuccessMessage(`Đã thêm ${temporaryProducts.length} hàng tạm vào đơn.`);
     setError(null);
   };
 
@@ -1445,7 +1716,7 @@ export function POS() {
         delivery_status: getDeliveryStatusFromTab(activeDeliveryTab),
         delivery_due_at: deliveryDueAt ?? null,
         items: cartProducts.map((item) => ({
-          product_id: item.id,
+          product_id: item.isTemporary ? null : item.productId ?? item.id,
           product_name: item.name,
           sku: item.code,
           unit_name: item.unitName,
@@ -1929,7 +2200,7 @@ export function POS() {
                       Không tìm thấy sản phẩm phù hợp
                     </div>
                   ) : (
-                    filteredProducts.slice(0, 10).map((product) => {
+                    filteredProducts.slice(0, 5).map((product) => {
                       const stock = stockSummary[product.id];
 
                       return (
@@ -1973,6 +2244,12 @@ export function POS() {
               className="shrink-0 rounded border border-slate-300 bg-white px-4 py-2 text-[13px] font-medium text-slate-700 transition-colors hover:bg-slate-50"
             >
               Chọn nhanh
+            </button>
+            <button
+              onClick={() => setIsTemporaryProductsOpen(true)}
+              className="shrink-0 rounded border border-blue-400 bg-white px-4 py-2 text-[13px] font-medium text-blue-600 transition-colors hover:bg-blue-50"
+            >
+              Thêm hàng tạm
             </button>
             <button
               onClick={() => setSuccessMessage('Bạn có thể dùng ô tìm sản phẩm để lọc nhanh theo tên hoặc SKU.')}
@@ -2039,6 +2316,12 @@ export function POS() {
               >
                 Thêm sản phẩm
               </button>
+              <button
+                onClick={() => setIsTemporaryProductsOpen(true)}
+                className="mt-2 rounded border border-slate-300 bg-white px-6 py-2 text-[13px] font-medium text-slate-700 transition-colors hover:bg-slate-50"
+              >
+                Thêm hàng tạm
+              </button>
             </div>
           ) : (
             <div className="relative z-10 min-h-[150px] overflow-x-auto bg-white">
@@ -2083,7 +2366,13 @@ export function POS() {
                         <td className={cn('px-2 py-4', isActive && 'border-y border-blue-400')}>
                           <div className="flex items-center gap-1 text-[13px] font-medium text-[#0A1629]">
                             {product.name}
-                            <Info size={12} className="mt-0.5 text-yellow-500" />
+                            {product.isTemporary ? (
+                              <span className="ml-1 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-600">
+                                Hàng tạm
+                              </span>
+                            ) : (
+                              <Info size={12} className="mt-0.5 text-yellow-500" />
+                            )}
                           </div>
                           <div className="mt-0.5 text-[12px] text-slate-500">{product.subName}</div>
                           <div className="text-[12px] text-blue-500">{product.code}</div>
@@ -2371,6 +2660,12 @@ export function POS() {
         setCustomerQuery('');
         setIsAddCustomerOpen(false);
       }}
+    />
+
+    <TemporaryProductsModal
+      open={isTemporaryProductsOpen}
+      onClose={() => setIsTemporaryProductsOpen(false)}
+      onAdd={handleTemporaryProductsAdd}
     />
 
     <AddProductModal

@@ -211,7 +211,7 @@ create table if not exists public.sales_orders (
 create table if not exists public.sales_order_items (
   id uuid primary key default gen_random_uuid(),
   sales_order_id uuid not null references public.sales_orders(id) on delete cascade,
-  product_id uuid not null references public.products(id) on delete restrict,
+  product_id uuid references public.products(id) on delete restrict,
   product_name text not null,
   sku text,
   unit_name text not null default 'cai',
