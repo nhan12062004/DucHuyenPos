@@ -235,6 +235,20 @@ function getCustomerStats(orders: SalesOrder[], customerId?: string) {
   };
 }
 
+function getScrollParent(element: HTMLElement | null) {
+  let parent = element?.parentElement ?? null;
+
+  while (parent) {
+    const { overflowY } = window.getComputedStyle(parent);
+    if ((overflowY === 'auto' || overflowY === 'scroll') && parent.scrollHeight > parent.clientHeight) {
+      return parent;
+    }
+    parent = parent.parentElement;
+  }
+
+  return null;
+}
+
 function isSameDay(value?: string) {
   if (!value) {
     return false;
@@ -497,6 +511,7 @@ export function Orders() {
   const [orderExportType, setOrderExportType] = useState<OrderExportType>('orders');
   const [isImporting, setIsImporting] = useState(false);
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
+  const detailPageRef = useRef<HTMLDivElement | null>(null);
   const processingWindowRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -754,6 +769,22 @@ export function Orders() {
   const paymentMeta = getPaymentStatusMeta(selectedOrder?.payment_status);
   const selectedOrderItems = selectedOrder?.sales_order_items ?? [];
   const customerStats = getCustomerStats(orders, selectedOrder?.customer_id);
+
+  useEffect(() => {
+    if (!selectedOrder?.id) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      const scrollParent = getScrollParent(detailPageRef.current);
+      if (scrollParent) {
+        scrollParent.scrollTo({ top: 0, left: 0 });
+        return;
+      }
+
+      window.scrollTo({ top: 0, left: 0 });
+    });
+  }, [selectedOrder?.id]);
 
   const handleSaveFilters = () => {
     window.localStorage.setItem(
@@ -1145,7 +1176,7 @@ export function Orders() {
     const progress = getTimelineProgress(selectedOrder.status);
 
     return (
-      <div className="flex flex-col gap-4">
+      <div ref={detailPageRef} className="flex flex-col gap-4">
         <ToastBridge message={infoMessage} onDone={() => setInfoMessage(null)} />
         <ToastBridge message={detailError} variant="error" onDone={() => setDetailError(null)} />
 
