@@ -52,7 +52,9 @@ function getOuterHeight(element: Element | null) {
 
   const rect = element.getBoundingClientRect();
   const styles = window.getComputedStyle(element);
-  return rect.height + parseFloat(styles.marginTop || '0') + parseFloat(styles.marginBottom || '0');
+  const marginTop = parseFloat(styles.marginTop || '0');
+  const marginBottom = parseFloat(styles.marginBottom || '0');
+  return rect.height + (Number.isFinite(marginTop) ? marginTop : 0) + (Number.isFinite(marginBottom) ? marginBottom : 0);
 }
 
 export function Invoice() {
@@ -607,7 +609,9 @@ export function Invoice() {
           min-height: 210mm;
           box-sizing: border-box;
           position: relative;
-          padding: 11mm 10mm 15mm;
+          display: flex;
+          flex-direction: column;
+          padding: 11mm 10mm 6mm;
           font-family: "Times New Roman", Times, serif;
           font-size: 12px;
           line-height: 1.32;
@@ -637,13 +641,10 @@ export function Invoice() {
         }
 
         .invoice-page-footer {
-          position: absolute;
-          left: 10mm;
-          right: 10mm;
-          bottom: 6mm;
           display: flex;
           align-items: center;
           justify-content: space-between;
+          margin-top: auto;
           color: #334155;
           font-size: 12px;
         }
@@ -1009,12 +1010,12 @@ export function Invoice() {
 
           .invoice-paper {
             width: 148mm !important;
-            min-height: 210mm !important;
-            height: 210mm !important;
+            min-height: 100vh !important;
+            height: 100vh !important;
             box-sizing: border-box !important;
             box-shadow: none !important;
             margin: 0 !important;
-            padding: 11mm 10mm 15mm !important;
+            padding: 11mm 10mm 6mm !important;
             overflow: visible !important;
             break-inside: avoid;
             page-break-inside: avoid;
