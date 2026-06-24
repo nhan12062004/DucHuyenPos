@@ -608,7 +608,8 @@ export function Invoice() {
           box-sizing: border-box;
           position: relative;
           padding: 11mm 10mm 15mm;
-          font-size: 10.5px;
+          font-family: "Times New Roman", Times, serif;
+          font-size: 12px;
           line-height: 1.32;
         }
 
@@ -644,7 +645,7 @@ export function Invoice() {
           align-items: center;
           justify-content: space-between;
           color: #334155;
-          font-size: 9px;
+          font-size: 12px;
         }
 
         .invoice-page-footer strong {
@@ -682,7 +683,7 @@ export function Invoice() {
         .invoice-store h1 {
           margin: 0 0 6px;
           color: #07152b;
-          font-size: 13px;
+          font-size: 12px;
           font-weight: 700;
           letter-spacing: 0;
         }
@@ -690,7 +691,7 @@ export function Invoice() {
         .invoice-store p {
           margin: 2px 0;
           color: #334155;
-          font-size: 10px;
+          font-size: 12px;
         }
 
         .invoice-rule {
@@ -709,7 +710,7 @@ export function Invoice() {
           border-bottom: 1px solid #e5e7eb;
           padding-bottom: 5px;
           color: #475569;
-          font-size: 9px;
+          font-size: 12px;
           font-weight: 600;
           letter-spacing: 0.06em;
         }
@@ -764,7 +765,7 @@ export function Invoice() {
         .invoice-order-section h3 {
           margin: 0 0 6px;
           color: #020617;
-          font-size: 13px;
+          font-size: 12px;
           font-weight: 700;
           letter-spacing: 0.04em;
           text-align: center;
@@ -795,7 +796,7 @@ export function Invoice() {
         .invoice-items th {
           padding: 1.8mm 1.4mm;
           color: #0f172a;
-          font-size: 9px;
+          font-size: 12px;
           font-weight: 600;
           text-align: left;
         }
@@ -851,7 +852,7 @@ export function Invoice() {
         .invoice-items td span {
           margin-top: 3px;
           color: #64748b;
-          font-size: 9px;
+          font-size: 12px;
         }
 
         .invoice-items .empty-row {
@@ -896,12 +897,12 @@ export function Invoice() {
         }
 
         .invoice-grand-total span {
-          font-size: 13px;
+          font-size: 12px;
           font-weight: 950;
         }
 
         .invoice-grand-total strong {
-          font-size: 20px;
+          font-size: 12px;
           font-weight: 950;
           white-space: nowrap;
         }
@@ -922,7 +923,7 @@ export function Invoice() {
 
         .invoice-debt strong {
           color: #111827;
-          font-size: 15px;
+          font-size: 12px;
           font-weight: 600;
           white-space: nowrap;
         }
@@ -946,14 +947,14 @@ export function Invoice() {
 
         .invoice-signatures strong {
           color: #020617;
-          font-size: 10px;
+          font-size: 12px;
           font-weight: 700;
         }
 
         .invoice-signatures span {
           margin-top: 2px;
           color: #0f172a;
-          font-size: 9px;
+          font-size: 12px;
           font-style: italic;
         }
 
@@ -1008,8 +1009,8 @@ export function Invoice() {
 
           .invoice-paper {
             width: 148mm !important;
-            min-height: auto !important;
-            height: auto !important;
+            min-height: 210mm !important;
+            height: 210mm !important;
             box-sizing: border-box !important;
             box-shadow: none !important;
             margin: 0 !important;
