@@ -28,6 +28,8 @@ export class SalesOrdersService {
       include_items?: string | boolean;
     },
   ): Promise<PaginatedResult<any>> {
+    await this.deleteExpiredSalesOrders();
+
     const {
       page = 1,
       limit = 20,
@@ -116,6 +118,20 @@ export class SalesOrdersService {
       limit,
       totalPages: Math.ceil((count ?? 0) / limit),
     };
+  }
+
+  private async deleteExpiredSalesOrders() {
+    const cutoff = new Date();
+    cutoff.setUTCDate(cutoff.getUTCDate() - 30);
+
+    const { error } = await this.supabase
+      .from('sales_orders')
+      .delete()
+      .lt('sold_at', cutoff.toISOString());
+
+    if (error) {
+      throw new Error(`Không thể xóa đơn hàng quá 30 ngày: ${error.message}`);
+    }
   }
 
   async getProcessingSummary(days = 90) {
