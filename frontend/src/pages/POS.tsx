@@ -1627,7 +1627,10 @@ export function POS() {
       unitName: item.unitName,
     }));
 
-    setCartProducts((current) => [...temporaryProducts, ...current]);
+    // Giỏ hàng hiển thị dòng mới nhất ở trên và đánh STT từ dưới lên.
+    // Đảo nhóm hàng tạm khi chèn để dòng 1 trong popup nhận STT kế tiếp,
+    // dòng 2 nhận STT sau đó, v.v.
+    setCartProducts((current) => [...temporaryProducts].reverse().concat(current));
     setActiveCartProductId(temporaryProducts[0]?.id ?? activeCartProductId);
     setSuccessMessage(`Đã thêm ${temporaryProducts.length} hàng tạm vào đơn.`);
     setError(null);
