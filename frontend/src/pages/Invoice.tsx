@@ -62,6 +62,7 @@ export function Invoice() {
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get('orderId');
   const shouldAutoPrint = searchParams.get('autoPrint') === '1';
+  const shouldHideDiscount = searchParams.get('hideDiscount') === '1';
   const hasAutoPrintedRef = useRef(false);
   const measureRef = useRef<HTMLDivElement>(null);
   const [order, setOrder] = useState<SalesOrder | null>(null);
@@ -392,10 +393,12 @@ export function Invoice() {
             <span>Tổng tiền hàng:</span>
             <strong>{formatCurrency(subtotal)} đ</strong>
           </div>
-          <div className="invoice-summary-row">
-            <span>Chiết khấu / Giảm giá:</span>
-            <strong>{discountAmount ? `- ${formatCurrency(discountAmount)} đ` : '0 đ'}</strong>
-          </div>
+          {!shouldHideDiscount ? (
+            <div className="invoice-summary-row">
+              <span>Chiết khấu / Giảm giá:</span>
+              <strong>{discountAmount ? `- ${formatCurrency(discountAmount)} đ` : '0 đ'}</strong>
+            </div>
+          ) : null}
           {shippingFee > 0 ? (
             <div className="invoice-summary-row">
               <span>Phí giao hàng:</span>
@@ -522,10 +525,12 @@ export function Invoice() {
               <span>Tổng tiền hàng:</span>
               <strong>{formatCurrency(subtotal)} đ</strong>
             </div>
-            <div className="invoice-summary-row">
-              <span>Chiết khấu / Giảm giá:</span>
-              <strong>{discountAmount ? `- ${formatCurrency(discountAmount)} đ` : '0 đ'}</strong>
-            </div>
+            {!shouldHideDiscount ? (
+              <div className="invoice-summary-row">
+                <span>Chiết khấu / Giảm giá:</span>
+                <strong>{discountAmount ? `- ${formatCurrency(discountAmount)} đ` : '0 đ'}</strong>
+              </div>
+            ) : null}
             {shippingFee > 0 ? (
               <div className="invoice-summary-row">
                 <span>Phí giao hàng:</span>

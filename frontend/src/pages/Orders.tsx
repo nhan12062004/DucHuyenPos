@@ -504,6 +504,7 @@ export function Orders() {
   const [isProcessingHidden, setIsProcessingHidden] = useState(false);
   const [processingWindowDays, setProcessingWindowDays] = useState<7 | 30 | 90>(90);
   const [showProcessingWindowMenu, setShowProcessingWindowMenu] = useState(false);
+  const [showPrintMenu, setShowPrintMenu] = useState(false);
   const [showCustomerExtra, setShowCustomerExtra] = useState(false);
   const [dashboardFilter, setDashboardFilter] = useState<DashboardOrderFilter | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -513,6 +514,7 @@ export function Orders() {
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
   const detailPageRef = useRef<HTMLDivElement | null>(null);
   const processingWindowRef = useRef<HTMLDivElement | null>(null);
+  const printMenuRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -743,6 +745,24 @@ export function Orders() {
     };
   }, [showProcessingWindowMenu]);
 
+  useEffect(() => {
+    if (!showPrintMenu) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!printMenuRef.current?.contains(event.target as Node)) {
+        setShowPrintMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+    };
+  }, [showPrintMenu]);
+
   const visibleOrders = orders;
   const totalPages = Math.max(1, Math.ceil((totalOrders || 1) / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -794,12 +814,22 @@ export function Orders() {
     setInfoMessage('Đã lưu bộ lọc hiện tại.');
   };
 
-  const handlePrintOrder = () => {
+  const handlePrintOrder = (hideDiscount = false) => {
     if (!selectedOrder) {
       return;
     }
 
-    window.location.assign(`/invoice?orderId=${encodeURIComponent(selectedOrder.id)}&autoPrint=1`);
+    const params = new URLSearchParams({
+      orderId: selectedOrder.id,
+      autoPrint: '1',
+    });
+
+    if (hideDiscount) {
+      params.set('hideDiscount', '1');
+    }
+
+    setShowPrintMenu(false);
+    window.location.assign(`/invoice?${params.toString()}`);
   };
 
   const handleExportOrders = async () => {
@@ -1242,13 +1272,36 @@ export function Orders() {
                 </span>
               </div>
               <div className="flex gap-2">
-                <button
-                  onClick={handlePrintOrder}
-                  className="flex items-center gap-2 rounded border border-slate-300 bg-white px-3 py-1.5 text-[13px] font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
-                >
-                  <Printer size={14} className="text-slate-500" /> In đơn hàng{' '}
-                  <ChevronDown size={14} className="text-slate-400" />
-                </button>
+                <div ref={printMenuRef} className="relative flex">
+                  <button
+                    type="button"
+                    onClick={() => handlePrintOrder()}
+                    className="flex items-center gap-2 rounded-l border border-r-0 border-slate-300 bg-white px-3 py-1.5 text-[13px] font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+                  >
+                    <Printer size={14} className="text-slate-500" /> In đơn hàng
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Mở tùy chọn in"
+                    aria-expanded={showPrintMenu}
+                    onClick={() => setShowPrintMenu((current) => !current)}
+                    className="flex items-center rounded-r border border-slate-300 bg-white px-2 py-1.5 text-slate-400 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-600"
+                  >
+                    <ChevronDown size={14} />
+                  </button>
+                  {showPrintMenu ? (
+                    <div className="absolute left-0 top-full z-30 mt-2 min-w-[245px] overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-[13px] font-medium text-slate-700 shadow-lg shadow-slate-200/70">
+                      <button
+                        type="button"
+                        onClick={() => handlePrintOrder(true)}
+                        className="flex w-full items-center gap-2 px-4 py-2.5 text-left transition-colors hover:bg-slate-50"
+                      >
+                        <Printer size={14} className="text-slate-500" />
+                        In không hiện dòng chiết khấu
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
                 <button
                   onClick={handleCopyOrder}
                   disabled={isCopying}
@@ -1453,7 +1506,7 @@ export function Orders() {
                   <Printer
                     className="ml-auto cursor-pointer text-slate-400 hover:text-slate-700"
                     size={16}
-                    onClick={handlePrintOrder}
+                    onClick={() => handlePrintOrder()}
                   />
                 </div>
                 <div className="space-y-3 text-[13px]">
