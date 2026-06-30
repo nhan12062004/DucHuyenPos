@@ -1283,16 +1283,28 @@ export function Orders() {
                   <button
                     type="button"
                     aria-label="Mở tùy chọn in"
+                    aria-haspopup="menu"
                     aria-expanded={showPrintMenu}
-                    onClick={() => setShowPrintMenu((current) => !current)}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setShowPrintMenu((current) => !current);
+                    }}
                     className="flex items-center rounded-r border border-slate-300 bg-white px-2 py-1.5 text-slate-400 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-600"
                   >
-                    <ChevronDown size={14} />
+                    <ChevronDown
+                      size={14}
+                      className={`pointer-events-none transition-transform ${showPrintMenu ? 'rotate-180' : ''}`}
+                    />
                   </button>
                   {showPrintMenu ? (
-                    <div className="absolute left-0 top-full z-30 mt-2 min-w-[245px] overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-[13px] font-medium text-slate-700 shadow-lg shadow-slate-200/70">
+                    <div
+                      role="menu"
+                      className="absolute left-0 top-full z-30 mt-2 min-w-[245px] overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-[13px] font-medium text-slate-700 shadow-lg shadow-slate-200/70"
+                    >
                       <button
                         type="button"
+                        role="menuitem"
                         onClick={() => handlePrintOrder(true)}
                         className="flex w-full items-center gap-2 px-4 py-2.5 text-left transition-colors hover:bg-slate-50"
                       >
