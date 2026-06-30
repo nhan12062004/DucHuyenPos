@@ -105,8 +105,6 @@ export function Invoice() {
   const shippingFee = Number(order?.shipping_fee ?? 0);
   const taxAmount = Number(order?.tax_amount ?? 0);
   const totalAmount = Number(order?.total_amount ?? 0);
-  const paidAmount = Number(order?.paid_amount ?? 0);
-  const debtAmount = useMemo(() => Math.max(0, totalAmount - paidAmount), [paidAmount, totalAmount]);
   const invoiceNo = order?.invoice_no ?? order?.order_no ?? '---';
   const fallbackInvoicePages = useMemo<InvoicePage[]>(() => {
     if (!items.length) {
@@ -140,7 +138,7 @@ export function Invoice() {
     const firstHeaderHeight = getOuterHeight(measure.querySelector('[data-measure="first-header"]'));
     const continuationHeaderHeight = getOuterHeight(measure.querySelector('[data-measure="continuation-header"]'));
     const orderHeaderHeight = getOuterHeight(measure.querySelector('[data-measure="order-header"]'));
-    const footerHeight = getOuterHeight(measure.querySelector('[data-measure="footer"]'));
+    const orderTitleHeight = getOuterHeight(measure.querySelector('[data-measure="order-title"]'));
     const summaryHeight =
       getOuterHeight(measure.querySelector('[data-measure="summary"]')) +
       getOuterHeight(measure.querySelector('[data-measure="signatures"]'));
@@ -158,7 +156,8 @@ export function Invoice() {
 
     while (cursor < items.length) {
       const showHeader = pageIndex === 0;
-      const fixedHeight = (showHeader ? firstHeaderHeight : continuationHeaderHeight) + orderHeaderHeight + footerHeight;
+      const currentOrderHeaderHeight = showHeader ? orderHeaderHeight : orderHeaderHeight - orderTitleHeight;
+      const fixedHeight = (showHeader ? firstHeaderHeight : continuationHeaderHeight) + currentOrderHeaderHeight;
       const availableForRows = Math.max(0, availableHeight - fixedHeight);
       const availableForLastPageRows = Math.max(0, availableForRows - summaryHeight);
 
@@ -306,11 +305,8 @@ export function Invoice() {
           </div>
         </header>
 
-        <div className="invoice-rule" />
-
         <section className="invoice-meta-grid">
           <div>
-            <h3>THÔNG TIN KHÁCH HÀNG</h3>
             <dl>
               <div>
                 <dt>Khách hàng:</dt>
@@ -328,7 +324,6 @@ export function Invoice() {
           </div>
 
           <div className="invoice-transaction">
-            <h3>CHI TIẾT GIAO DỊCH</h3>
             <dl>
               <div>
                 <dt>Mã hóa đơn:</dt>
@@ -352,7 +347,7 @@ export function Invoice() {
 
             {page.items.length || pageIndex === 0 ? (
         <section className="invoice-order-section">
-          <h3>{pageIndex === 0 ? 'ĐƠN HÀNG' : 'ĐƠN HÀNG (tiếp)'}</h3>
+          {pageIndex === 0 ? <h3>ĐƠN HÀNG</h3> : null}
           <table className="invoice-items">
             <thead>
               <tr>
@@ -417,14 +412,6 @@ export function Invoice() {
             <span>TỔNG CỘNG:</span>
             <strong>{formatCurrency(totalAmount)} đ</strong>
           </div>
-          <div className="invoice-summary-row paid">
-            <span>Khách đã thanh toán:</span>
-            <strong>{formatCurrency(paidAmount)} đ</strong>
-          </div>
-          <div className="invoice-debt">
-            <span>GHI NỢ:</span>
-            <strong>{formatCurrency(debtAmount)} đ</strong>
-          </div>
         </section>
 
         <section className="invoice-signatures">
@@ -440,10 +427,6 @@ export function Invoice() {
         </section>
           </>
         ) : null}
-            <footer className="invoice-page-footer">
-              <strong>#{invoiceNo}</strong>
-              <span>Trang {pageIndex + 1}/{renderedInvoicePages.length}</span>
-            </footer>
           </main>
         ))}
       </div>
@@ -462,11 +445,8 @@ export function Invoice() {
               </div>
             </header>
 
-            <div className="invoice-rule" />
-
             <section className="invoice-meta-grid">
               <div>
-                <h3>THÔNG TIN KHÁCH HÀNG</h3>
                 <dl>
                   <div>
                     <dt>Khách hàng:</dt>
@@ -484,7 +464,6 @@ export function Invoice() {
               </div>
 
               <div className="invoice-transaction">
-                <h3>CHI TIẾT GIAO DỊCH</h3>
                 <dl>
                   <div>
                     <dt>Mã hóa đơn:</dt>
@@ -506,7 +485,7 @@ export function Invoice() {
           <div className="invoice-continuation-spacer" data-measure="continuation-header" />
 
           <section className="invoice-order-section" data-measure="order-header">
-            <h3>ĐƠN HÀNG</h3>
+            <h3 data-measure="order-title">ĐƠN HÀNG</h3>
             <table className="invoice-items">
               <thead>
                 <tr>
@@ -563,14 +542,6 @@ export function Invoice() {
               <span>TỔNG CỘNG:</span>
               <strong>{formatCurrency(totalAmount)} đ</strong>
             </div>
-            <div className="invoice-summary-row paid">
-              <span>Khách đã thanh toán:</span>
-              <strong>{formatCurrency(paidAmount)} đ</strong>
-            </div>
-            <div className="invoice-debt">
-              <span>GHI NỢ:</span>
-              <strong>{formatCurrency(debtAmount)} đ</strong>
-            </div>
           </section>
 
           <section className="invoice-signatures" data-measure="signatures">
@@ -585,10 +556,6 @@ export function Invoice() {
             </div>
           </section>
 
-          <footer className="invoice-page-footer" data-measure="footer">
-            <strong>#{invoiceNo}</strong>
-            <span>Trang 1/1</span>
-          </footer>
         </main>
       </div>
 
@@ -611,7 +578,7 @@ export function Invoice() {
           position: relative;
           display: flex;
           flex-direction: column;
-          padding: 11mm 10mm 6mm;
+          padding: 7mm 10mm 6mm;
           font-family: "Times New Roman", Times, serif;
           font-size: 12px;
           line-height: 1.32;
@@ -640,24 +607,6 @@ export function Invoice() {
           height: 0;
         }
 
-        .invoice-page-footer {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-top: auto;
-          color: #334155;
-          font-size: 12px;
-        }
-
-        .invoice-page-footer strong {
-          color: #0f172a;
-          font-weight: 700;
-        }
-
-        .invoice-page-footer span {
-          font-weight: 600;
-        }
-
         .invoice-hero {
           display: grid;
           grid-template-columns: minmax(0, 1fr);
@@ -684,9 +633,10 @@ export function Invoice() {
         .invoice-store h1 {
           margin: 0 0 6px;
           color: #07152b;
-          font-size: 12px;
+          font-size: 16px;
           font-weight: 700;
           letter-spacing: 0;
+          line-height: 1.2;
         }
 
         .invoice-store p {
@@ -695,25 +645,11 @@ export function Invoice() {
           font-size: 12px;
         }
 
-        .invoice-rule {
-          margin: 6mm 0 5mm;
-          border-top: 2px solid #111827;
-        }
-
         .invoice-meta-grid {
           display: grid;
           grid-template-columns: minmax(0, 1fr) 56mm;
           gap: 7mm;
-        }
-
-        .invoice-meta-grid h3 {
-          margin: 0 0 12px;
-          border-bottom: 1px solid #e5e7eb;
-          padding-bottom: 5px;
-          color: #475569;
-          font-size: 12px;
-          font-weight: 600;
-          letter-spacing: 0.06em;
+          margin-top: 6mm;
         }
 
         .invoice-meta-grid dl {
@@ -760,13 +696,13 @@ export function Invoice() {
         }
 
         .invoice-order-section {
-          margin-top: 5mm;
+          margin-top: 3mm;
         }
 
         .invoice-order-section h3 {
           margin: 0 0 6px;
           color: #020617;
-          font-size: 12px;
+          font-size: 15px;
           font-weight: 700;
           letter-spacing: 0.04em;
           text-align: center;
@@ -774,6 +710,8 @@ export function Invoice() {
 
         .invoice-items {
           width: 100%;
+          border-right: 1px solid #64748b;
+          border-left: 1px solid #64748b;
           border-collapse: collapse;
           break-inside: auto;
           page-break-inside: auto;
@@ -802,11 +740,19 @@ export function Invoice() {
           text-align: left;
         }
 
+        .invoice-items th + th {
+          border-left: 1px solid #64748b;
+        }
+
         .invoice-items td {
-          border-bottom: 1px solid #eef2f7;
+          border-bottom: 1.5px solid #64748b;
           padding: 2mm 1.4mm;
           color: #0f172a;
           vertical-align: top;
+        }
+
+        .invoice-items td + td {
+          border-left: 1px solid #64748b;
         }
 
         .invoice-items th:nth-child(1),
@@ -872,8 +818,7 @@ export function Invoice() {
         }
 
         .invoice-summary-row,
-        .invoice-grand-total,
-        .invoice-debt {
+        .invoice-grand-total {
           display: flex;
           justify-content: space-between;
           align-items: baseline;
@@ -905,27 +850,6 @@ export function Invoice() {
         .invoice-grand-total strong {
           font-size: 12px;
           font-weight: 950;
-          white-space: nowrap;
-        }
-
-        .invoice-summary-row.paid {
-          border-bottom: 1px solid #cbd5e1;
-          padding-bottom: 8px;
-        }
-
-        .invoice-debt {
-          padding: 0;
-        }
-
-        .invoice-debt span {
-          color: #111827;
-          font-weight: 600;
-        }
-
-        .invoice-debt strong {
-          color: #111827;
-          font-size: 12px;
-          font-weight: 600;
           white-space: nowrap;
         }
 
@@ -1015,7 +939,7 @@ export function Invoice() {
             box-sizing: border-box !important;
             box-shadow: none !important;
             margin: 0 !important;
-            padding: 11mm 10mm 6mm !important;
+            padding: 7mm 10mm 6mm !important;
             overflow: visible !important;
             break-inside: avoid;
             page-break-inside: avoid;
