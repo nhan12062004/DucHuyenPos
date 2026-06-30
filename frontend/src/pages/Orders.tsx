@@ -27,6 +27,7 @@ import {
   salesOrdersService,
   type CreateSalesOrderPayload,
   type SalesOrder,
+  type SalesOrderItem,
   type SalesOrdersProcessingSummary,
   type SalesOrdersQuery,
 } from '../services/salesOrdersService';
@@ -112,6 +113,17 @@ export function invalidateOrdersCache() {
 
 function formatCurrency(value: number) {
   return value.toLocaleString('vi-VN');
+}
+
+const productNameCollator = new Intl.Collator('vi', {
+  numeric: true,
+  sensitivity: 'base',
+});
+
+function sortOrderItemsByProductName(items: SalesOrderItem[]) {
+  return [...items].sort((left, right) =>
+    productNameCollator.compare(left.product_name.trim(), right.product_name.trim()),
+  );
 }
 
 function formatDateTime(value?: string) {
@@ -787,7 +799,7 @@ export function Orders() {
   const cancelledDeliveryOrders = processingSummary.cancelledDelivery;
   const statusMeta = getOrderStatusMeta(selectedOrder?.status);
   const paymentMeta = getPaymentStatusMeta(selectedOrder?.payment_status);
-  const selectedOrderItems = selectedOrder?.sales_order_items ?? [];
+  const selectedOrderItems = sortOrderItemsByProductName(selectedOrder?.sales_order_items ?? []);
   const customerStats = getCustomerStats(orders, selectedOrder?.customer_id);
 
   useEffect(() => {
