@@ -1200,7 +1200,7 @@ export function POS() {
   const routeState = location.state as { orderId?: string } | null;
   const editingOrderIdFromRoute = routeState?.orderId ?? '';
 
-  const [activeDeliveryTab, setActiveDeliveryTab] = useState<DeliveryTab>('hang_van_chuyen');
+  const [activeDeliveryTab, setActiveDeliveryTab] = useState<DeliveryTab>('nhan_tai_cua_hang');
   const [issueInvoice, setIssueInvoice] = useState(false);
   const [customerId, setCustomerId] = useState('');
   const [customerQuery, setCustomerQuery] = useState('');
