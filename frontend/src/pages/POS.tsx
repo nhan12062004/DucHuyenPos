@@ -2357,7 +2357,7 @@ export function POS() {
                           'px-5 py-4 text-center font-medium text-slate-600',
                           isActive && 'border-y border-l border-blue-400',
                         )}>
-                          {index + 1}
+                          {cartProducts.length - index}
                         </td>
                         <td className={cn('px-2 py-4', isActive && 'border-y border-blue-400')}>
                           <div className="flex h-10 w-10 items-center justify-center rounded border border-slate-200 bg-white text-slate-300">
