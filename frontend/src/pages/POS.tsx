@@ -1584,13 +1584,13 @@ export function POS() {
     setCartProducts((current) => {
       const existing = current.find((item) => item.id === product.id);
       if (existing) {
-        return current.map((item) =>
-          item.id === product.id ? { ...item, qty: item.qty + 1 } : item,
-        );
+        return [
+          { ...existing, qty: existing.qty + 1 },
+          ...current.filter((item) => item.id !== product.id),
+        ];
       }
 
       return [
-        ...current,
         {
           id: product.id,
           productId: product.id,
@@ -1603,6 +1603,7 @@ export function POS() {
           discount: 0,
           unitName: product.unit_name || 'cái',
         },
+        ...current,
       ];
     });
     setIsDropdownOpen(false);
@@ -1626,7 +1627,7 @@ export function POS() {
       unitName: item.unitName,
     }));
 
-    setCartProducts((current) => [...current, ...temporaryProducts]);
+    setCartProducts((current) => [...temporaryProducts, ...current]);
     setActiveCartProductId(temporaryProducts[0]?.id ?? activeCartProductId);
     setSuccessMessage(`Đã thêm ${temporaryProducts.length} hàng tạm vào đơn.`);
     setError(null);
