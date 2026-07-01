@@ -3,6 +3,7 @@ frontend/dist/
 build/
 dist/
 coverage/
+database/backups/
 .DS_Store
 *.log
 .env*
