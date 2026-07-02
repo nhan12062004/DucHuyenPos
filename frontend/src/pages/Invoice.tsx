@@ -435,7 +435,6 @@ export function Invoice() {
           <div>
             <strong>NGƯỜI BÁN HÀNG</strong>
             <span>(Ký, ghi rõ họ tên)</span>
-            <em>{order.cashier?.full_name ?? ''}</em>
           </div>
         </section>
           </>
@@ -567,7 +566,6 @@ export function Invoice() {
             <div>
               <strong>NGƯỜI BÁN HÀNG</strong>
               <span>(Ký, ghi rõ họ tên)</span>
-              <em>{order.cashier?.full_name ?? ''}</em>
             </div>
           </section>
 
@@ -761,7 +759,7 @@ export function Invoice() {
 
         .invoice-items td {
           border-bottom: 1.5px solid #64748b;
-          padding: 2mm 1.4mm;
+          padding: 1mm 1.4mm;
           color: #0f172a;
           vertical-align: top;
         }
@@ -808,7 +806,7 @@ export function Invoice() {
 
         .invoice-items td strong {
           font-weight: 400;
-          line-height: 1.35;
+          line-height: 1.2;
         }
 
         .invoice-items td span {
@@ -880,8 +878,7 @@ export function Invoice() {
         }
 
         .invoice-signatures strong,
-        .invoice-signatures span,
-        .invoice-signatures em {
+        .invoice-signatures span {
           display: block;
         }
 
@@ -896,15 +893,6 @@ export function Invoice() {
           color: #0f172a;
           font-size: 12px;
           font-style: italic;
-        }
-
-        .invoice-signatures em {
-          margin-top: 12mm;
-          border-top: 1px solid #e5e7eb;
-          padding-top: 6px;
-          color: #0f172a;
-          font-style: normal;
-          font-weight: 400;
         }
 
         @media print {
