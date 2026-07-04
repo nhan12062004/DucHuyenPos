@@ -1189,6 +1189,31 @@ type PosCache = {
 };
 let posCache: PosCache | null = null;
 
+type PosDraft = {
+  activeDeliveryTab: DeliveryTab;
+  issueInvoice: boolean;
+  customerId: string;
+  customer: Customer | null;
+  customerQuery: string;
+  productQuery: string;
+  cartProducts: CartProduct[];
+  activeCartProductId: string;
+  branchId: string;
+  cashierId: string;
+  source: 'pos' | 'web' | 'phone' | 'manual';
+  deliveryDue: string;
+  orderNo: string;
+  orderNote: string;
+  tags: string;
+  orderDiscount: number;
+  shippingFee: number;
+  paidAmount: number;
+};
+
+// Chỉ giữ đơn nháp trong bộ nhớ của tab hiện tại. Chuyển trang trong ứng dụng
+// không làm mất dữ liệu, còn tải lại hoặc đóng tab sẽ tự động xóa nháp.
+let posDraft: PosDraft | null = null;
+
 export function invalidatePosCache() {
   posCache = null;
 }
@@ -1199,12 +1224,15 @@ export function POS() {
   const { user } = useAuth();
   const routeState = location.state as { orderId?: string } | null;
   const editingOrderIdFromRoute = routeState?.orderId ?? '';
+  const restoredDraft = editingOrderIdFromRoute ? null : posDraft;
 
-  const [activeDeliveryTab, setActiveDeliveryTab] = useState<DeliveryTab>('nhan_tai_cua_hang');
-  const [issueInvoice, setIssueInvoice] = useState(false);
-  const [customerId, setCustomerId] = useState('');
-  const [customerQuery, setCustomerQuery] = useState('');
-  const [productQuery, setProductQuery] = useState('');
+  const [activeDeliveryTab, setActiveDeliveryTab] = useState<DeliveryTab>(
+    restoredDraft?.activeDeliveryTab ?? 'nhan_tai_cua_hang',
+  );
+  const [issueInvoice, setIssueInvoice] = useState(restoredDraft?.issueInvoice ?? false);
+  const [customerId, setCustomerId] = useState(restoredDraft?.customerId ?? '');
+  const [customerQuery, setCustomerQuery] = useState(restoredDraft?.customerQuery ?? '');
+  const [productQuery, setProductQuery] = useState(restoredDraft?.productQuery ?? '');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
   const [isCustomerDetailsExpanded, setIsCustomerDetailsExpanded] = useState(false);
@@ -1213,22 +1241,30 @@ export function POS() {
   
   // Modals
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
-  const [cartProducts, setCartProducts] = useState<CartProduct[]>([]);
-  const [activeCartProductId, setActiveCartProductId] = useState('');
+  const [cartProducts, setCartProducts] = useState<CartProduct[]>(
+    () => restoredDraft?.cartProducts ?? [],
+  );
+  const [activeCartProductId, setActiveCartProductId] = useState(
+    restoredDraft?.activeCartProductId ?? '',
+  );
   const [branches, setBranches] = useState<Branch[]>([]);
   const [staffList, setStaffList] = useState<StaffProfile[]>([]);
-  const [branchId, setBranchId] = useState('');
-  const [cashierId, setCashierId] = useState('');
-  const [source, setSource] = useState<'pos' | 'web' | 'phone' | 'manual'>('web');
-  const [deliveryDue, setDeliveryDue] = useState('');
-  const [orderNo, setOrderNo] = useState('');
-  const [orderNote, setOrderNote] = useState('');
-  const [tags, setTags] = useState('');
-  const [orderDiscount, setOrderDiscount] = useState(0);
-  const [shippingFee, setShippingFee] = useState(0);
-  const [paidAmount, setPaidAmount] = useState(0);
+  const [branchId, setBranchId] = useState(restoredDraft?.branchId ?? '');
+  const [cashierId, setCashierId] = useState(restoredDraft?.cashierId ?? '');
+  const [source, setSource] = useState<'pos' | 'web' | 'phone' | 'manual'>(
+    restoredDraft?.source ?? 'web',
+  );
+  const [deliveryDue, setDeliveryDue] = useState(restoredDraft?.deliveryDue ?? '');
+  const [orderNo, setOrderNo] = useState(restoredDraft?.orderNo ?? '');
+  const [orderNote, setOrderNote] = useState(restoredDraft?.orderNote ?? '');
+  const [tags, setTags] = useState(restoredDraft?.tags ?? '');
+  const [orderDiscount, setOrderDiscount] = useState(restoredDraft?.orderDiscount ?? 0);
+  const [shippingFee, setShippingFee] = useState(restoredDraft?.shippingFee ?? 0);
+  const [paidAmount, setPaidAmount] = useState(restoredDraft?.paidAmount ?? 0);
   const [editingOrderId, setEditingOrderId] = useState('');
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>(
+    () => (restoredDraft?.customer ? [restoredDraft.customer] : []),
+  );
   const [customerSearchResults, setCustomerSearchResults] = useState<Customer[]>([]);
   const [customerSearchLoading, setCustomerSearchLoading] = useState(false);
   const [customerSearchError, setCustomerSearchError] = useState<string | null>(null);
@@ -1250,6 +1286,53 @@ export function POS() {
   const [isTemporaryProductsOpen, setIsTemporaryProductsOpen] = useState(false);
 
   useEffect(() => {
+    if (editingOrderIdFromRoute) {
+      return;
+    }
+
+    posDraft = {
+      activeDeliveryTab,
+      issueInvoice,
+      customerId,
+      customer: customers.find((customer) => customer.id === customerId) ?? null,
+      customerQuery,
+      productQuery,
+      cartProducts,
+      activeCartProductId,
+      branchId,
+      cashierId,
+      source,
+      deliveryDue,
+      orderNo,
+      orderNote,
+      tags,
+      orderDiscount,
+      shippingFee,
+      paidAmount,
+    };
+  }, [
+    activeCartProductId,
+    activeDeliveryTab,
+    branchId,
+    cashierId,
+    cartProducts,
+    customerId,
+    customerQuery,
+    customers,
+    deliveryDue,
+    editingOrderIdFromRoute,
+    issueInvoice,
+    orderDiscount,
+    orderNo,
+    orderNote,
+    paidAmount,
+    productQuery,
+    shippingFee,
+    source,
+    tags,
+  ]);
+
+  useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (customerSearchRef.current && !customerSearchRef.current.contains(e.target as Node)) {
         setIsCustomerDropdownOpen(false);
@@ -1268,7 +1351,12 @@ export function POS() {
     async function loadData() {
       if (posCache && Date.now() - posCache.timestamp < POS_CACHE_TTL_MS) {
         setBranches(posCache.branches);
-        setCustomers(posCache.customers);
+        setCustomers(
+          restoredDraft?.customer &&
+            !posCache.customers.some((customer) => customer.id === restoredDraft.customer?.id)
+            ? [restoredDraft.customer, ...posCache.customers]
+            : posCache.customers,
+        );
         setDebtSummary(posCache.debtSummary);
         setProducts(posCache.products);
         setStockSummary(posCache.stockSummary);
@@ -1333,7 +1421,12 @@ export function POS() {
         setStaffList(finalStaffList);
         setBranchId((current) => current || defaultBranch?.id || '');
         setCashierId((current) => current || currentUserFallback?.id || finalStaffList[0]?.id || '');
-        setCustomers(customerList.data);
+        setCustomers(
+          restoredDraft?.customer &&
+            !customerList.data.some((customer) => customer.id === restoredDraft.customer?.id)
+            ? [restoredDraft.customer, ...customerList.data]
+            : customerList.data,
+        );
         setProducts(productList.data);
         setStockSummary(stockMap);
         setDebtSummary(debtMap);
@@ -1744,6 +1837,7 @@ export function POS() {
         return;
       }
 
+      posDraft = null;
       navigate('/orders', {
         state: {
           selectedOrderId: savedOrder.id,
