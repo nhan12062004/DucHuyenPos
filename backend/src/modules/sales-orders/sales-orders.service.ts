@@ -112,7 +112,7 @@ export class SalesOrdersService {
     if (error) throw new Error(error.message);
 
     return {
-      data: data ?? [],
+      data: (data ?? []).map((order: any) => this.sortOrderItems(order)),
       total: count ?? 0,
       page,
       limit,
@@ -207,7 +207,7 @@ export class SalesOrdersService {
       .single();
 
     if (error || !data) throw new NotFoundException('Không tìm thấy đơn hàng');
-    return data;
+    return this.sortOrderItems(data);
   }
 
   async create(dto: CreateSalesOrderDto, actor?: ActivityActor) {
@@ -245,7 +245,7 @@ export class SalesOrdersService {
 
     if (orderErr || !order) throw new Error(orderErr?.message ?? 'Tạo đơn hàng thất bại');
 
-    const itemsToInsert = items.map((item) => ({
+    const itemsToInsert = items.map((item, index) => ({
       sales_order_id: order.id,
       product_id: item.product_id || null,
       product_name: item.product_name,
@@ -255,6 +255,7 @@ export class SalesOrdersService {
       unit_price: item.unit_price,
       discount_amount: item.discount_amount ?? 0,
       line_total: item.quantity * item.unit_price - (item.discount_amount ?? 0),
+      sort_order: index,
     }));
 
     const { error: itemsErr } = await this.supabase
@@ -330,7 +331,7 @@ export class SalesOrdersService {
       if (deleteItemsError) throw new Error(deleteItemsError.message);
 
       if (items.length > 0) {
-        const itemsToInsert = items.map((item) => ({
+        const itemsToInsert = items.map((item, index) => ({
           sales_order_id: id,
           product_id: item.product_id || null,
           product_name: item.product_name,
@@ -340,6 +341,7 @@ export class SalesOrdersService {
           unit_price: item.unit_price,
           discount_amount: item.discount_amount ?? 0,
           line_total: item.quantity * item.unit_price - (item.discount_amount ?? 0),
+          sort_order: index,
         }));
 
         const { error: insertItemsError } = await this.supabase
@@ -436,6 +438,31 @@ export class SalesOrdersService {
       .split(',')
       .map((item) => item.trim())
       .filter(Boolean);
+  }
+
+  private sortOrderItems<T extends { sales_order_items?: any[] }>(order: T): T {
+    if (!order.sales_order_items) return order;
+
+    return {
+      ...order,
+      sales_order_items: order.sales_order_items
+        .map((item, originalIndex) => ({ item, originalIndex }))
+        .sort((left, right) => {
+          const leftPosition = Number(left.item.sort_order);
+          const rightPosition = Number(right.item.sort_order);
+          const leftHasPosition = Number.isInteger(leftPosition);
+          const rightHasPosition = Number.isInteger(rightPosition);
+
+          if (leftHasPosition && rightHasPosition && leftPosition !== rightPosition) {
+            return leftPosition - rightPosition;
+          }
+          if (leftHasPosition !== rightHasPosition) {
+            return leftHasPosition ? -1 : 1;
+          }
+          return left.originalIndex - right.originalIndex;
+        })
+        .map(({ item }) => item),
+    };
   }
 
   private createSummaryBucket() {

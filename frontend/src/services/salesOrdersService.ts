@@ -15,6 +15,7 @@ export interface SalesOrderItem {
   unit_price: number;
   discount_amount: number;
   line_total: number;
+  sort_order: number;
   products?: { name: string; sku: string; image_url?: string } | null;
 }
 

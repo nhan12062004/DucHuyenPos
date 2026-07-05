@@ -220,6 +220,7 @@ create table if not exists public.sales_order_items (
   unit_price numeric(14,2) not null check (unit_price >= 0),
   discount_amount numeric(14,2) not null default 0,
   line_total numeric(14,2) not null default 0,
+  sort_order integer not null default 0 check (sort_order >= 0),
   created_at timestamptz not null default now()
 );
 
@@ -371,6 +372,7 @@ create index if not exists idx_sales_orders_branch_id on public.sales_orders(bra
 create index if not exists idx_sales_orders_sold_at on public.sales_orders(sold_at desc);
 create index if not exists idx_sales_orders_delivery_status on public.sales_orders(delivery_status);
 create index if not exists idx_sales_order_items_order_id on public.sales_order_items(sales_order_id);
+create index if not exists idx_sales_order_items_order_sort on public.sales_order_items(sales_order_id, sort_order);
 create index if not exists idx_sales_payments_order_id on public.sales_payments(sales_order_id);
 create index if not exists idx_sales_returns_order_id on public.sales_returns(sales_order_id);
 create index if not exists idx_purchase_orders_supplier_id on public.purchase_orders(supplier_id);

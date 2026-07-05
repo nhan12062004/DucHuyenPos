@@ -8,11 +8,6 @@ import { salesOrdersService, type SalesOrder } from '../services/salesOrdersServ
 const STORE_NAME = 'Vật tư Điện Nước Đức Huyền';
 const STORE_ADDRESS = '277 Nguyễn Thị Duệ, Việt Hòa, TP. Hải Phòng';
 const STORE_PHONE = '0989 245 272 - 0904 538 786';
-const productNameCollator = new Intl.Collator('vi', {
-  numeric: true,
-  sensitivity: 'base',
-});
-
 type InvoiceItem = NonNullable<SalesOrder['sales_order_items']>[number];
 
 interface InvoicePage {
@@ -104,13 +99,7 @@ export function Invoice() {
     };
   }, [orderId]);
 
-  const items = useMemo(
-    () =>
-      [...(order?.sales_order_items ?? [])].sort((left, right) =>
-        productNameCollator.compare(left.product_name.trim(), right.product_name.trim()),
-      ),
-    [order?.sales_order_items],
-  );
+  const items = useMemo(() => order?.sales_order_items ?? [], [order?.sales_order_items]);
   const subtotal = Number(order?.subtotal ?? 0);
   const discountAmount = Number(order?.discount_amount ?? 0);
   const shippingFee = Number(order?.shipping_fee ?? 0);
