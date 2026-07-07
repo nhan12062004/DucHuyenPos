@@ -1518,8 +1518,9 @@ export function POS() {
             discount: Number(item.discount_amount ?? 0),
             unitName: item.unit_name || 'cái',
           }));
-        setCartProducts(hydratedCartProducts);
-        setActiveCartProductId(hydratedCartProducts[0]?.id ?? '');
+        const displayCartProducts = [...hydratedCartProducts].reverse();
+        setCartProducts(displayCartProducts);
+        setActiveCartProductId(displayCartProducts[0]?.id ?? '');
       } catch (loadError: any) {
         if (!active) {
           return;
@@ -1677,10 +1678,9 @@ export function POS() {
     setCartProducts((current) => {
       const existing = current.find((item) => item.id === product.id);
       if (existing) {
-        return [
-          { ...existing, qty: existing.qty + 1 },
-          ...current.filter((item) => item.id !== product.id),
-        ];
+        return current.map((item) =>
+          item.id === product.id ? { ...item, qty: item.qty + 1 } : item,
+        );
       }
 
       return [
@@ -1720,11 +1720,8 @@ export function POS() {
       unitName: item.unitName,
     }));
 
-    // Giỏ hàng hiển thị dòng mới nhất ở trên và đánh STT từ dưới lên.
-    // Đảo nhóm hàng tạm khi chèn để dòng 1 trong popup nhận STT kế tiếp,
-    // dòng 2 nhận STT sau đó, v.v.
     setCartProducts((current) => [...temporaryProducts].reverse().concat(current));
-    setActiveCartProductId(temporaryProducts[0]?.id ?? activeCartProductId);
+    setActiveCartProductId(temporaryProducts[temporaryProducts.length - 1]?.id ?? activeCartProductId);
     setSuccessMessage(`Đã thêm ${temporaryProducts.length} hàng tạm vào đơn.`);
     setError(null);
   };
@@ -1812,7 +1809,7 @@ export function POS() {
         delivery_method: activeDeliveryTab,
         delivery_status: getDeliveryStatusFromTab(activeDeliveryTab),
         delivery_due_at: deliveryDueAt ?? null,
-        items: cartProducts.map((item) => ({
+        items: [...cartProducts].reverse().map((item) => ({
           product_id: item.isTemporary ? null : item.productId ?? item.id,
           product_name: item.name,
           sku: item.code,
@@ -2454,7 +2451,7 @@ export function POS() {
                           'px-5 py-4 text-center font-medium text-slate-600',
                           isActive && 'border-y border-l border-blue-400',
                         )}>
-                          {cartProducts.length - index}
+                          {index + 1}
                         </td>
                         <td className={cn('px-2 py-4', isActive && 'border-y border-blue-400')}>
                           <div className="flex h-10 w-10 items-center justify-center rounded border border-slate-200 bg-white text-slate-300">
