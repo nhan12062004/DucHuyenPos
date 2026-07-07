@@ -1437,7 +1437,6 @@ export function Orders() {
                       state: {
                         orderId: selectedOrder.id,
                         orderNo: selectedOrder.order_no,
-                        message: `Đang mở hóa đơn điện tử cho đơn ${selectedOrder.order_no}.`,
                       },
                     })
                   }

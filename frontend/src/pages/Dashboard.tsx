@@ -66,7 +66,6 @@ function getActivityRoute(activity: RecentActivity) {
       path: '/orders',
       state: {
         selectedOrderId: activity.entity_id ?? undefined,
-        message: 'Đang mở giao dịch liên quan từ hoạt động gần đây.',
       },
     };
   }
@@ -77,7 +76,6 @@ function getActivityRoute(activity: RecentActivity) {
       state: {
         selectedProductId: activity.entity_id ?? undefined,
         detailTab: 'stock' as const,
-        message: 'Đang mở sản phẩm liên quan từ hoạt động gần đây.',
       },
     };
   }
@@ -88,7 +86,6 @@ function getActivityRoute(activity: RecentActivity) {
       state: {
         selectedCustomerId: activity.entity_id ?? undefined,
         detailTab: 'history' as const,
-        message: 'Đang mở khách hàng liên quan từ hoạt động gần đây.',
       },
     };
   }
@@ -96,9 +93,7 @@ function getActivityRoute(activity: RecentActivity) {
   if (entityType.includes('inventory')) {
     return {
       path: '/inventory',
-      state: {
-        message: 'Đang mở kho hàng liên quan từ hoạt động gần đây.',
-      },
+      state: null,
     };
   }
 
@@ -195,11 +190,6 @@ export function Dashboard() {
     name: point.date.slice(5).replace('-', '/'),
     total: point.revenue,
   }));
-  const selectedBranch = branches.find((branch) => branch.id === effectiveDashboardBranchId);
-  const branchLabel =
-    dashboardBranchId && defaultBranch && dashboardBranchId === defaultBranch.id
-      ? 'chi nhánh mặc định'
-      : selectedBranch?.name ?? 'tất cả chi nhánh';
   const totalTopProductsQty = (stats?.top_products ?? []).reduce((sum, item) => sum + Number(item.sold_qty ?? 0), 0);
   const shareRows = (stats?.top_products ?? []).map((item) => ({
     ...item,
@@ -236,7 +226,6 @@ export function Dashboard() {
   }
 
   const openOrders = (options: {
-    message: string;
     activeTab?: 'all' | 'trading';
       filters?: {
         branchId?: string;
@@ -251,13 +240,11 @@ export function Dashboard() {
       state: {
         activeTab: options.activeTab ?? 'all',
         filters: options.filters,
-        message: options.message,
       },
     });
   };
 
   const openProducts = (options: {
-    message: string;
     selectedProductId?: string;
     searchTerm?: string;
   }) => {
@@ -266,26 +253,23 @@ export function Dashboard() {
         selectedProductId: options.selectedProductId,
         detailTab: 'stock',
         searchTerm: options.searchTerm,
-        message: options.message,
       },
     });
   };
 
   const openInventory = (options: {
-    message: string;
     lowStockOnly?: boolean;
   }) => {
     navigate('/inventory', {
       state: {
         branchId: effectiveDashboardBranchId || undefined,
         lowStockOnly: options.lowStockOnly,
-        message: options.message,
       },
     });
   };
 
-  const openDebts = (message: string) => {
-    navigate('/debts', { state: { message } });
+  const openDebts = () => {
+    navigate('/debts');
   };
 
   if (loading) {
@@ -327,7 +311,6 @@ export function Dashboard() {
                 sub={fmtFull(stats?.today_revenue ?? 0)}
                 onClick={() =>
                   openOrders({
-                    message: `Đang xem doanh thu đơn hoàn thành hôm nay của ${branchLabel}.`,
                     filters: {
                       branchId: effectiveDashboardBranchId || undefined,
                       status: 'completed',
@@ -342,7 +325,6 @@ export function Dashboard() {
                 value={String(stats?.today_orders ?? 0)}
                 onClick={() =>
                   openOrders({
-                    message: `Đang xem đơn hàng mới hôm nay của ${branchLabel}.`,
                     filters: {
                       branchId: effectiveDashboardBranchId || undefined,
                       datePreset: 'today',
@@ -357,7 +339,6 @@ export function Dashboard() {
                 sub={fmtFull(stats?.month_revenue ?? 0)}
                 onClick={() =>
                   openOrders({
-                    message: `Đang xem doanh thu tháng hiện tại của ${branchLabel}.`,
                     filters: {
                       branchId: effectiveDashboardBranchId || undefined,
                       status: 'completed',
@@ -371,7 +352,7 @@ export function Dashboard() {
                 label="Tổng nợ KH"
                 value={fmt(stats?.total_customer_debt ?? 0)}
                 sub={fmtFull(stats?.total_customer_debt ?? 0)}
-                onClick={() => openDebts(`Đang xem công nợ khách hàng của ${branchLabel}.`)}
+                onClick={() => openDebts()}
               />
             </div>
           </div>
@@ -482,7 +463,6 @@ export function Dashboard() {
                           openProducts({
                             selectedProductId: item.product_id,
                             searchTerm: item.name,
-                            message: `Đang mở sản phẩm bán chạy ${item.name}.`,
                           })
                         }
                         className="block w-full rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-4 text-left transition-colors hover:bg-slate-50"
@@ -522,7 +502,6 @@ export function Dashboard() {
                 value={String(stats?.pending_summary?.pending_approval ?? 0)}
                 onClick={() =>
                   openOrders({
-                    message: `Đang xem đơn chờ duyệt của ${branchLabel}.`,
                     activeTab: 'trading',
                     filters: {
                       branchId: effectiveDashboardBranchId || undefined,
@@ -538,7 +517,6 @@ export function Dashboard() {
                 value={String(stats?.pending_summary?.pending_payment ?? 0)}
                 onClick={() =>
                   openOrders({
-                    message: `Đang xem đơn chờ thanh toán của ${branchLabel}.`,
                     activeTab: 'trading',
                     filters: {
                       branchId: effectiveDashboardBranchId || undefined,
@@ -554,7 +532,6 @@ export function Dashboard() {
                 value={String(stats?.pending_summary?.pending_packing ?? 0)}
                 onClick={() =>
                   openOrders({
-                    message: `Đang xem đơn chờ đóng gói của ${branchLabel}.`,
                     activeTab: 'trading',
                     filters: {
                       branchId: effectiveDashboardBranchId || undefined,
@@ -571,7 +548,6 @@ export function Dashboard() {
                 value={String(stats?.pending_summary?.waiting_pick_up ?? 0)}
                 onClick={() =>
                   openOrders({
-                    message: `Đang xem đơn chờ lấy hàng của ${branchLabel}.`,
                     activeTab: 'trading',
                     filters: {
                       branchId: effectiveDashboardBranchId || undefined,
@@ -588,7 +564,6 @@ export function Dashboard() {
                 value={String(stats?.pending_summary?.delivering ?? 0)}
                 onClick={() =>
                   openOrders({
-                    message: `Đang xem đơn đang giao của ${branchLabel}.`,
                     activeTab: 'trading',
                     filters: {
                       branchId: effectiveDashboardBranchId || undefined,
@@ -605,7 +580,6 @@ export function Dashboard() {
                 value={String(stats?.pending_summary?.cancelled_delivery ?? 0)}
                 onClick={() =>
                   openOrders({
-                    message: `Đang xem đơn giao thất bại của ${branchLabel}.`,
                     filters: {
                       branchId: effectiveDashboardBranchId || undefined,
                       deliveryStatus: 'cancelled_delivery',
@@ -696,7 +670,6 @@ export function Dashboard() {
                         openProducts({
                           selectedProductId: item.product_id,
                           searchTerm: item.name,
-                          message: `Đang mở sản phẩm bán chạy ${item.name}.`,
                         })
                       }
                       className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-slate-50"
@@ -744,7 +717,6 @@ export function Dashboard() {
                   onClick={() =>
                     openInventory({
                       lowStockOnly: true,
-                      message: `Đang xem sản phẩm cần nhập của ${branchLabel}.`,
                     })
                   }
                 />
@@ -752,18 +724,14 @@ export function Dashboard() {
                   label="Số tồn kho chi nhánh"
                   value={fmt(inventorySummary?.total_stock_qty ?? 0)}
                   onClick={() =>
-                    openInventory({
-                      message: `Đang xem số tồn kho của ${branchLabel}.`,
-                    })
+                    openInventory({})
                   }
                 />
                 <InventorySummaryRow
                   label="Giá trị tồn kho chi nhánh"
                   value={fmtFull(inventorySummary?.total_stock_value ?? 0)}
                   onClick={() =>
-                    openInventory({
-                      message: `Đang xem giá trị tồn kho của ${branchLabel}.`,
-                    })
+                    openInventory({})
                   }
                 />
               </div>

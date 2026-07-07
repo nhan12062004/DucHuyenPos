@@ -397,7 +397,6 @@ export function Inventory() {
                             state: {
                               selectedProductId: row.product_id,
                               detailTab: 'stock',
-                              message: `Đang mở chi tiết tồn kho của ${row.products?.name ?? 'sản phẩm'}.`,
                             },
                           })
                         }

@@ -686,7 +686,6 @@ export function Customers() {
       state: firstOrder
         ? {
             selectedOrderId: firstOrder.id,
-            message: `Đang mở đơn gần nhất của ${selectedCustomer.full_name}.`,
           }
         : {
             message: `Khách hàng ${selectedCustomer.full_name} chưa có đơn hàng để mở.`,

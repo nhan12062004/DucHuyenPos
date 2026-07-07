@@ -51,7 +51,7 @@ export function Debts() {
         state: {
           selectedCustomerId: routeState.customerId,
           detailTab: 'debt',
-          message: routeState.message ?? 'Đang mở chi tiết công nợ khách hàng.',
+          message: routeState.message,
         },
       });
       return;
@@ -180,7 +180,6 @@ export function Debts() {
                           state: {
                             selectedCustomerId: customer.customer_id,
                             detailTab: 'debt',
-                            message: `Đang mở công nợ của ${customer.full_name}.`,
                           },
                         })
                       }
@@ -197,7 +196,6 @@ export function Debts() {
                               state: {
                                 selectedCustomerId: customer.customer_id,
                                 detailTab: 'debt',
-                                message: `Đang mở công nợ của ${customer.full_name}.`,
                               },
                             });
                           }}
