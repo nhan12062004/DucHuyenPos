@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Printer } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Logo } from '../components/Logo';
 import { PageLoader } from '../components/PageLoader';
 import { salesOrdersService, type SalesOrder } from '../services/salesOrdersService';
 
@@ -296,7 +295,6 @@ export function Invoice() {
               <>
         <header className="invoice-hero">
           <div className="invoice-store">
-            <Logo className="invoice-logo" />
             <div className="invoice-store-copy">
               <h1>{STORE_NAME}</h1>
               <p>{STORE_ADDRESS}</p>
@@ -437,7 +435,6 @@ export function Invoice() {
           <div data-measure="first-header">
             <header className="invoice-hero">
               <div className="invoice-store">
-                <Logo className="invoice-logo" />
                 <div className="invoice-store-copy">
                   <h1>{STORE_NAME}</h1>
                   <p>{STORE_ADDRESS}</p>
@@ -617,15 +614,7 @@ export function Invoice() {
         }
 
         .invoice-store {
-          display: grid;
-          grid-template-columns: 38px minmax(0, 1fr);
-          gap: 10px;
-          align-items: start;
-        }
-
-        .invoice-logo {
-          width: 32px;
-          height: 32px;
+          display: block;
         }
 
         .invoice-store-copy {

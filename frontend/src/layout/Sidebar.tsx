@@ -11,7 +11,6 @@ import {
   Truck,
   User
 } from 'lucide-react';
-import { Logo } from '../components/Logo';
 import { cn } from '../utils/cn';
 
 interface SidebarProps {
@@ -183,37 +182,6 @@ export function Sidebar({ expanded, setExpanded }: SidebarProps) {
               expanded ? 'flex-1' : 'w-10 justify-center'
             )}
           >
-            <div
-              className={cn(
-                'flex shrink-0 items-center justify-center',
-                expanded ? 'h-10 w-10 rounded-xl bg-white shadow-sm' : 'h-10 w-10'
-              )}
-            >
-              <AnimatePresence mode="wait" initial={false}>
-                {expanded ? (
-                  <motion.div
-                    key="logo"
-                    initial={{ opacity: 0, scale: 0.92 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.92 }}
-                    transition={CONTENT_TRANSITION}
-                  >
-                    <Logo className="h-5 w-5" />
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="menu"
-                    initial={{ opacity: 0, scale: 0.92 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.92 }}
-                    transition={CONTENT_TRANSITION}
-                  >
-                    <Menu size={22} className="text-white" />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
             <AnimatePresence initial={false}>
               {expanded && (
                 <motion.div
@@ -221,12 +189,12 @@ export function Sidebar({ expanded, setExpanded }: SidebarProps) {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -12 }}
                   transition={CONTENT_TRANSITION}
-                  className="ml-3 min-w-0 text-left"
+                  className="min-w-0 text-left"
                 >
-                  <span className="block whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-200">
-                    Điện máy
+                  <span className="block whitespace-nowrap text-[11px] font-medium uppercase text-blue-200">
+                    Vật tư điện nước
                   </span>
-                  <span className="block whitespace-nowrap text-[17px] font-bold tracking-tight text-white">Đức Huyền</span>
+                  <span className="block whitespace-nowrap text-[18px] font-bold text-white">Đức Huyền</span>
                 </motion.div>
               )}
             </AnimatePresence>

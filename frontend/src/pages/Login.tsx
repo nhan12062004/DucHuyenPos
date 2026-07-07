@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Logo } from '../components/Logo';
 import { ArrowLeft, CheckCircle2, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { ToastBridge } from '../components/Toast';
 
@@ -82,12 +81,7 @@ export function Login() {
 
   const Header = ({ title, subtitle }: { title: string; subtitle: string }) => (
     <div className="sm:mx-auto sm:w-full sm:max-w-md mb-8">
-      <div className="flex justify-center">
-        <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/10 border border-slate-100">
-          <Logo className="w-16 h-16" />
-        </div>
-      </div>
-      <h2 className="mt-6 text-center text-3xl font-extrabold text-[#0A1629] tracking-tight">{title}</h2>
+      <h2 className="text-center text-3xl font-extrabold text-[#0A1629] tracking-tight">{title}</h2>
       <p className="mt-2 text-center text-sm text-slate-500 font-medium px-4">{subtitle}</p>
     </div>
   );
