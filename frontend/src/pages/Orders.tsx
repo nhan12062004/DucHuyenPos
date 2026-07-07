@@ -1607,10 +1607,12 @@ export function Orders() {
           </div>
 
           <div className="ui-card mt-6">
-            <div className="flex items-end justify-between border-b border-slate-200 px-5 p-0">
-              <h3 className="border-b-2 border-[#0088FF] pb-3 pt-4 text-[14px] font-semibold text-[#0088FF]">
-                Thông tin sản phẩm
-              </h3>
+            <div className="flex items-end justify-between border-b border-slate-200 pr-5">
+              <div className="border-b-2 border-[#0088FF] pb-3 pt-4">
+                <h3 className="pl-5 text-[14px] font-semibold text-[#0088FF]">
+                  Thông tin sản phẩm
+                </h3>
+              </div>
               <div className="flex items-center gap-4 pb-3 text-[13px]">
                 <button
                   onClick={() => navigate('/inventory')}
