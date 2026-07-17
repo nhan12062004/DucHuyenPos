@@ -177,11 +177,13 @@ export function Sidebar({ expanded, setExpanded }: SidebarProps) {
               }
             }}
             title={expanded ? undefined : 'Mở rộng menu'}
+            aria-label={expanded ? 'Tên cửa hàng' : 'Mở rộng menu'}
             className={cn(
-              'flex min-w-0 items-center overflow-hidden rounded-2xl',
-              expanded ? 'flex-1' : 'w-10 justify-center'
+              'flex min-w-0 items-center overflow-hidden rounded-xl',
+              expanded ? 'flex-1' : 'h-10 w-10 justify-center text-slate-300 transition-colors hover:bg-slate-700 hover:text-white'
             )}
           >
+            {!expanded && <Menu size={20} />}
             <AnimatePresence initial={false}>
               {expanded && (
                 <motion.div
