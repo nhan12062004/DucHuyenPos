@@ -88,12 +88,16 @@ export class SalesOrdersService {
       .order('sold_at', { ascending: false });
 
     if (search) {
-      const safeSearch = search.trim().replace(/[,%]/g, '');
-      const customerIds = await this.findCustomerIdsBySearch(safeSearch);
+      const safeSearch = search.trim().replace(/[%,()]/g, '');
+      const [customerIds, cashierIds] = await Promise.all([
+        this.findCustomerIdsBySearch(safeSearch),
+        this.findCashierIdsBySearch(safeSearch),
+      ]);
       const orderSearch = `order_no.ilike.%${safeSearch}%,invoice_no.ilike.%${safeSearch}%`;
-      q = customerIds.length > 0
-        ? q.or(`${orderSearch},customer_id.in.(${customerIds.join(',')})`)
-        : q.or(orderSearch);
+      const searchFilters = [orderSearch];
+      if (customerIds.length > 0) searchFilters.push(`customer_id.in.(${customerIds.join(',')})`);
+      if (cashierIds.length > 0) searchFilters.push(`cashier_id.in.(${cashierIds.join(',')})`);
+      q = q.or(searchFilters.join(','));
     }
     if (branch_id) q = q.eq('branch_id', branch_id);
     if (status) q = q.eq('status', status);
@@ -122,7 +126,7 @@ export class SalesOrdersService {
 
   private async deleteExpiredSalesOrders() {
     const cutoff = new Date();
-    cutoff.setUTCDate(cutoff.getUTCDate() - 30);
+    cutoff.setUTCDate(cutoff.getUTCDate() - 90);
 
     const { error } = await this.supabase
       .from('sales_orders')
@@ -130,7 +134,7 @@ export class SalesOrdersService {
       .lt('sold_at', cutoff.toISOString());
 
     if (error) {
-      throw new Error(`Không thể xóa đơn hàng quá 30 ngày: ${error.message}`);
+      throw new Error(`Không thể xóa đơn hàng quá 90 ngày: ${error.message}`);
     }
   }
 
@@ -490,5 +494,20 @@ export class SalesOrdersService {
 
     if (error) throw new Error(error.message);
     return (data ?? []).map((customer: any) => customer.id).filter(Boolean);
+  }
+
+  private async findCashierIdsBySearch(search: string) {
+    if (!search) {
+      return [];
+    }
+
+    const { data, error } = await this.supabase
+      .from('profiles')
+      .select('id')
+      .or(`full_name.ilike.%${search}%,phone.ilike.%${search}%`)
+      .limit(100);
+
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((profile: any) => profile.id).filter(Boolean);
   }
 }

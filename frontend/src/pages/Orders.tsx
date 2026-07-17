@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useDeferredValue, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { readSheet } from 'read-excel-file/browser';
 import {
@@ -488,6 +488,7 @@ export function Orders() {
   const [activeTab, setActiveTab] = useState<OrderTab>('all');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const deferredSearchTerm = useDeferredValue(searchTerm);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [orders, setOrders] = useState<SalesOrder[]>([]);
@@ -588,7 +589,7 @@ export function Orders() {
     let active = true;
 
     async function loadOrders() {
-      if (isCacheValid(page, pageSize, searchTerm, activeTab, dashboardFilter)) {
+      if (isCacheValid(page, pageSize, deferredSearchTerm, activeTab, dashboardFilter)) {
         setOrders(ordersCache!.orders);
         setTotalOrders(ordersCache!.totalOrders);
         setProcessingSummary(ordersCache!.processingSummary);
@@ -605,7 +606,7 @@ export function Orders() {
             buildOrdersQuery({
               activeTab,
               dashboardFilter,
-              searchTerm,
+              searchTerm: deferredSearchTerm,
               page,
               limit: pageSize,
               includeItems: false,
@@ -630,7 +631,7 @@ export function Orders() {
           processingSummary: summaryResponse,
           page,
           limit: pageSize,
-          searchTerm,
+          searchTerm: deferredSearchTerm,
           activeTab,
           dashboardFilter: JSON.stringify(dashboardFilter),
           timestamp: Date.now(),
@@ -652,7 +653,7 @@ export function Orders() {
     return () => {
       active = false;
     };
-  }, [activeTab, dashboardFilter, page, pageSize, searchTerm]);
+  }, [activeTab, dashboardFilter, deferredSearchTerm, page, pageSize]);
 
   useEffect(() => {
     setPage(1);
@@ -2027,9 +2028,25 @@ export function Orders() {
                 type="text"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    setSearchTerm('');
+                  }
+                }}
                 placeholder="Tìm kiếm theo mã đơn hàng, tên, SĐT khách hàng / người nhận hàng"
-                className="w-full rounded border border-slate-300 bg-white py-2 pl-9 pr-4 text-[13px] transition-colors focus:border-[#0088FF] focus:outline-none"
+                aria-label="Tìm kiếm đơn hàng"
+                className="w-full rounded border border-slate-300 bg-white py-2 pl-9 pr-9 text-[13px] transition-colors focus:border-[#0088FF] focus:outline-none"
               />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  aria-label="Xóa từ khóa tìm kiếm"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                >
+                  <X size={15} />
+                </button>
+              )}
             </div>
 
             <div className="flex items-center gap-0">

@@ -505,10 +505,10 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
--- Permanently delete sales orders more than 30 days after sold_at.
+-- Permanently delete sales orders more than 90 days after sold_at.
 -- Related order items, payments and invoices are deleted by their foreign-key
 -- cascades; sales returns are retained with their order references set to null.
-create or replace function public.delete_sales_orders_older_than_30_days()
+create or replace function public.delete_sales_orders_older_than_90_days()
 returns bigint
 language sql
 security definer
@@ -516,19 +516,19 @@ set search_path = ''
 as $$
   with deleted_orders as (
     delete from public.sales_orders
-    where sold_at < now() - interval '30 days'
+    where sold_at < now() - interval '90 days'
     returning id
   )
   select count(*)::bigint
   from deleted_orders;
 $$;
 
-revoke all on function public.delete_sales_orders_older_than_30_days()
+revoke all on function public.delete_sales_orders_older_than_90_days()
 from public, anon, authenticated;
 
 -- pg_cron uses UTC: 17:05 UTC is 00:05 in Vietnam.
 select cron.schedule(
-  'delete-sales-orders-older-than-30-days',
+  'delete-sales-orders-older-than-90-days',
   '5 17 * * *',
-  $job$select public.delete_sales_orders_older_than_30_days();$job$
+  $job$select public.delete_sales_orders_older_than_90_days();$job$
 );
