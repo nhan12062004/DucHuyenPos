@@ -1,4 +1,4 @@
-import React, { useDeferredValue, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { readSheet } from 'read-excel-file/browser';
 import {
@@ -488,7 +488,7 @@ export function Orders() {
   const [activeTab, setActiveTab] = useState<OrderTab>('all');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const deferredSearchTerm = useDeferredValue(searchTerm);
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [orders, setOrders] = useState<SalesOrder[]>([]);
@@ -496,6 +496,7 @@ export function Orders() {
   const [selectedOrderDetail, setSelectedOrderDetail] = useState<SalesOrder | null>(null);
   const [processingSummary, setProcessingSummary] = useState<SalesOrdersProcessingSummary>(EMPTY_PROCESSING_SUMMARY);
   const [isListLoading, setIsListLoading] = useState(true);
+  const [hasLoadedList, setHasLoadedList] = useState(false);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
@@ -586,14 +587,20 @@ export function Orders() {
   }, [infoMessage]);
 
   useEffect(() => {
+    const timeoutId = window.setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);
+    return () => window.clearTimeout(timeoutId);
+  }, [searchTerm]);
+
+  useEffect(() => {
     let active = true;
 
     async function loadOrders() {
-      if (isCacheValid(page, pageSize, deferredSearchTerm, activeTab, dashboardFilter)) {
+      if (isCacheValid(page, pageSize, debouncedSearchTerm, activeTab, dashboardFilter)) {
         setOrders(ordersCache!.orders);
         setTotalOrders(ordersCache!.totalOrders);
         setProcessingSummary(ordersCache!.processingSummary);
         setIsListLoading(false);
+        setHasLoadedList(true);
         return;
       }
 
@@ -606,7 +613,7 @@ export function Orders() {
             buildOrdersQuery({
               activeTab,
               dashboardFilter,
-              searchTerm: deferredSearchTerm,
+              searchTerm: debouncedSearchTerm,
               page,
               limit: pageSize,
               includeItems: false,
@@ -631,7 +638,7 @@ export function Orders() {
           processingSummary: summaryResponse,
           page,
           limit: pageSize,
-          searchTerm: deferredSearchTerm,
+          searchTerm: debouncedSearchTerm,
           activeTab,
           dashboardFilter: JSON.stringify(dashboardFilter),
           timestamp: Date.now(),
@@ -644,6 +651,7 @@ export function Orders() {
       } finally {
         if (active) {
           setIsListLoading(false);
+          setHasLoadedList(true);
         }
       }
     }
@@ -653,7 +661,7 @@ export function Orders() {
     return () => {
       active = false;
     };
-  }, [activeTab, dashboardFilter, deferredSearchTerm, page, pageSize]);
+  }, [activeTab, dashboardFilter, debouncedSearchTerm, page, pageSize]);
 
   useEffect(() => {
     setPage(1);
@@ -1723,7 +1731,7 @@ export function Orders() {
     );
   }
 
-  if (isListLoading && !selectedOrderId) {
+  if (isListLoading && !hasLoadedList && !selectedOrderId) {
     return <PageLoader text="Đang tải danh sách đơn hàng..." fullScreen />;
   }
 
@@ -2086,6 +2094,13 @@ export function Orders() {
               </button>
             </div>
           </div>
+
+          {isListLoading && (
+            <div className="flex items-center gap-2 border-t border-slate-100 px-5 py-2 text-[12px] text-slate-500">
+              <Loader2 size={14} className="animate-spin" />
+              Đang cập nhật danh sách đơn hàng...
+            </div>
+          )}
 
           {pagedOrders.length === 0 ? (
             <div className="flex items-center justify-center py-16 text-slate-500">
