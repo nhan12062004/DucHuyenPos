@@ -57,6 +57,9 @@ export const consolidatedInvoicesService = {
   getOne: (id: string) =>
     api.get<ConsolidatedInvoice>(`/consolidated-invoices/${id}`),
 
+  getByOrder: (salesOrderId: string) =>
+    api.get<ConsolidatedInvoice>(`/consolidated-invoices/by-order/${salesOrderId}`),
+
   create: (dto: CreateConsolidatedInvoicePayload) =>
     api.post<ConsolidatedInvoice>('/consolidated-invoices', dto),
 };

@@ -82,6 +82,21 @@ export class ConsolidatedInvoicesService {
     };
   }
 
+  async findByOrder(salesOrderId: string) {
+    const { data, error } = await this.supabase
+      .from('consolidated_invoice_orders')
+      .select('consolidated_invoice_id')
+      .eq('sales_order_id', salesOrderId)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    if (!data?.consolidated_invoice_id) {
+      throw new NotFoundException('Đơn hàng chưa nằm trong hóa đơn tổng hợp');
+    }
+
+    return this.findOne(data.consolidated_invoice_id);
+  }
+
   async create(dto: CreateConsolidatedInvoiceDto, actor?: ActivityActor) {
     const orderIds = [...new Set(dto.sales_order_ids)];
     if (orderIds.length < 2) {

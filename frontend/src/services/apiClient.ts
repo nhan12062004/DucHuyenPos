@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase';
 
 const _apiUrl = import.meta.env.VITE_API_URL as string | undefined;
 const BASE_URL = (_apiUrl && _apiUrl.trim()) ? _apiUrl.trim() : '/api';
+const REQUEST_TIMEOUT_MS = 30_000;
 
 export class ApiError extends Error {
   constructor(
@@ -62,11 +63,25 @@ async function request<T>(
     ...(await getActorHeaders()),
   };
 
-  const res = await fetch(url, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let res: Response;
+
+  try {
+    res = await fetch(url, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new ApiError(408, 'Máy chủ phản hồi quá lâu. Vui lòng kiểm tra lại kết quả trước khi thao tác lại.');
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));

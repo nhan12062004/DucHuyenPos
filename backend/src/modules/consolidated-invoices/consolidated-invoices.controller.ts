@@ -12,6 +12,11 @@ export class ConsolidatedInvoicesController {
     return this.consolidatedInvoicesService.findEligible(customerId);
   }
 
+  @Get('by-order/:salesOrderId')
+  findByOrder(@Param('salesOrderId') salesOrderId: string) {
+    return this.consolidatedInvoicesService.findByOrder(salesOrderId);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.consolidatedInvoicesService.findOne(id);

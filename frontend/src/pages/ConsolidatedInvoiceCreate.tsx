@@ -16,6 +16,10 @@ function formatDateTime(value?: string) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString('vi-VN');
 }
 
+function wait(milliseconds: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
 export function ConsolidatedInvoiceCreate() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -46,6 +50,15 @@ export function ConsolidatedInvoiceCreate() {
         setOrders(eligibleOrders);
         if (initialOrderId && eligibleOrders.some((order) => order.id === initialOrderId)) {
           setSelectedIds([initialOrderId]);
+        } else if (initialOrderId) {
+          try {
+            const existing = await consolidatedInvoicesService.getByOrder(initialOrderId);
+            if (active) {
+              window.location.assign(`/invoice?consolidatedInvoiceId=${encodeURIComponent(existing.id)}`);
+            }
+          } catch {
+            // The order can also be unavailable because it is not completed.
+          }
         }
       } catch (nextError: any) {
         if (active) setError(nextError?.message ?? 'Không tải được các đơn hàng có thể gộp.');
@@ -105,6 +118,17 @@ export function ConsolidatedInvoiceCreate() {
       });
       window.location.assign(`/invoice?consolidatedInvoiceId=${encodeURIComponent(created.id)}&autoPrint=1`);
     } catch (nextError: any) {
+      // The server may finish creating the invoice after the browser connection times out.
+      // Recover by locating the invoice from one of its source orders before allowing a retry.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          const existing = await consolidatedInvoicesService.getByOrder(selectedIds[0]);
+          window.location.assign(`/invoice?consolidatedInvoiceId=${encodeURIComponent(existing.id)}&autoPrint=1`);
+          return;
+        } catch {
+          if (attempt < 2) await wait(1_000);
+        }
+      }
       setError(nextError?.message ?? 'Không thể tạo hóa đơn tổng hợp.');
       setIsCreating(false);
     }
