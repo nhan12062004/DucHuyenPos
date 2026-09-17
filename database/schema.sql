@@ -351,6 +351,52 @@ create table if not exists public.invoices (
   updated_at timestamptz not null default now()
 );
 
+-- Hóa đơn thường dùng để in, tổng hợp từ nhiều đơn bán hàng.
+create table if not exists public.consolidated_invoices (
+  id uuid primary key default gen_random_uuid(),
+  branch_id uuid not null references public.branches(id) on delete restrict,
+  customer_id uuid not null references public.customers(id) on delete restrict,
+  invoice_no text not null unique,
+  status text not null default 'issued' check (status in ('draft', 'issued', 'printed', 'cancelled')),
+  issued_at timestamptz not null default now(),
+  subtotal numeric(14,2) not null default 0,
+  discount_amount numeric(14,2) not null default 0,
+  shipping_fee numeric(14,2) not null default 0,
+  tax_amount numeric(14,2) not null default 0,
+  total_amount numeric(14,2) not null default 0,
+  paid_amount numeric(14,2) not null default 0,
+  note text,
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.consolidated_invoice_items (
+  id uuid primary key default gen_random_uuid(),
+  consolidated_invoice_id uuid not null references public.consolidated_invoices(id) on delete cascade,
+  product_id uuid references public.products(id) on delete set null,
+  product_name text not null,
+  sku text,
+  unit_name text not null default 'cai',
+  quantity numeric(14,2) not null check (quantity > 0),
+  unit_price numeric(14,4) not null check (unit_price >= 0),
+  discount_amount numeric(14,2) not null default 0,
+  line_total numeric(14,2) not null default 0,
+  sort_order integer not null default 0 check (sort_order >= 0),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.consolidated_invoice_orders (
+  id uuid primary key default gen_random_uuid(),
+  consolidated_invoice_id uuid not null references public.consolidated_invoices(id) on delete cascade,
+  sales_order_id uuid unique references public.sales_orders(id) on delete set null,
+  source_order_no text not null,
+  source_sold_at timestamptz,
+  source_total_amount numeric(14,2) not null default 0,
+  created_at timestamptz not null default now(),
+  unique (consolidated_invoice_id, source_order_no)
+);
+
 create table if not exists public.activity_logs (
   id uuid primary key default gen_random_uuid(),
   actor_id uuid references public.profiles(id) on delete set null,
@@ -373,6 +419,10 @@ create index if not exists idx_sales_orders_sold_at on public.sales_orders(sold_
 create index if not exists idx_sales_orders_delivery_status on public.sales_orders(delivery_status);
 create index if not exists idx_sales_order_items_order_id on public.sales_order_items(sales_order_id);
 create index if not exists idx_sales_order_items_order_sort on public.sales_order_items(sales_order_id, sort_order);
+create index if not exists idx_consolidated_invoices_customer_id on public.consolidated_invoices(customer_id);
+create index if not exists idx_consolidated_invoices_issued_at on public.consolidated_invoices(issued_at desc);
+create index if not exists idx_consolidated_invoice_items_invoice_id on public.consolidated_invoice_items(consolidated_invoice_id, sort_order);
+create index if not exists idx_consolidated_invoice_orders_invoice_id on public.consolidated_invoice_orders(consolidated_invoice_id);
 create index if not exists idx_sales_payments_order_id on public.sales_payments(sales_order_id);
 create index if not exists idx_sales_returns_order_id on public.sales_returns(sales_order_id);
 create index if not exists idx_purchase_orders_supplier_id on public.purchase_orders(supplier_id);
@@ -481,6 +531,10 @@ for each row execute function public.set_updated_at();
 
 drop trigger if exists trg_invoices_updated_at on public.invoices;
 create trigger trg_invoices_updated_at before update on public.invoices
+for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_consolidated_invoices_updated_at on public.consolidated_invoices;
+create trigger trg_consolidated_invoices_updated_at before update on public.consolidated_invoices
 for each row execute function public.set_updated_at();
 
 -- Automatically create profile on new user signup

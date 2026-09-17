@@ -841,6 +841,17 @@ export function Orders() {
     window.location.assign(`/invoice?${params.toString()}`);
   };
 
+  const handleCreateConsolidatedInvoice = () => {
+    if (!selectedOrder?.customer_id) {
+      setInfoMessage('Đơn hàng chưa có khách hàng nên không thể tạo hóa đơn tổng hợp.');
+      return;
+    }
+
+    navigate(
+      `/consolidated-invoices/new?customerId=${encodeURIComponent(selectedOrder.customer_id)}&orderId=${encodeURIComponent(selectedOrder.id)}`,
+    );
+  };
+
   const handleExportOrders = async () => {
     try {
       const includeItems = orderExportType === 'products';
@@ -1281,6 +1292,14 @@ export function Orders() {
                 </span>
               </div>
               <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleCreateConsolidatedInvoice}
+                  disabled={selectedOrder.status === 'cancelled' || !selectedOrder.customer_id}
+                  className="flex items-center gap-2 rounded border border-[#0088FF] bg-white px-3 py-1.5 text-[13px] font-medium text-[#0088FF] shadow-sm transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-400"
+                >
+                  <Receipt size={14} /> Gộp hóa đơn
+                </button>
                 <div ref={printMenuRef} className="relative flex">
                   <button
                     type="button"

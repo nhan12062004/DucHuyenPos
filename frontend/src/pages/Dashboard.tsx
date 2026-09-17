@@ -415,13 +415,19 @@ export function Dashboard() {
             </div>
 
             {salesInsightTab === 'revenue' ? (
-              <div className="p-6 h-[300px]">
+              <div className="h-[300px] min-w-0 p-6">
                 {chartData.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-slate-400">
                     <p className="text-sm">Chưa có dữ liệu doanh thu</p>
                   </div>
                 ) : (
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer
+                    width="100%"
+                    height="100%"
+                    minWidth={0}
+                    minHeight={1}
+                    initialDimension={{ width: 1, height: 1 }}
+                  >
                     <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
                       <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94A3B8' }} axisLine={false} tickLine={false} />

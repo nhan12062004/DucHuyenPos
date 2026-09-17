@@ -3,6 +3,7 @@ import { ArrowLeft, Printer } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageLoader } from '../components/PageLoader';
 import { salesOrdersService, type SalesOrder } from '../services/salesOrdersService';
+import { consolidatedInvoicesService, type ConsolidatedInvoice } from '../services/consolidatedInvoicesService';
 
 const STORE_NAME = 'Vật tư Điện Nước Đức Huyền';
 const STORE_ADDRESS = '277 Nguyễn Thị Duệ, Việt Hòa, TP. Hải Phòng';
@@ -45,6 +46,50 @@ function getPdfFileName(invoiceNo: string) {
   return `Hoa_don_${safeInvoiceNo}`;
 }
 
+function toPrintableSalesOrder(invoice: ConsolidatedInvoice): SalesOrder {
+  const totalAmount = Number(invoice.total_amount ?? 0);
+  const paidAmount = Number(invoice.paid_amount ?? 0);
+
+  return {
+    id: invoice.id,
+    branch_id: invoice.branch_id,
+    order_no: invoice.invoice_no,
+    invoice_no: invoice.invoice_no,
+    customer_id: invoice.customer_id,
+    cashier_id: null,
+    sold_at: invoice.issued_at,
+    source: 'manual',
+    status: 'completed',
+    payment_status: paidAmount >= totalAmount ? 'paid' : paidAmount > 0 ? 'partial' : 'unpaid',
+    subtotal: Number(invoice.subtotal ?? 0),
+    discount_amount: Number(invoice.discount_amount ?? 0),
+    shipping_fee: Number(invoice.shipping_fee ?? 0),
+    tax_amount: Number(invoice.tax_amount ?? 0),
+    total_amount: totalAmount,
+    paid_amount: paidAmount,
+    note: invoice.note ?? undefined,
+    delivery_address: invoice.customers?.address,
+    delivery_method: 'nhan_tai_cua_hang',
+    delivery_status: 'delivered',
+    created_at: invoice.created_at,
+    customers: invoice.customers ?? null,
+    branches: invoice.branches ?? null,
+    sales_order_items: invoice.consolidated_invoice_items.map((item) => ({
+      id: item.id,
+      sales_order_id: invoice.id,
+      product_id: item.product_id ?? null,
+      product_name: item.product_name,
+      sku: item.sku ?? undefined,
+      unit_name: item.unit_name,
+      quantity: Number(item.quantity ?? 0),
+      unit_price: Number(item.unit_price ?? 0),
+      discount_amount: Number(item.discount_amount ?? 0),
+      line_total: Number(item.line_total ?? 0),
+      sort_order: Number(item.sort_order ?? 0),
+    })),
+  };
+}
+
 function getOuterHeight(element: Element | null) {
   if (!element) return 0;
 
@@ -59,11 +104,13 @@ export function Invoice() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get('orderId');
+  const consolidatedInvoiceId = searchParams.get('consolidatedInvoiceId');
   const shouldAutoPrint = searchParams.get('autoPrint') === '1';
   const shouldHideDiscount = searchParams.get('hideDiscount') === '1';
   const hasAutoPrintedRef = useRef(false);
   const measureRef = useRef<HTMLDivElement>(null);
   const [order, setOrder] = useState<SalesOrder | null>(null);
+  const [consolidatedInvoice, setConsolidatedInvoice] = useState<ConsolidatedInvoice | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [invoicePages, setInvoicePages] = useState<InvoicePage[]>([]);
@@ -72,7 +119,7 @@ export function Invoice() {
     let active = true;
 
     async function loadOrder() {
-      if (!orderId) {
+      if (!orderId && !consolidatedInvoiceId) {
         setError('Thiếu mã đơn hàng để in hóa đơn.');
         setIsLoading(false);
         return;
@@ -82,8 +129,19 @@ export function Invoice() {
       setError(null);
 
       try {
-        const detail = await salesOrdersService.getOne(orderId);
-        if (active) setOrder(detail);
+        if (consolidatedInvoiceId) {
+          const detail = await consolidatedInvoicesService.getOne(consolidatedInvoiceId);
+          if (active) {
+            setConsolidatedInvoice(detail);
+            setOrder(toPrintableSalesOrder(detail));
+          }
+        } else if (orderId) {
+          const detail = await salesOrdersService.getOne(orderId);
+          if (active) {
+            setConsolidatedInvoice(null);
+            setOrder(detail);
+          }
+        }
       } catch (loadError: any) {
         if (active) setError(loadError?.message ?? 'Không tải được hóa đơn.');
       } finally {
@@ -96,7 +154,7 @@ export function Invoice() {
     return () => {
       active = false;
     };
-  }, [orderId]);
+  }, [consolidatedInvoiceId, orderId]);
 
   const items = useMemo(() => order?.sales_order_items ?? [], [order?.sales_order_items]);
   const subtotal = Number(order?.subtotal ?? 0);
@@ -105,6 +163,10 @@ export function Invoice() {
   const taxAmount = Number(order?.tax_amount ?? 0);
   const totalAmount = Number(order?.total_amount ?? 0);
   const invoiceNo = order?.invoice_no ?? order?.order_no ?? '---';
+  const documentTitle = consolidatedInvoice ? 'HÓA ĐƠN TỔNG HỢP' : 'ĐƠN HÀNG';
+  const sourceOrderNos = consolidatedInvoice?.consolidated_invoice_orders
+    .map((item) => item.source_order_no)
+    .filter(Boolean) ?? [];
   const fallbackInvoicePages = useMemo<InvoicePage[]>(() => {
     if (!items.length) {
       return [{ items: [], startIndex: 0, showHeader: true, showSummary: true }];
@@ -238,9 +300,7 @@ export function Invoice() {
   }, [handlePrintInvoice, invoicePages.length, isLoading, order, shouldAutoPrint]);
 
   const handleBack = () => {
-    navigate('/orders', {
-      state: orderId ? { selectedOrderId: orderId } : undefined,
-    });
+    navigate('/orders', { state: orderId ? { selectedOrderId: orderId } : undefined });
   };
 
   if (isLoading) {
@@ -318,6 +378,12 @@ export function Invoice() {
                 <dt>Địa chỉ:</dt>
                 <dd>{order.delivery_address ?? order.customers?.address ?? '---'}</dd>
               </div>
+              {sourceOrderNos.length ? (
+                <div>
+                  <dt>Đơn gốc:</dt>
+                  <dd>{sourceOrderNos.join(', ')}</dd>
+                </div>
+              ) : null}
             </dl>
           </div>
 
@@ -345,7 +411,7 @@ export function Invoice() {
 
             {page.items.length || pageIndex === 0 ? (
         <section className="invoice-order-section">
-          {pageIndex === 0 ? <h3>ĐƠN HÀNG</h3> : null}
+          {pageIndex === 0 ? <h3>{documentTitle}</h3> : null}
           <table className="invoice-items">
             <thead>
               <tr>
@@ -458,6 +524,12 @@ export function Invoice() {
                     <dt>Địa chỉ:</dt>
                     <dd>{order.delivery_address ?? order.customers?.address ?? '---'}</dd>
                   </div>
+                  {sourceOrderNos.length ? (
+                    <div>
+                      <dt>Đơn gốc:</dt>
+                      <dd>{sourceOrderNos.join(', ')}</dd>
+                    </div>
+                  ) : null}
                 </dl>
               </div>
 
@@ -483,7 +555,7 @@ export function Invoice() {
           <div className="invoice-continuation-spacer" data-measure="continuation-header" />
 
           <section className="invoice-order-section" data-measure="order-header">
-            <h3 data-measure="order-title">ĐƠN HÀNG</h3>
+            <h3 data-measure="order-title">{documentTitle}</h3>
             <table className="invoice-items">
               <thead>
                 <tr>

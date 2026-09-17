@@ -14,6 +14,7 @@ import { CustomerCreate } from './pages/CustomerCreate';
 import { Debts } from './pages/Debts';
 import { Invoice } from './pages/Invoice';
 import { EInvoices } from './pages/EInvoices';
+import { ConsolidatedInvoiceCreate } from './pages/ConsolidatedInvoiceCreate';
 import { Shipping } from './pages/Shipping';
 
 import { Returns } from './pages/Returns';
@@ -120,6 +121,7 @@ function AppRoutes() {
           <Route path="orders" element={<Orders />} />
           <Route path="returns" element={<Returns />} />
           <Route path="e-invoices" element={<EInvoices />} />
+          <Route path="consolidated-invoices/new" element={<ConsolidatedInvoiceCreate />} />
           <Route path="shipping" element={<Shipping />} />
           <Route path="products" element={<Products />} />
           <Route path="products/create" element={<ProductCreate />} />
