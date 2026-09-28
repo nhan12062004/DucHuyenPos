@@ -4,10 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageLoader } from '../components/PageLoader';
 import { salesOrdersService, type SalesOrder } from '../services/salesOrdersService';
 import { consolidatedInvoicesService, type ConsolidatedInvoice } from '../services/consolidatedInvoicesService';
-
-const STORE_NAME = 'Vật tư Điện Nước Đức Huyền';
-const STORE_ADDRESS = '277 Nguyễn Thị Duệ, Việt Hòa, TP. Hải Phòng';
-const STORE_PHONE = '0989 245 272 - 0904 538 786';
+import { STORE_INFO } from '../utils/storeInfo';
 type InvoiceItem = NonNullable<SalesOrder['sales_order_items']>[number];
 
 interface InvoicePage {
@@ -356,9 +353,9 @@ export function Invoice() {
         <header className="invoice-hero">
           <div className="invoice-store">
             <div className="invoice-store-copy">
-              <h1>{STORE_NAME}</h1>
-              <p>{STORE_ADDRESS}</p>
-              <p>Hotline: {STORE_PHONE}</p>
+              <h1>{STORE_INFO.name}</h1>
+              <p>{STORE_INFO.address}</p>
+              <p>Hotline: {STORE_INFO.phone}</p>
             </div>
           </div>
         </header>
@@ -502,9 +499,9 @@ export function Invoice() {
             <header className="invoice-hero">
               <div className="invoice-store">
                 <div className="invoice-store-copy">
-                  <h1>{STORE_NAME}</h1>
-                  <p>{STORE_ADDRESS}</p>
-                  <p>Hotline: {STORE_PHONE}</p>
+                  <h1>{STORE_INFO.name}</h1>
+                  <p>{STORE_INFO.address}</p>
+                  <p>Hotline: {STORE_INFO.phone}</p>
                 </div>
               </div>
             </header>

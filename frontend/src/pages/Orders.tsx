@@ -35,7 +35,8 @@ import { inventoryService, type Branch } from '../services/inventoryService';
 import { PageLoader } from '../components/PageLoader';
 import { ToastBridge } from '../components/Toast';
 import { getDeliveryLabel, getDeliveryStatusFromTab, parseLegacyDeliveryTab } from '../utils/delivery';
-import { exportRowsToXlsx } from '../utils/excel';
+import { exportRowsToXlsx, exportSalesOrderInvoiceToXlsx } from '../utils/excel';
+import { STORE_INFO } from '../utils/storeInfo';
 
 type OrderTab = 'all' | 'trading';
 type DatePreset = 'today' | 'this_month';
@@ -491,6 +492,7 @@ export function Orders() {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [ordersRefreshVersion, setOrdersRefreshVersion] = useState(0);
   const [orders, setOrders] = useState<SalesOrder[]>([]);
   const [totalOrders, setTotalOrders] = useState(0);
   const [selectedOrderDetail, setSelectedOrderDetail] = useState<SalesOrder | null>(null);
@@ -662,7 +664,7 @@ export function Orders() {
     return () => {
       active = false;
     };
-  }, [activeTab, dashboardFilter, debouncedSearchTerm, page, pageSize]);
+  }, [activeTab, dashboardFilter, debouncedSearchTerm, page, pageSize, ordersRefreshVersion]);
 
   useEffect(() => {
     setPage(1);
@@ -826,6 +828,11 @@ export function Orders() {
     setInfoMessage('Đã lưu bộ lọc hiện tại.');
   };
 
+  const refreshOrders = () => {
+    invalidateOrdersCache();
+    setOrdersRefreshVersion((version) => version + 1);
+  };
+
   const handlePrintOrder = (hideDiscount = false) => {
     if (!selectedOrder) {
       return;
@@ -853,39 +860,8 @@ export function Orders() {
 
     try {
       const order = await salesOrdersService.getOne(selectedOrderId);
-      const rows: Array<Array<string | number>> = [
-        ['ĐƠN HÀNG', order.order_no],
-        ['Mã hóa đơn', order.invoice_no ?? ''],
-        ['Ngày bán', formatDateTime(order.sold_at)],
-        ['Khách hàng', order.customers?.full_name ?? 'Khách lẻ'],
-        ['Điện thoại', order.customers?.phone ?? ''],
-        ['Địa chỉ', order.delivery_address ?? order.customers?.address ?? ''],
-        ['Chi nhánh', order.branches?.name ?? ''],
-        ['Ghi chú', order.note ?? ''],
-        [],
-        ['STT', 'SKU', 'Tên sản phẩm', 'Đơn vị', 'Số lượng', 'Đơn giá', 'Chiết khấu', 'Thành tiền'],
-        ...(order.sales_order_items ?? []).map((item, index) => [
-          index + 1,
-          item.sku ?? '',
-          item.product_name,
-          item.unit_name ?? '',
-          Number(item.quantity ?? 0),
-          Number(item.unit_price ?? 0),
-          Number(item.discount_amount ?? 0),
-          Number(item.line_total ?? 0),
-        ]),
-        [],
-        ['Tạm tính', Number(order.subtotal ?? 0)],
-        ['Chiết khấu đơn hàng', Number(order.discount_amount ?? 0)],
-        ['Phí giao hàng', Number(order.shipping_fee ?? 0)],
-        ['Thuế', Number(order.tax_amount ?? 0)],
-        ['Tổng tiền', Number(order.total_amount ?? 0)],
-        ['Đã thanh toán', Number(order.paid_amount ?? 0)],
-        ['Còn phải trả', Math.max(0, Number(order.total_amount ?? 0) - Number(order.paid_amount ?? 0))],
-      ];
-
       const safeOrderNo = order.order_no.replace(/[^a-zA-Z0-9_-]/g, '_') || order.id;
-      exportRowsToXlsx(rows, `Don_hang_${safeOrderNo}`, 'Đơn hàng');
+      await exportSalesOrderInvoiceToXlsx(order, STORE_INFO, `Hoa_don_${safeOrderNo}`);
       setInfoMessage(`Đã xuất Excel đơn hàng ${order.order_no}.`);
     } catch (error: any) {
       setDetailError(error?.message ?? 'Không thể xuất đơn hàng ra Excel.');
@@ -1150,7 +1126,7 @@ export function Orders() {
       }
 
       if (createdOrders.length > 0) {
-        invalidateOrdersCache();
+        refreshOrders();
         setOrders((current) => [...createdOrders, ...current]);
         setTotalOrders((current) => current + createdOrders.length);
         setSelectedOrderId(createdOrders[0].id);
@@ -1210,7 +1186,7 @@ export function Orders() {
         })),
       });
 
-      invalidateOrdersCache();
+      refreshOrders();
       setOrders((current) => [duplicated, ...current]);
       setTotalOrders((current) => current + 1);
       setSelectedOrderId(duplicated.id);
@@ -1254,7 +1230,7 @@ export function Orders() {
 
     try {
       const updated = await salesOrdersService.cancel(selectedOrder.id);
-      invalidateOrdersCache();
+      refreshOrders();
       setOrders((current) =>
         current.map((order) => (order.id === updated.id ? { ...order, ...updated } : order)),
       );
