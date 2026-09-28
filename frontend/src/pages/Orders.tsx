@@ -500,6 +500,7 @@ export function Orders() {
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
+  const [isExportingOrderExcel, setIsExportingOrderExcel] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
@@ -786,7 +787,9 @@ export function Orders() {
   }, [isListLoading, page, totalPages]);
 
   const selectedOrder =
-    selectedOrderDetail ?? orders.find((order) => order.id === selectedOrderId) ?? null;
+    (selectedOrderDetail?.id === selectedOrderId ? selectedOrderDetail : null) ??
+    orders.find((order) => order.id === selectedOrderId) ??
+    null;
 
   const pendingOrders = processingSummary.pending;
   const unpaidOrders = processingSummary.unpaid;
@@ -839,6 +842,56 @@ export function Orders() {
 
     setShowPrintMenu(false);
     window.location.assign(`/invoice?${params.toString()}`);
+  };
+
+  const handleExportOrderExcel = async () => {
+    if (!selectedOrderId || isExportingOrderExcel) return;
+
+    setShowPrintMenu(false);
+    setIsExportingOrderExcel(true);
+    setDetailError(null);
+
+    try {
+      const order = await salesOrdersService.getOne(selectedOrderId);
+      const rows: Array<Array<string | number>> = [
+        ['ĐƠN HÀNG', order.order_no],
+        ['Mã hóa đơn', order.invoice_no ?? ''],
+        ['Ngày bán', formatDateTime(order.sold_at)],
+        ['Khách hàng', order.customers?.full_name ?? 'Khách lẻ'],
+        ['Điện thoại', order.customers?.phone ?? ''],
+        ['Địa chỉ', order.delivery_address ?? order.customers?.address ?? ''],
+        ['Chi nhánh', order.branches?.name ?? ''],
+        ['Ghi chú', order.note ?? ''],
+        [],
+        ['STT', 'SKU', 'Tên sản phẩm', 'Đơn vị', 'Số lượng', 'Đơn giá', 'Chiết khấu', 'Thành tiền'],
+        ...(order.sales_order_items ?? []).map((item, index) => [
+          index + 1,
+          item.sku ?? '',
+          item.product_name,
+          item.unit_name ?? '',
+          Number(item.quantity ?? 0),
+          Number(item.unit_price ?? 0),
+          Number(item.discount_amount ?? 0),
+          Number(item.line_total ?? 0),
+        ]),
+        [],
+        ['Tạm tính', Number(order.subtotal ?? 0)],
+        ['Chiết khấu đơn hàng', Number(order.discount_amount ?? 0)],
+        ['Phí giao hàng', Number(order.shipping_fee ?? 0)],
+        ['Thuế', Number(order.tax_amount ?? 0)],
+        ['Tổng tiền', Number(order.total_amount ?? 0)],
+        ['Đã thanh toán', Number(order.paid_amount ?? 0)],
+        ['Còn phải trả', Math.max(0, Number(order.total_amount ?? 0) - Number(order.paid_amount ?? 0))],
+      ];
+
+      const safeOrderNo = order.order_no.replace(/[^a-zA-Z0-9_-]/g, '_') || order.id;
+      exportRowsToXlsx(rows, `Don_hang_${safeOrderNo}`, 'Đơn hàng');
+      setInfoMessage(`Đã xuất Excel đơn hàng ${order.order_no}.`);
+    } catch (error: any) {
+      setDetailError(error?.message ?? 'Không thể xuất đơn hàng ra Excel.');
+    } finally {
+      setIsExportingOrderExcel(false);
+    }
   };
 
   const handleCreateConsolidatedInvoice = () => {
@@ -1338,6 +1391,16 @@ export function Orders() {
                       >
                         <Printer size={14} className="text-slate-500" />
                         In không hiện dòng chiết khấu
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => void handleExportOrderExcel()}
+                        disabled={isExportingOrderExcel}
+                        className="flex w-full items-center gap-2 px-4 py-2.5 text-left transition-colors hover:bg-slate-50 disabled:cursor-wait disabled:text-slate-400"
+                      >
+                        {isExportingOrderExcel ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} className="text-slate-500" />}
+                        Xuất đơn hàng ra Excel
                       </button>
                     </div>
                   ) : null}
