@@ -30,6 +30,14 @@ function getOrderItemLineTotal(item: NonNullable<SalesOrder['sales_order_items']
   return Number(item.quantity ?? 0) * Number(item.unit_price ?? 0) - Number(item.discount_amount ?? 0);
 }
 
+function getQuantityNumberFormat(value: number) {
+  if (!Number.isFinite(value) || Number.isInteger(value)) return '#,##0';
+
+  const fraction = value.toString().split('.')[1] ?? '';
+  const decimalPlaces = fraction.length || 2;
+  return '#,##0.' + '0'.repeat(decimalPlaces);
+}
+
 export async function exportSalesOrderInvoiceToXlsx(
   order: SalesOrder,
   store: { name: string; address: string; phone: string },
@@ -186,13 +194,11 @@ export async function exportSalesOrderInvoiceToXlsx(
     }
   }
 
-  [6, 7, 8].forEach((column) => {
-    for (let row = itemStartRow; row < totalRow; row += 1) {
-      setCellStyle(row, column, {
-        numFmt: column === 6 ? '#,##0.##' : '#,##0',
-      });
-    }
-  });
+  for (let row = itemStartRow; row < totalRow; row += 1) {
+    const quantity = Number(items[row - itemStartRow]?.quantity ?? 0);
+    setCellStyle(row, 6, { numFmt: getQuantityNumberFormat(quantity) });
+    [7, 8].forEach((column) => setCellStyle(row, column, { numFmt: '#,##0' }));
+  }
 
   applyStyle(totalRow, totalRow, 0, 9, {
     font: { ...baseFont, bold: true },
