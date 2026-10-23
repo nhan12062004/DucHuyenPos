@@ -50,15 +50,6 @@ export function ConsolidatedInvoiceCreate() {
         setOrders(eligibleOrders);
         if (initialOrderId && eligibleOrders.some((order) => order.id === initialOrderId)) {
           setSelectedIds([initialOrderId]);
-        } else if (initialOrderId) {
-          try {
-            const existing = await consolidatedInvoicesService.getByOrder(initialOrderId);
-            if (active) {
-              window.location.assign(`/invoice?consolidatedInvoiceId=${encodeURIComponent(existing.id)}`);
-            }
-          } catch {
-            // The order can also be unavailable because it is not completed.
-          }
         }
       } catch (nextError: any) {
         if (active) setError(nextError?.message ?? 'Không tải được các đơn hàng có thể gộp.');
@@ -150,7 +141,7 @@ export function ConsolidatedInvoiceCreate() {
             <ArrowLeft size={16} /> Quay lại đơn hàng
           </button>
           <h1 className="text-2xl font-semibold text-[#182537]">Tạo hóa đơn tổng hợp</h1>
-          <p className="mt-1 text-sm text-slate-500">Chọn các đơn đã hoàn thành của cùng khách; sản phẩm trùng nhau sẽ được gộp khi in.</p>
+          <p className="mt-1 text-sm text-slate-500">Chọn các đơn đã hoàn thành chưa gộp của cùng khách; mỗi lần tạo sẽ có mã hóa đơn riêng và vẫn lưu các đơn gốc liên quan.</p>
         </div>
         <button
           type="button"

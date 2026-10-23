@@ -20,7 +20,7 @@ export const CODE_PREFIXES = {
   payment: 'PC',
   salesReturn: 'TH',
   invoice: 'HD',
-  consolidatedInvoice: 'HDT',
+  consolidatedOrder: 'DHG',
 } as const;
 
 export async function generateNextCode(

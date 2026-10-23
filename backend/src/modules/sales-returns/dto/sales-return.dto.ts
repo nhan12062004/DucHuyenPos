@@ -8,8 +8,9 @@ export class CreateSalesReturnItemDto {
   @IsUUID()
   sales_order_item_id?: string;
 
+  @IsOptional()
   @IsUUID()
-  product_id: string = '';
+  product_id?: string | null;
 
   @IsString()
   product_name: string = '';

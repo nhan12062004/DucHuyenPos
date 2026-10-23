@@ -1200,7 +1200,8 @@ export function Orders() {
   };
 
   const handleEditOrder = () => {
-    if (!selectedOrder) {
+    if (!selectedOrder || selectedOrder.status === 'cancelled') {
+      setInfoMessage('Đơn hàng đã hủy không thể chỉnh sửa.');
       return;
     }
 
@@ -1208,7 +1209,8 @@ export function Orders() {
   };
 
   const handleReturnOrder = () => {
-    if (!selectedOrder) {
+    if (!selectedOrder || selectedOrder.status !== 'completed') {
+      setInfoMessage('Chỉ có thể trả hàng cho đơn đã hoàn thành.');
       return;
     }
 
@@ -1290,13 +1292,15 @@ export function Orders() {
             </button>
             <button
               onClick={handleEditOrder}
-              className="rounded border border-[#0088FF] bg-white px-4 py-1.5 text-[13px] font-medium text-[#0088FF] transition-colors hover:bg-blue-50"
+              disabled={selectedOrder.status === 'cancelled'}
+              className="rounded border border-[#0088FF] bg-white px-4 py-1.5 text-[13px] font-medium text-[#0088FF] transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-400"
             >
               Sửa đơn hàng
             </button>
             <button
               onClick={handleReturnOrder}
-              className="rounded bg-[#0088FF] px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-blue-700"
+              disabled={selectedOrder.status !== 'completed'}
+              className="rounded bg-[#0088FF] px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               Đổi trả hàng
             </button>

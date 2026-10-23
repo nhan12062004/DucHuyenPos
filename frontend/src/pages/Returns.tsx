@@ -90,8 +90,25 @@ export function Returns() {
           salesReturnsService.getAll({ page: 1, limit: 200 }),
         ]);
         if (!active) return;
-        setOrders(ordersResponse.data);
+        let loadedOrders = ordersResponse.data;
+        if (routeState?.orderId && !loadedOrders.some((order) => order.id === routeState.orderId)) {
+          try {
+            const routedOrder = await salesOrdersService.getOne(routeState.orderId);
+            loadedOrders = [...loadedOrders, routedOrder];
+          } catch {
+            // The order may have expired or been deleted.
+          }
+        }
+        setOrders(loadedOrders);
         setReturns(returnsResponse.data);
+        const routedOrder = loadedOrders.find((order) => order.id === routeState?.orderId);
+        if (routeState?.orderId && !routedOrder) {
+          setShowCreateModal(false);
+          setError('Không tìm thấy đơn hàng gốc để trả hàng.');
+        } else if (routeState?.orderId && routedOrder?.status !== 'completed') {
+          setShowCreateModal(false);
+          setError('Chỉ có thể tạo phiếu trả cho đơn đã hoàn thành.');
+        }
       } catch (nextError: any) {
         if (active) setError(nextError?.message ?? 'Không tải được dữ liệu trả hàng.');
       } finally {
@@ -138,10 +155,24 @@ export function Returns() {
   const selectedReturn = returns.find((item) => item.id === selectedReturnId) ?? filteredReturns[0] ?? null;
   const selectedOrder = orders.find((order) => order.id === selectedOrderId) ?? null;
   const selectedOrderItems = selectedOrder?.sales_order_items ?? [];
+  const returnedQuantities = useMemo(() => {
+    const quantities: Record<string, number> = {};
+    returns
+      .filter((item) => item.sales_order_id === selectedOrderId && item.status !== 'cancelled')
+      .flatMap((item) => item.sales_return_items ?? [])
+      .forEach((item) => {
+        if (item.sales_order_item_id) {
+          quantities[item.sales_order_item_id] = (quantities[item.sales_order_item_id] ?? 0) + Number(item.quantity ?? 0);
+        }
+      });
+    return quantities;
+  }, [returns, selectedOrderId]);
   const returnItemsPreview = selectedOrderItems
     .map((item) => {
       const quantity = Number(returnQuantities[item.id] ?? 0);
       const orderedQuantity = Number(item.quantity ?? 0);
+      const returnedQuantity = Number(returnedQuantities[item.id] ?? 0);
+      const remainingQuantity = Math.max(0, orderedQuantity - returnedQuantity);
       const orderedLineTotal =
         Number(item.line_total ?? 0) ||
         orderedQuantity * Number(item.unit_price ?? 0) - Number(item.discount_amount ?? 0);
@@ -149,6 +180,8 @@ export function Returns() {
       return {
         item,
         quantity,
+        returnedQuantity,
+        remainingQuantity,
         unitPrice: refundableUnitPrice,
         lineTotal: Math.max(0, quantity * refundableUnitPrice),
       };
@@ -160,7 +193,7 @@ export function Returns() {
     .reduce((sum, item) => sum + Number(item.refund_amount || 0), 0);
 
   const handleQuantityChange = (item: SalesOrderItem, value: number) => {
-    const maxQuantity = Number(item.quantity ?? 0);
+    const maxQuantity = Math.max(0, Number(item.quantity ?? 0) - Number(returnedQuantities[item.id] ?? 0));
     const safeValue = Math.max(0, Math.min(maxQuantity, value));
     setReturnQuantities((current) => ({ ...current, [item.id]: safeValue }));
   };
@@ -266,7 +299,7 @@ export function Returns() {
                     >
                       <option value="">Chọn đơn hàng</option>
                       {orders
-                        .filter((order) => order.status !== 'cancelled')
+                        .filter((order) => order.status === 'completed')
                         .map((order) => (
                           <option key={order.id} value={order.id}>
                             {order.order_no} - {order.customers?.full_name ?? 'Khách lẻ'}
@@ -319,26 +352,34 @@ export function Returns() {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {selectedOrderItems.length ? (
-                        selectedOrderItems.map((item) => (
+                        selectedOrderItems.map((item) => {
+                          const returnedQuantity = Number(returnedQuantities[item.id] ?? 0);
+                          const remainingQuantity = Math.max(0, Number(item.quantity ?? 0) - returnedQuantity);
+                          return (
                           <tr key={item.id}>
                             <td className="px-4 py-3">
                               <div className="font-medium text-[#182537]">{item.product_name}</div>
                               <div className="mt-1 text-[12px] text-slate-500">{item.sku || '---'} - {item.unit_name || 'cái'}</div>
                             </td>
-                            <td className="px-3 py-3 text-right">{Number(item.quantity ?? 0)}</td>
+                            <td className="px-3 py-3 text-right">
+                              <div>{Number(item.quantity ?? 0)}</div>
+                              {returnedQuantity > 0 ? <div className="text-[11px] text-slate-500">Đã trả: {returnedQuantity}</div> : null}
+                            </td>
                             <td className="px-3 py-3 text-right">{formatCurrency(Number(item.unit_price ?? 0))} đ</td>
                             <td className="px-4 py-3 text-right">
                               <input
                                 type="number"
                                 min={0}
-                                max={Number(item.quantity ?? 0)}
+                                max={remainingQuantity}
                                 value={returnQuantities[item.id] ?? 0}
                                 onChange={(event) => handleQuantityChange(item, Number(event.target.value))}
                                 className="h-8 w-20 border border-slate-300 px-2 text-right outline-none focus:border-[#0088FF]"
                               />
+                              {remainingQuantity === 0 ? <div className="mt-1 text-[11px] text-slate-500">Đã trả đủ</div> : null}
                             </td>
                           </tr>
-                        ))
+                          );
+                        })
                       ) : (
                         <tr>
                           <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
@@ -533,7 +574,7 @@ export function Returns() {
                     <PackageCheck size={15} /> Xác nhận hoàn tiền
                   </button>
                 ) : null}
-                {selectedReturn.status !== 'cancelled' && selectedReturn.status !== 'refunded' ? (
+                {selectedReturn.status === 'pending' ? (
                   <button
                     type="button"
                     onClick={() => handleUpdateStatus(selectedReturn, 'cancelled')}

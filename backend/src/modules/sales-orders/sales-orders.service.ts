@@ -1,4 +1,4 @@
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CLIENT } from '../supabase/supabase.constants.js';
 import { CreateSalesOrderDto, UpdateSalesOrderDto } from './dto/sales-order.dto.js';
@@ -268,6 +268,15 @@ export class SalesOrdersService {
 
     if (itemsErr) throw new Error(itemsErr.message);
 
+    try {
+      if (order.status === 'completed') {
+        await this.syncStockForOrder(order, [], itemsToInsert, 'sales_order');
+      }
+    } catch (stockError) {
+      await this.supabase.from('sales_orders').delete().eq('id', order.id);
+      throw stockError;
+    }
+
     const createdOrder = await this.findOne(order.id);
 
     await this.activityLogsService.logActivity({
@@ -288,7 +297,25 @@ export class SalesOrdersService {
 
   async update(id: string, dto: UpdateSalesOrderDto, actor?: ActivityActor) {
     const currentOrder = await this.findOne(id);
+    if (currentOrder.status === 'cancelled') {
+      throw new ConflictException('Don hang da huy khong the chinh sua');
+    }
+
+    const { data: activeReturns, error: returnsError } = await this.supabase
+      .from('sales_returns')
+      .select('id')
+      .eq('sales_order_id', id)
+      .neq('status', 'cancelled');
+    if (returnsError) throw new Error(returnsError.message);
+    if (activeReturns?.length) {
+      throw new ConflictException('Don hang da co phieu tra hang, khong the chinh sua');
+    }
+
     const { items, ...orderData } = dto;
+    const nextStatus = orderData.status ?? currentOrder.status;
+    if (currentOrder.status === 'completed' && nextStatus === 'pending') {
+      throw new ConflictException('Don hang da hoan thanh khong the chuyen lai dang cho xu ly');
+    }
     if (orderData.order_no) {
       orderData.order_no = normalizeManualCode(orderData.order_no) ?? currentOrder.order_no;
     }
@@ -311,6 +338,14 @@ export class SalesOrdersService {
     const shippingFee = Number(orderData.shipping_fee ?? currentOrder.shipping_fee ?? 0);
     const taxAmount = Number(orderData.tax_amount ?? currentOrder.tax_amount ?? 0);
     const totalAmount = subtotal - discountAmount + shippingFee + taxAmount;
+    const paidAmount = Math.min(
+      Math.max(0, Number(orderData.paid_amount ?? currentOrder.paid_amount ?? 0)),
+      Math.max(0, totalAmount),
+    );
+    const paymentStatus =
+      paidAmount <= 0 ? 'unpaid' : paidAmount >= totalAmount ? 'paid' : 'partial';
+    orderData.paid_amount = paidAmount;
+    orderData.payment_status = paymentStatus;
 
     const { error } = await this.supabase
       .from('sales_orders')
@@ -357,6 +392,12 @@ export class SalesOrdersService {
     }
 
     const updatedOrder = await this.findOne(id);
+    await this.syncStockForOrder(
+      currentOrder,
+      currentOrder.status === 'completed' ? currentOrder.sales_order_items ?? [] : [],
+      nextStatus === 'completed' ? orderItems : [],
+      'sales_order_edit',
+    );
     const isCancelled = orderData.status === 'cancelled' && currentOrder.status !== 'cancelled';
 
     await this.activityLogsService.logActivity({
@@ -375,6 +416,87 @@ export class SalesOrdersService {
     });
 
     return updatedOrder;
+  }
+
+  private async syncStockForOrder(
+    order: { id: string; branch_id: string; status?: string },
+    previousItems: any[],
+    nextItems: any[],
+    referenceType: string,
+  ) {
+    const { data: existingTransactions, error: transactionsError } = await this.supabase
+      .from('inventory_transactions')
+      .select('id')
+      .eq('reference_id', order.id)
+      .in('reference_type', ['sales_order', 'sales_order_edit'])
+      .eq('transaction_type', 'sale_out');
+    if (transactionsError) throw new Error(transactionsError.message);
+
+    const isNewCompletedSale = !previousItems.length && nextItems.length > 0 && !existingTransactions?.length;
+    if (!existingTransactions?.length && !isNewCompletedSale) return;
+
+    const quantities = new Map<string, number>();
+    previousItems.forEach((item: any) => {
+      if (item.product_id) quantities.set(item.product_id, (quantities.get(item.product_id) ?? 0) - Number(item.quantity ?? 0));
+    });
+    nextItems.forEach((item: any) => {
+      if (item.product_id) quantities.set(item.product_id, (quantities.get(item.product_id) ?? 0) + Number(item.quantity ?? 0));
+    });
+
+    const productIds = [...quantities.keys()];
+    if (!productIds.length) return;
+    const { data: products, error: productsError } = await this.supabase
+      .from('products')
+      .select('id, track_inventory, allow_negative_stock')
+      .in('id', productIds);
+    if (productsError) throw new Error(productsError.message);
+    const productSettings = new Map((products ?? []).map((product: any) => [product.id, product]));
+
+    for (const [productId, delta] of quantities) {
+      if (!delta || productSettings.get(productId)?.track_inventory === false) continue;
+
+      const { data: stock, error: stockError } = await this.supabase
+        .from('branch_stocks')
+        .select('id, on_hand_qty, average_cost')
+        .eq('branch_id', order.branch_id)
+        .eq('product_id', productId)
+        .maybeSingle();
+      if (stockError) throw new Error(stockError.message);
+
+      const currentQuantity = Number(stock?.on_hand_qty ?? 0);
+      const nextQuantity = currentQuantity - delta;
+      if (delta > 0 && nextQuantity < 0 && productSettings.get(productId)?.allow_negative_stock !== true) {
+        throw new ConflictException(`Khong du ton kho cho san pham ${productId}`);
+      }
+
+      if (stock) {
+        const { error } = await this.supabase
+          .from('branch_stocks')
+          .update({ on_hand_qty: nextQuantity })
+          .eq('id', stock.id);
+        if (error) throw new Error(error.message);
+      } else {
+        const { error } = await this.supabase.from('branch_stocks').insert({
+          branch_id: order.branch_id,
+          product_id: productId,
+          on_hand_qty: nextQuantity,
+          average_cost: 0,
+        });
+        if (error) throw new Error(error.message);
+      }
+
+      const { error: transactionError } = await this.supabase.from('inventory_transactions').insert({
+        branch_id: order.branch_id,
+        product_id: productId,
+        transaction_type: delta > 0 ? 'sale_out' : 'sale_return_in',
+        reference_type: referenceType,
+        reference_id: order.id,
+        quantity: Math.abs(delta),
+        unit_cost: Number(stock?.average_cost ?? 0),
+        note: delta > 0 ? `Xuat kho cho don ${order.id}` : `Nhap lai kho khi sua don ${order.id}`,
+      });
+      if (transactionError) throw new Error(transactionError.message);
+    }
   }
 
   async cancel(id: string, actor?: ActivityActor) {

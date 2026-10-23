@@ -152,7 +152,7 @@ export class ConsolidatedInvoicesService {
     const invoiceNo = await generateNextCode(this.supabase, {
       table: 'consolidated_invoices',
       column: 'invoice_no',
-      prefix: CODE_PREFIXES.consolidatedInvoice,
+      prefix: CODE_PREFIXES.consolidatedOrder,
     });
 
     const { data: invoice, error: invoiceError } = await this.supabase
