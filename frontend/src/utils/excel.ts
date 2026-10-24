@@ -1,7 +1,7 @@
-import * as XLSX from 'xlsx';
 import type { SalesOrder } from '../services/salesOrdersService';
 
-export function exportRowsToXlsx(rows: Array<Array<string | number>>, fileName: string, sheetName = 'Sheet1') {
+export async function exportRowsToXlsx(rows: Array<Array<string | number>>, fileName: string, sheetName = 'Sheet1') {
+  const XLSX = await import('xlsx');
   const worksheet = XLSX.utils.aoa_to_sheet(rows);
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, sheetName.slice(0, 31) || 'Sheet1');

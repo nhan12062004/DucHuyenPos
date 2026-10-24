@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import type { User } from '@supabase/supabase-js';
 
 /**
  * API Client - thin wrapper gọi NestJS backend
@@ -8,6 +9,11 @@ import { supabase } from '../lib/supabase';
 const _apiUrl = import.meta.env.VITE_API_URL as string | undefined;
 const BASE_URL = (_apiUrl && _apiUrl.trim()) ? _apiUrl.trim() : '/api';
 const REQUEST_TIMEOUT_MS = 30_000;
+let actorUser: User | null | undefined;
+
+export function setApiActorUser(user: User | null) {
+  actorUser = user;
+}
 
 export class ApiError extends Error {
   constructor(
@@ -21,8 +27,9 @@ export class ApiError extends Error {
 }
 
 async function getActorHeaders() {
-  const { data } = await supabase.auth.getSession();
-  const user = data.session?.user;
+  const user = actorUser === undefined
+    ? (await supabase.auth.getSession()).data.session?.user
+    : actorUser;
 
   if (!user) {
     return {};

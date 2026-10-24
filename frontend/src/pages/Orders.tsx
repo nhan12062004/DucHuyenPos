@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { readSheet } from 'read-excel-file/browser';
 import {
   Search,
   ChevronDown,
@@ -332,6 +331,7 @@ function parseImportNumber(value?: string) {
 }
 
 async function parseImportFile(file: File) {
+  const { readSheet } = await import('read-excel-file/browser');
   const rows = await readSheet(file);
   return rows
     .map((row) => row.map((cell) => (cell === null ? '' : String(cell).trim())))
@@ -982,7 +982,7 @@ export function Orders() {
               ]),
             ];
 
-      exportRowsToXlsx(rows, `orders-${orderExportType}-${new Date().toISOString().slice(0, 10)}`, 'Đơn hàng');
+      await exportRowsToXlsx(rows, `orders-${orderExportType}-${new Date().toISOString().slice(0, 10)}`, 'Đơn hàng');
       setShowExportModal(false);
       setInfoMessage(`Đã xuất ${ordersToExport.length} đơn hàng.`);
     } catch (error: any) {

@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { readSheet } from 'read-excel-file/browser';
 import {
   Search,
   ChevronDown,
@@ -158,6 +157,7 @@ function parseImportBoolean(value: string | undefined, defaultValue: boolean) {
 }
 
 async function parseImportFile(file: File) {
+  const { readSheet } = await import('read-excel-file/browser');
   const rows = await readSheet(file);
   return rows
     .map((row) => row.map((cell) => (cell === null ? '' : String(cell).trim())))
@@ -577,7 +577,7 @@ export function Products() {
     );
   };
 
-  const handleExportProducts = () => {
+  const handleExportProducts = async () => {
     const productsToExport = exportScope === 'all' ? visibleProducts : pagedProducts;
 
     if (productsToExport.length === 0) {
@@ -598,9 +598,13 @@ export function Products() {
       ]),
     ];
 
-    exportRowsToXlsx(rows, `products-${new Date().toISOString().slice(0, 10)}`, 'Sản phẩm');
-    setShowExportModal(false);
-    setInfoMessage(`Đã xuất ${productsToExport.length} sản phẩm.`);
+    try {
+      await exportRowsToXlsx(rows, `products-${new Date().toISOString().slice(0, 10)}`, 'Sản phẩm');
+      setShowExportModal(false);
+      setInfoMessage(`Đã xuất ${productsToExport.length} sản phẩm.`);
+    } catch (error: any) {
+      setInfoMessage(error?.message ?? 'Xuất file sản phẩm thất bại.');
+    }
   };
 
   const handleImportProducts = async (event: React.ChangeEvent<HTMLInputElement>) => {

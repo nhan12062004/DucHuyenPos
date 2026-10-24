@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { readSheet } from 'read-excel-file/browser';
 import {
   Search,
   ChevronDown,
@@ -166,6 +165,7 @@ function normalizeImportKey(value: string) {
 }
 
 async function parseImportFile(file: File) {
+  const { readSheet } = await import('read-excel-file/browser');
   const rows = await readSheet(file);
   return rows
     .map((row) => row.map((cell) => (cell === null ? '' : String(cell).trim())))
@@ -495,9 +495,13 @@ export function Customers() {
       ]),
     ];
 
-    exportRowsToXlsx(rows, `customers-${new Date().toISOString().slice(0, 10)}`, 'Khách hàng');
-    setShowExportModal(false);
-    setInfoMessage(`Đã xuất ${customersToExport.length} khách hàng.`);
+    try {
+      await exportRowsToXlsx(rows, `customers-${new Date().toISOString().slice(0, 10)}`, 'Khách hàng');
+      setShowExportModal(false);
+      setInfoMessage(`Đã xuất ${customersToExport.length} khách hàng.`);
+    } catch (error: any) {
+      setListError(error?.message ?? 'Xuất file khách hàng thất bại.');
+    }
   };
 
   const handleImportCustomers = async (event: React.ChangeEvent<HTMLInputElement>) => {

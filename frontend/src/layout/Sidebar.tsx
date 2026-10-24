@@ -12,6 +12,7 @@ import {
   User
 } from 'lucide-react';
 import { cn } from '../utils/cn';
+import { preloadRoute } from '../routeModules';
 
 interface SidebarProps {
   expanded: boolean;
@@ -287,6 +288,9 @@ export function Sidebar({ expanded, setExpanded }: SidebarProps) {
                             <motion.li key={child.path} variants={SUBMENU_ITEM_VARIANTS}>
                               <NavLink
                                 to={child.path}
+                                onPointerEnter={() => preloadRoute(child.path)}
+                                onFocus={() => preloadRoute(child.path)}
+                                onTouchStart={() => preloadRoute(child.path)}
                                 className={cn(
                                   'block truncate px-4 py-2.5 pl-12 text-[14.5px] font-medium transition-colors',
                                   isActive ? ACTIVE_SUBITEM_CLASSES : DEFAULT_SUBITEM_CLASSES
