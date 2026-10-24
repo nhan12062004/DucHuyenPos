@@ -9,11 +9,21 @@ export class DashboardController {
   getStats(
     @Query('branch_id') branchId?: string,
     @Query('top_products_days') topProductsDays?: string,
+    @Query('summary_only') summaryOnly?: string,
   ) {
     return this.dashboardService.getStats(
       branchId,
       topProductsDays ? parseInt(topProductsDays, 10) : 7,
+      summaryOnly === 'true',
     );
+  }
+
+  @Get('top-products')
+  getTopProducts(
+    @Query('days') days?: string,
+    @Query('branch_id') branchId?: string,
+  ) {
+    return this.dashboardService.getTopProducts(days ? parseInt(days, 10) : 7, branchId);
   }
 
   @Get('inventory-summary')

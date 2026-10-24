@@ -20,54 +20,56 @@ export class DashboardService {
     private readonly activityLogsService: ActivityLogsService,
   ) {}
 
-  async getStats(branchId?: string, topProductsDays = 7) {
+  async getStats(branchId?: string, topProductsDays = 7, summaryOnly = false) {
     const today = new Date();
     const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
-    const topProductsFrom = new Date();
-    topProductsFrom.setDate(topProductsFrom.getDate() - topProductsDays);
 
     let todayQuery = this.supabase
       .from('sales_orders')
-      .select('total_amount, paid_amount')
+      .select('total_amount')
       .eq('status', 'completed')
       .gte('sold_at', startOfDay);
     if (branchId) todayQuery = todayQuery.eq('branch_id', branchId);
-    const { data: todayOrders, error: todayOrdersError } = await todayQuery;
-    if (todayOrdersError) throw new Error(todayOrdersError.message);
-
     let monthQuery = this.supabase
       .from('sales_orders')
-      .select('id, total_amount, paid_amount')
+      .select('total_amount')
       .eq('status', 'completed')
       .gte('sold_at', startOfMonth);
     if (branchId) monthQuery = monthQuery.eq('branch_id', branchId);
-    const { data: monthOrders, error: monthOrdersError } = await monthQuery;
-    if (monthOrdersError) throw new Error(monthOrdersError.message);
-
     let todayOrdersCountQuery = this.supabase
       .from('sales_orders')
-      .select('id', { count: 'exact' })
+      .select('id', { count: 'exact', head: true })
       .gte('sold_at', startOfDay);
     if (branchId) todayOrdersCountQuery = todayOrdersCountQuery.eq('branch_id', branchId);
-    const { count: todayOrderCount, error: todayOrderCountError } = await todayOrdersCountQuery;
-    if (todayOrderCountError) throw new Error(todayOrderCountError.message);
-
-    const { data: debtData, error: debtDataError } = await this.supabase
+    const debtQuery = this.supabase
       .from('customer_debt_summary')
       .select('current_debt');
-    if (debtDataError) throw new Error(debtDataError.message);
 
     let pendingOrdersQuery = this.supabase
       .from('sales_orders')
       .select('status, payment_status, note, delivery_method, delivery_status');
     if (branchId) pendingOrdersQuery = pendingOrdersQuery.eq('branch_id', branchId);
-    const { data: pendingOrders, error: pendingOrdersError } = await pendingOrdersQuery;
-    if (pendingOrdersError) throw new Error(pendingOrdersError.message);
+    const [todayResult, monthResult, countResult, debtResult, pendingResult, recentActivities, topProducts] =
+      await Promise.all([
+        todayQuery,
+        monthQuery,
+        todayOrdersCountQuery,
+        debtQuery,
+        pendingOrdersQuery,
+        this.activityLogsService.getRecentActivities(10),
+        summaryOnly ? Promise.resolve(null) : this.getTopProducts(topProductsDays, branchId),
+      ]);
 
-    const topProducts = await this.getTopProducts(topProductsFrom.toISOString(), branchId);
+    for (const result of [todayResult, monthResult, countResult, debtResult, pendingResult]) {
+      if (result.error) throw new Error(result.error.message);
+    }
 
-    const recentActivities = await this.activityLogsService.getRecentActivities(10);
+    const todayOrders = todayResult.data;
+    const monthOrders = monthResult.data;
+    const todayOrderCount = countResult.count;
+    const debtData = debtResult.data;
+    const pendingOrders = pendingResult.data;
 
     const todayRevenue = (todayOrders ?? []).reduce(
       (sum: number, order: any) => sum + Number(order.total_amount),
@@ -133,12 +135,15 @@ export class DashboardService {
       month_revenue: monthRevenue,
       total_customer_debt: totalDebt,
       pending_summary: pendingSummary,
-      top_products: topProducts,
+      ...(topProducts === null ? {} : { top_products: topProducts }),
       recent_activities: recentActivities,
     };
   }
 
-  private async getTopProducts(fromIso: string, branchId?: string): Promise<TopProductStats[]> {
+  async getTopProducts(days = 7, branchId?: string): Promise<TopProductStats[]> {
+    const from = new Date();
+    from.setDate(from.getDate() - days);
+    const fromIso = from.toISOString();
     const orderPageSize = 500;
     const itemBatchSize = 100;
     const groupedProducts = new Map<string, TopProductStats & { order_ids: Set<string> }>();
@@ -159,13 +164,19 @@ export class DashboardService {
       const topProductsOrderIds = (topProductsOrders ?? []).map((order: any) => order.id).filter(Boolean);
       if (topProductsOrderIds.length === 0) break;
 
+      const itemBatches: string[][] = [];
       for (let i = 0; i < topProductsOrderIds.length; i += itemBatchSize) {
-        const orderIdBatch = topProductsOrderIds.slice(i, i + itemBatchSize);
-        const { data: orderItems, error: orderItemsError } = await this.supabase
+        itemBatches.push(topProductsOrderIds.slice(i, i + itemBatchSize));
+      }
+
+      const itemResults = await Promise.all(itemBatches.map((orderIdBatch) =>
+        this.supabase
           .from('sales_order_items')
           .select('sales_order_id, product_id, product_name, sku, quantity, line_total')
-          .in('sales_order_id', orderIdBatch);
+          .in('sales_order_id', orderIdBatch),
+      ));
 
+      for (const { data: orderItems, error: orderItemsError } of itemResults) {
         if (orderItemsError) throw new Error(orderItemsError.message);
 
         (orderItems ?? []).forEach((item: any) => {
@@ -269,7 +280,7 @@ export class DashboardService {
 
     let query = this.supabase
       .from('sales_orders')
-      .select('sold_at, total_amount, paid_amount')
+      .select('sold_at, total_amount')
       .eq('status', 'completed')
       .gte('sold_at', from.toISOString())
       .order('sold_at');

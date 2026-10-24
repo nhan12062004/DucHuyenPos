@@ -1,14 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts';
 import {
   DollarSign,
   ShoppingBag,
@@ -30,11 +21,83 @@ import {
   type InventorySummary,
   type RecentActivity,
   type RevenueChartPoint,
+  type TopProductStats,
 } from '../services/dashboardService';
 import { PageLoader } from '../components/PageLoader';
 import { inventoryService, type Branch } from '../services/inventoryService';
+import { useAuth } from '../context/AuthContext';
 
 const DEFAULT_BRANCH_FILTER = '__default__';
+const RevenueChart = React.lazy(() => import('../components/RevenueChart'));
+const statsCache = new Map<string, DashboardStats>();
+const chartCache = new Map<string, RevenueChartPoint[]>();
+const inventoryCache = new Map<string, InventorySummary>();
+const topProductsCache = new Map<string, TopProductStats[]>();
+const statsRequests = new Map<string, Promise<DashboardStats>>();
+const chartRequests = new Map<string, Promise<RevenueChartPoint[]>>();
+const inventoryRequests = new Map<string, Promise<InventorySummary>>();
+const topProductsRequests = new Map<string, Promise<TopProductStats[]>>();
+
+function useDashboardResource<T>(
+  key: string,
+  cache: Map<string, T>,
+  requests: Map<string, Promise<T>>,
+  fetcher: () => Promise<T>,
+) {
+  const [result, setResult] = useState<{ key: string; data: T } | null>(() => {
+    const cached = cache.get(key);
+    return cached === undefined ? null : { key, data: cached };
+  });
+  const [errorResult, setErrorResult] = useState<{ key: string; message: string } | null>(null);
+  const [loadingKey, setLoadingKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const cached = cache.get(key);
+    setResult(cached === undefined ? null : { key, data: cached });
+    setErrorResult(null);
+    setLoadingKey(key);
+
+    let request = requests.get(key);
+    if (!request) {
+      request = fetcher()
+        .then((data) => {
+          cache.set(key, data);
+          return data;
+        })
+        .finally(() => {
+          requests.delete(key);
+        });
+      requests.set(key, request);
+    }
+
+    request.then(
+      (data) => {
+        if (active) {
+          setResult({ key, data });
+          setLoadingKey(null);
+        }
+      },
+      (nextError) => {
+        if (active) {
+          setErrorResult({ key, message: nextError?.message ?? 'Không tải được dữ liệu tổng quan.' });
+          setLoadingKey(null);
+        }
+      },
+    );
+
+    return () => {
+      active = false;
+    };
+    // The key includes every parameter used by fetcher.
+  }, [key]);
+
+  return {
+    data: result?.key === key ? result.data : null,
+    error: errorResult?.key === key ? errorResult.message : null,
+    refreshing: loadingKey === key && result?.key === key,
+  };
+}
 
 function fmt(value: number) {
   if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)} tỷ`;
@@ -108,12 +171,8 @@ function getActivityRoute(activity: RecentActivity) {
 }
 
 export function Dashboard() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [chart, setChart] = useState<RevenueChartPoint[]>([]);
-  const [inventorySummary, setInventorySummary] = useState<InventorySummary | null>(null);
+  const { user } = useAuth();
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [chartDays, setChartDays] = useState(7);
   const [topProductsDays, setTopProductsDays] = useState(7);
   const [salesInsightTab, setSalesInsightTab] = useState<'revenue' | 'share'>('revenue');
@@ -128,6 +187,31 @@ export function Dashboard() {
   const defaultBranch = branches.find((branch) => branch.is_default) ?? branches[0] ?? null;
   const effectiveDashboardBranchId =
     dashboardBranchId === DEFAULT_BRANCH_FILTER ? defaultBranch?.id ?? '' : dashboardBranchId;
+  const cachePrefix = `${user?.id ?? 'anonymous'}:${new Date().toDateString()}:${effectiveDashboardBranchId || 'all'}`;
+  const { data: stats, error: statsError, refreshing: statsRefreshing } = useDashboardResource(
+    `${cachePrefix}:stats`,
+    statsCache,
+    statsRequests,
+    () => dashboardService.getStats(effectiveDashboardBranchId || undefined),
+  );
+  const { data: topProducts, error: topProductsError, refreshing: topProductsRefreshing } = useDashboardResource(
+    `${cachePrefix}:top-products:${topProductsDays}`,
+    topProductsCache,
+    topProductsRequests,
+    () => dashboardService.getTopProducts(topProductsDays, effectiveDashboardBranchId || undefined),
+  );
+  const { data: chart, error: chartError, refreshing: chartRefreshing } = useDashboardResource(
+    `${cachePrefix}:chart:${chartDays}`,
+    chartCache,
+    chartRequests,
+    () => dashboardService.getRevenueChart(chartDays, effectiveDashboardBranchId || undefined),
+  );
+  const { data: inventorySummary, error: inventoryError, refreshing: inventoryRefreshing } = useDashboardResource(
+    `${cachePrefix}:inventory`,
+    inventoryCache,
+    inventoryRequests,
+    () => dashboardService.getInventorySummary(effectiveDashboardBranchId || undefined),
+  );
 
   useEffect(() => {
     inventoryService.getBranches().then(setBranches).catch(() => {
@@ -146,56 +230,16 @@ export function Dashboard() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    let active = true;
-
-    async function loadDashboard() {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const [nextStats, nextChart, nextInventory] = await Promise.all([
-          dashboardService.getStats(effectiveDashboardBranchId || undefined, topProductsDays),
-          dashboardService.getRevenueChart(chartDays, effectiveDashboardBranchId || undefined),
-          dashboardService.getInventorySummary(effectiveDashboardBranchId || undefined),
-        ]);
-
-        if (!active) {
-          return;
-        }
-
-        setStats(nextStats);
-        setChart(nextChart);
-        setInventorySummary(nextInventory);
-      } catch (nextError: any) {
-        if (!active) {
-          return;
-        }
-        setError(nextError?.message ?? 'Không tải được dữ liệu tổng quan.');
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    }
-
-    loadDashboard();
-
-    return () => {
-      active = false;
-    };
-  }, [chartDays, effectiveDashboardBranchId, topProductsDays]);
-
-  const chartData = chart.map((point) => ({
+  const chartData = (chart ?? []).map((point) => ({
     name: point.date.slice(5).replace('-', '/'),
     total: point.revenue,
   }));
-  const totalTopProductsQty = (stats?.top_products ?? []).reduce((sum, item) => sum + Number(item.sold_qty ?? 0), 0);
-  const shareRows = (stats?.top_products ?? []).map((item) => ({
+  const totalTopProductsQty = (topProducts ?? []).reduce((sum, item) => sum + Number(item.sold_qty ?? 0), 0);
+  const shareRows = (topProducts ?? []).map((item) => ({
     ...item,
     sharePercent: totalTopProductsQty > 0 ? (Number(item.sold_qty ?? 0) / totalTopProductsQty) * 100 : 0,
   }));
-  const topProductsRows = [...(stats?.top_products ?? [])].sort((a, b) => {
+  const topProductsRows = [...(topProducts ?? [])].sort((a, b) => {
     if (topProductsMetric === 'orders') {
       return Number(b.order_count ?? 0) - Number(a.order_count ?? 0);
     }
@@ -204,6 +248,13 @@ export function Dashboard() {
     }
     return Number(b.sold_qty ?? 0) - Number(a.sold_qty ?? 0);
   });
+  const hasCachedDataError = Boolean(
+    (stats && statsError) ||
+    (topProducts && topProductsError) ||
+    (chart && chartError) ||
+    (inventorySummary && inventoryError),
+  );
+  const isRefreshing = statsRefreshing || topProductsRefreshing || chartRefreshing || inventoryRefreshing;
 
   function getTopProductsMetricLabel() {
     if (topProductsMetric === 'orders') {
@@ -215,7 +266,7 @@ export function Dashboard() {
     return 'đã bán';
   }
 
-  function getTopProductsMetricValue(item: DashboardStats['top_products'][number]) {
+  function getTopProductsMetricValue(item: TopProductStats) {
     if (topProductsMetric === 'orders') {
       return fmt(item.order_count ?? 0);
     }
@@ -272,18 +323,18 @@ export function Dashboard() {
     navigate('/debts');
   };
 
-  if (loading) {
+  if (!stats && !statsError) {
     return (
       <PageLoader text="Đang tải dữ liệu báo cáo..." fullScreen />
     );
   }
 
-  if (error) {
+  if (!stats && statsError) {
     return (
       <div className="page-shell flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-3 text-red-500">
           <AlertCircle className="w-8 h-8" />
-          <p className="text-sm font-medium">{error}</p>
+          <p className="text-sm font-medium">{statsError}</p>
           <button
             onClick={() => window.location.reload()}
             className="text-xs text-blue-600 underline"
@@ -297,6 +348,11 @@ export function Dashboard() {
 
   return (
     <div className="page-shell space-y-6 text-sm">
+      {(isRefreshing || hasCachedDataError) && (
+        <p className={`text-xs ${hasCachedDataError ? 'text-amber-700' : 'text-slate-500'}`} role="status">
+          {hasCachedDataError ? 'Không thể cập nhật một số số liệu. Đang hiển thị dữ liệu đã tải trước đó.' : 'Đang cập nhật số liệu...'}
+        </p>
+      )}
       <div className="grid grid-cols-1 gap-6 text-sm xl:grid-cols-4">
         <div className="xl:col-span-3 space-y-6">
           <div className="ui-card">
@@ -416,46 +472,27 @@ export function Dashboard() {
 
             {salesInsightTab === 'revenue' ? (
               <div className="h-[300px] min-w-0 p-6">
-                {chartData.length === 0 ? (
+                {chartError && !chart ? (
+                  <div className="h-full flex items-center justify-center text-sm text-red-500">Không tải được biểu đồ doanh thu</div>
+                ) : !chart ? (
+                  <div className="h-full flex items-center justify-center text-sm text-slate-400">Đang tải biểu đồ...</div>
+                ) : chartData.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-slate-400">
                     <p className="text-sm">Chưa có dữ liệu doanh thu</p>
                   </div>
                 ) : (
-                  <ResponsiveContainer
-                    width="100%"
-                    height="100%"
-                    minWidth={0}
-                    minHeight={1}
-                    initialDimension={{ width: 1, height: 1 }}
-                  >
-                    <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                      <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
-                      <YAxis
-                        tick={{ fontSize: 12, fill: '#94A3B8' }}
-                        axisLine={false}
-                        tickLine={false}
-                        tickFormatter={(value) => fmt(value)}
-                      />
-                      <Tooltip
-                        formatter={(value: number) => [fmtFull(value), 'Doanh thu']}
-                        contentStyle={{ borderRadius: 12, border: '1px solid #E2E8F0', fontSize: 13 }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="total"
-                        stroke="#2563EB"
-                        strokeWidth={2.5}
-                        dot={{ r: 4, fill: '#2563EB', strokeWidth: 0 }}
-                        activeDot={{ r: 6 }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
+                  <Suspense fallback={<div className="h-full flex items-center justify-center text-sm text-slate-400">Đang mở biểu đồ...</div>}>
+                    <RevenueChart data={chartData} formatCompact={fmt} formatFull={fmtFull} />
+                  </Suspense>
                 )}
               </div>
             ) : (
               <div className="p-6">
-                {shareRows.length === 0 ? (
+                {!topProducts ? (
+                  <div className="flex h-[252px] items-center justify-center text-sm text-slate-400">
+                    {topProductsError ? 'Không tải được tỷ trọng bán hàng' : 'Đang tải tỷ trọng bán hàng...'}
+                  </div>
+                ) : shareRows.length === 0 ? (
                   <div className="flex h-[252px] flex-col items-center justify-center text-slate-400">
                     <p className="text-sm">Chưa có dữ liệu tỷ trọng bán hàng</p>
                   </div>
@@ -664,7 +701,11 @@ export function Dashboard() {
                   </div>
                 </div>
               </div>
-              {!stats?.top_products?.length ? (
+              {!topProducts ? (
+                <div className="px-4 py-10 text-center text-sm text-slate-400">
+                  {topProductsError ? 'Không tải được sản phẩm bán chạy' : 'Đang tải sản phẩm bán chạy...'}
+                </div>
+              ) : !topProducts.length ? (
                 <div className="px-4 py-10 text-center text-sm text-slate-400">Chưa có dữ liệu bán hàng</div>
               ) : (
                 <div className="min-h-[178px] divide-y divide-slate-100">
@@ -717,7 +758,7 @@ export function Dashboard() {
               <div className="space-y-3 bg-white px-3 py-4">
                 <InventorySummaryRow
                   label="Sản phẩm dưới định mức"
-                  value={fmt(inventorySummary?.low_stock_count ?? 0)}
+                  value={inventorySummary ? fmt(inventorySummary.low_stock_count) : '…'}
                   accent="text-red-500"
                   showAlert
                   onClick={() =>
@@ -728,19 +769,22 @@ export function Dashboard() {
                 />
                 <InventorySummaryRow
                   label="Số tồn kho chi nhánh"
-                  value={fmt(inventorySummary?.total_stock_qty ?? 0)}
+                  value={inventorySummary ? fmt(inventorySummary.total_stock_qty) : '…'}
                   onClick={() =>
                     openInventory({})
                   }
                 />
                 <InventorySummaryRow
                   label="Giá trị tồn kho chi nhánh"
-                  value={fmtFull(inventorySummary?.total_stock_value ?? 0)}
+                  value={inventorySummary ? fmtFull(inventorySummary.total_stock_value) : '…'}
                   onClick={() =>
                     openInventory({})
                   }
                 />
               </div>
+              {inventoryError && !inventorySummary && (
+                <p className="px-3 pb-3 text-xs text-red-500">Không tải được thông tin kho</p>
+              )}
             </div>
           </div>
         </div>

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { Suspense, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
+import { PageLoader } from '../components/PageLoader';
 
 const SIDEBAR_WIDTH = {
   expanded: 236,
@@ -28,7 +29,9 @@ export function Layout() {
       >
         {!hasCustomHeader ? <TopBar /> : null}
         <div className={`flex-1 overflow-auto ${!isPosRoute && !hasCustomHeader ? 'px-6 py-6 lg:px-7 xl:px-8' : 'p-0'}`}>
-          <Outlet />
+          <Suspense fallback={<PageLoader text="Đang mở trang..." />}>
+            <Outlet />
+          </Suspense>
         </div>
       </main>
     </div>

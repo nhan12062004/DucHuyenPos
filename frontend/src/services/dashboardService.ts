@@ -30,15 +30,16 @@ export interface DashboardStats {
     delivering: number;
     cancelled_delivery: number;
   };
-  top_products: {
-    product_id: string;
-    name: string;
-    sku: string | null;
-    order_count: number;
-    sold_qty: number;
-    revenue: number;
-  }[];
   recent_activities: RecentActivity[];
+}
+
+export interface TopProductStats {
+  product_id: string;
+  name: string;
+  sku: string | null;
+  order_count: number;
+  sold_qty: number;
+  revenue: number;
 }
 
 export interface RevenueChartPoint {
@@ -47,10 +48,16 @@ export interface RevenueChartPoint {
 }
 
 export const dashboardService = {
-  getStats: (branchId?: string, topProductsDays = 7) =>
+  getStats: (branchId?: string) =>
     api.get<DashboardStats>('/dashboard/stats', {
+      summary_only: true,
       ...(branchId ? { branch_id: branchId } : {}),
-      top_products_days: topProductsDays,
+    }),
+
+  getTopProducts: (days = 7, branchId?: string) =>
+    api.get<TopProductStats[]>('/dashboard/top-products', {
+      days,
+      ...(branchId ? { branch_id: branchId } : {}),
     }),
 
   getInventorySummary: (branchId?: string) =>
