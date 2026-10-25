@@ -3,6 +3,7 @@ import { ArrowLeft, Printer } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageLoader } from '../components/PageLoader';
 import { salesOrdersService, type SalesOrder } from '../services/salesOrdersService';
+import { salesReturnsService, type SalesReturn, type SalesReturnStatus } from '../services/salesReturnsService';
 import { consolidatedInvoicesService, type ConsolidatedInvoice } from '../services/consolidatedInvoicesService';
 import { STORE_INFO } from '../utils/storeInfo';
 type InvoiceItem = NonNullable<SalesOrder['sales_order_items']>[number];
@@ -41,6 +42,60 @@ function getLineTotal(item: NonNullable<SalesOrder['sales_order_items']>[number]
 function getPdfFileName(invoiceNo: string) {
   const safeInvoiceNo = invoiceNo.replace(/[^a-zA-Z0-9_-]/g, '_');
   return `Hoa_don_${safeInvoiceNo}`;
+}
+
+function getReturnStatusLabel(status: SalesReturnStatus) {
+  switch (status) {
+    case 'approved': return 'Đã duyệt';
+    case 'refunded': return 'Đã hoàn tiền';
+    case 'completed': return 'Hoàn tất';
+    case 'cancelled': return 'Đã hủy';
+    default: return 'Chờ xử lý';
+  }
+}
+
+function toPrintableSalesReturn(record: SalesReturn, sourceOrder: SalesOrder | null): SalesOrder {
+  const sourceItems = new Map((sourceOrder?.sales_order_items ?? []).map((item) => [item.id, item]));
+
+  return {
+    id: record.id,
+    branch_id: record.branch_id,
+    order_no: record.return_no,
+    invoice_no: record.return_no,
+    customer_id: record.customer_id ?? undefined,
+    cashier_id: null,
+    sold_at: record.returned_at,
+    source: 'manual',
+    status: 'completed',
+    payment_status: 'unpaid',
+    subtotal: Number(record.subtotal ?? 0),
+    discount_amount: 0,
+    shipping_fee: 0,
+    tax_amount: 0,
+    total_amount: Number(record.refund_amount ?? 0),
+    paid_amount: 0,
+    note: record.note ?? undefined,
+    delivery_address: sourceOrder?.delivery_address ?? sourceOrder?.customers?.address,
+    delivery_method: 'nhan_tai_cua_hang',
+    delivery_status: 'delivered',
+    created_at: record.created_at,
+    customers: sourceOrder?.customers ?? record.customers ?? null,
+    branches: record.branches ?? null,
+    sales_order_items: (record.sales_return_items ?? []).map((item, index) => ({
+      id: item.id,
+      sales_order_id: record.sales_order_id ?? '',
+      product_id: item.product_id ?? null,
+      product_name: item.product_name,
+      unit_name: item.sales_order_item_id
+        ? sourceItems.get(item.sales_order_item_id)?.unit_name ?? 'Cái'
+        : 'Cái',
+      quantity: Number(item.quantity ?? 0),
+      unit_price: Number(item.unit_price ?? 0),
+      discount_amount: 0,
+      line_total: Number(item.line_total ?? 0),
+      sort_order: index,
+    })),
+  };
 }
 
 function toPrintableSalesOrder(invoice: ConsolidatedInvoice): SalesOrder {
@@ -102,12 +157,14 @@ export function Invoice() {
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get('orderId');
   const consolidatedInvoiceId = searchParams.get('consolidatedInvoiceId');
+  const returnId = searchParams.get('returnId');
   const shouldAutoPrint = searchParams.get('autoPrint') === '1';
   const shouldHideDiscount = searchParams.get('hideDiscount') === '1';
   const hasAutoPrintedRef = useRef(false);
   const measureRef = useRef<HTMLDivElement>(null);
   const [order, setOrder] = useState<SalesOrder | null>(null);
   const [consolidatedInvoice, setConsolidatedInvoice] = useState<ConsolidatedInvoice | null>(null);
+  const [salesReturn, setSalesReturn] = useState<SalesReturn | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [invoicePages, setInvoicePages] = useState<InvoicePage[]>([]);
@@ -116,31 +173,46 @@ export function Invoice() {
     let active = true;
 
     async function loadOrder() {
-      if (!orderId && !consolidatedInvoiceId) {
-        setError('Thiếu mã đơn hàng để in hóa đơn.');
+      if (!orderId && !consolidatedInvoiceId && !returnId) {
+        setError('Thiếu mã chứng từ để in.');
         setIsLoading(false);
         return;
       }
 
       setIsLoading(true);
       setError(null);
+      setOrder(null);
+      setInvoicePages([]);
+      hasAutoPrintedRef.current = false;
 
       try {
-        if (consolidatedInvoiceId) {
+        if (returnId) {
+          const detail = await salesReturnsService.getOne(returnId);
+          const sourceOrder = detail.sales_order_id
+            ? await salesOrdersService.getOne(detail.sales_order_id).catch(() => null)
+            : null;
+          if (active) {
+            setConsolidatedInvoice(null);
+            setSalesReturn(detail);
+            setOrder(toPrintableSalesReturn(detail, sourceOrder));
+          }
+        } else if (consolidatedInvoiceId) {
           const detail = await consolidatedInvoicesService.getOne(consolidatedInvoiceId);
           if (active) {
+            setSalesReturn(null);
             setConsolidatedInvoice(detail);
             setOrder(toPrintableSalesOrder(detail));
           }
         } else if (orderId) {
           const detail = await salesOrdersService.getOne(orderId);
           if (active) {
+            setSalesReturn(null);
             setConsolidatedInvoice(null);
             setOrder(detail);
           }
         }
       } catch (loadError: any) {
-        if (active) setError(loadError?.message ?? 'Không tải được hóa đơn.');
+        if (active) setError(loadError?.message ?? 'Không tải được chứng từ.');
       } finally {
         if (active) setIsLoading(false);
       }
@@ -151,7 +223,7 @@ export function Invoice() {
     return () => {
       active = false;
     };
-  }, [consolidatedInvoiceId, orderId]);
+  }, [consolidatedInvoiceId, orderId, returnId]);
 
   const items = useMemo(() => order?.sales_order_items ?? [], [order?.sales_order_items]);
   const subtotal = Number(order?.subtotal ?? 0);
@@ -160,7 +232,7 @@ export function Invoice() {
   const taxAmount = Number(order?.tax_amount ?? 0);
   const totalAmount = Number(order?.total_amount ?? 0);
   const invoiceNo = order?.invoice_no ?? order?.order_no ?? '---';
-  const documentTitle = consolidatedInvoice ? 'HÓA ĐƠN TỔNG HỢP' : 'ĐƠN HÀNG';
+  const documentTitle = salesReturn ? 'PHIẾU TRẢ HÀNG' : consolidatedInvoice ? 'HÓA ĐƠN TỔNG HỢP' : 'ĐƠN HÀNG';
   const sourceOrderNos = consolidatedInvoice?.consolidated_invoice_orders
     .map((item) => item.source_order_no)
     .filter(Boolean) ?? [];
@@ -266,7 +338,9 @@ export function Invoice() {
 
   const handlePrintInvoice = useCallback(() => {
     const previousTitle = document.title;
-    const pdfTitle = getPdfFileName(invoiceNo);
+    const pdfTitle = salesReturn
+      ? `Phieu_tra_${invoiceNo.replace(/[^a-zA-Z0-9_-]/g, '_')}`
+      : getPdfFileName(invoiceNo);
     let restored = false;
 
     const restoreTitle = () => {
@@ -285,7 +359,7 @@ export function Invoice() {
         window.setTimeout(restoreTitle, 1500);
       });
     });
-  }, [invoiceNo]);
+  }, [invoiceNo, salesReturn]);
 
   useEffect(() => {
     if (!shouldAutoPrint || isLoading || !order || !invoicePages.length || hasAutoPrintedRef.current) return;
@@ -297,7 +371,11 @@ export function Invoice() {
   }, [handlePrintInvoice, invoicePages.length, isLoading, order, shouldAutoPrint]);
 
   const handleBack = () => {
-    navigate('/orders', { state: orderId ? { selectedOrderId: orderId } : undefined });
+    navigate(returnId ? '/returns' : '/orders', {
+      state: returnId
+        ? { selectedReturnId: returnId }
+        : orderId ? { selectedOrderId: orderId } : undefined,
+    });
   };
 
   if (isLoading) {
@@ -338,7 +416,7 @@ export function Invoice() {
           className="flex h-10 items-center gap-2 bg-[#111827] px-5 text-sm font-semibold text-white shadow-sm hover:bg-black"
         >
           <Printer size={17} />
-          In hóa đơn
+          {salesReturn ? 'In phiếu trả' : 'In hóa đơn'}
         </button>
       </div>
 
@@ -375,6 +453,18 @@ export function Invoice() {
                 <dt>Địa chỉ:</dt>
                 <dd>{order.delivery_address ?? order.customers?.address ?? '---'}</dd>
               </div>
+              {salesReturn ? (
+                <>
+                  <div>
+                    <dt>Đơn gốc:</dt>
+                    <dd>{salesReturn.sales_orders?.order_no ?? '---'}</dd>
+                  </div>
+                  <div>
+                    <dt>Lý do trả:</dt>
+                    <dd>{salesReturn.reason || '---'}</dd>
+                  </div>
+                </>
+              ) : null}
               {sourceOrderNos.length ? (
                 <div>
                   <dt>Đơn gốc:</dt>
@@ -387,17 +477,24 @@ export function Invoice() {
           <div className="invoice-transaction">
             <dl>
               <div>
-                <dt>Mã hóa đơn:</dt>
+                <dt>{salesReturn ? 'Mã phiếu trả:' : 'Mã hóa đơn:'}</dt>
                 <dd>#{invoiceNo}</dd>
               </div>
               <div>
-                <dt>Ngày tạo:</dt>
+                <dt>{salesReturn ? 'Ngày trả:' : 'Ngày tạo:'}</dt>
                 <dd>{formatDateTime(order.sold_at)}</dd>
               </div>
-              <div>
-                <dt>Thu ngân:</dt>
-                <dd>{order.cashier?.full_name ?? '---'}</dd>
-              </div>
+              {salesReturn ? (
+                <div>
+                  <dt>Trạng thái:</dt>
+                  <dd>{getReturnStatusLabel(salesReturn.status)}</dd>
+                </div>
+              ) : (
+                <div>
+                  <dt>Thu ngân:</dt>
+                  <dd>{order.cashier?.full_name ?? '---'}</dd>
+                </div>
+              )}
             </dl>
           </div>
         </section>
@@ -437,7 +534,7 @@ export function Invoice() {
               ) : (
                 <tr>
                   <td colSpan={6} className="empty-row">
-                    Chưa có sản phẩm trong đơn hàng.
+                    {salesReturn ? 'Chưa có sản phẩm trả.' : 'Chưa có sản phẩm trong đơn hàng.'}
                   </td>
                 </tr>
               )}
@@ -450,40 +547,40 @@ export function Invoice() {
           <>
         <section className="invoice-summary">
           <div className="invoice-summary-row">
-            <span>Tổng tiền hàng:</span>
+            <span>{salesReturn ? 'Tổng tiền hàng trả:' : 'Tổng tiền hàng:'}</span>
             <strong>{formatCurrency(subtotal)} đ</strong>
           </div>
-          {!shouldHideDiscount ? (
+          {!salesReturn && !shouldHideDiscount ? (
             <div className="invoice-summary-row">
               <span>Chiết khấu / Giảm giá:</span>
               <strong>{discountAmount ? `- ${formatCurrency(discountAmount)} đ` : '0 đ'}</strong>
             </div>
           ) : null}
-          {shippingFee > 0 ? (
+          {!salesReturn && shippingFee > 0 ? (
             <div className="invoice-summary-row">
               <span>Phí giao hàng:</span>
               <strong>{formatCurrency(shippingFee)} đ</strong>
             </div>
           ) : null}
-          {taxAmount > 0 ? (
+          {!salesReturn && taxAmount > 0 ? (
             <div className="invoice-summary-row">
               <span>Thuế:</span>
               <strong>{formatCurrency(taxAmount)} đ</strong>
             </div>
           ) : null}
           <div className="invoice-grand-total">
-            <span>TỔNG CỘNG:</span>
+            <span>{salesReturn ? 'TIỀN HOÀN:' : 'TỔNG CỘNG:'}</span>
             <strong>{formatCurrency(totalAmount)} đ</strong>
           </div>
         </section>
 
         <section className="invoice-signatures">
           <div>
-            <strong>NGƯỜI MUA HÀNG</strong>
+            <strong>{salesReturn ? 'NGƯỜI TRẢ HÀNG' : 'NGƯỜI MUA HÀNG'}</strong>
             <span>(Ký, ghi rõ họ tên)</span>
           </div>
           <div>
-            <strong>NGƯỜI BÁN HÀNG</strong>
+            <strong>{salesReturn ? 'NGƯỜI NHẬN HÀNG' : 'NGƯỜI BÁN HÀNG'}</strong>
             <span>(Ký, ghi rõ họ tên)</span>
           </div>
         </section>
@@ -521,6 +618,18 @@ export function Invoice() {
                     <dt>Địa chỉ:</dt>
                     <dd>{order.delivery_address ?? order.customers?.address ?? '---'}</dd>
                   </div>
+                  {salesReturn ? (
+                    <>
+                      <div>
+                        <dt>Đơn gốc:</dt>
+                        <dd>{salesReturn.sales_orders?.order_no ?? '---'}</dd>
+                      </div>
+                      <div>
+                        <dt>Lý do trả:</dt>
+                        <dd>{salesReturn.reason || '---'}</dd>
+                      </div>
+                    </>
+                  ) : null}
                   {sourceOrderNos.length ? (
                     <div>
                       <dt>Đơn gốc:</dt>
@@ -533,17 +642,24 @@ export function Invoice() {
               <div className="invoice-transaction">
                 <dl>
                   <div>
-                    <dt>Mã hóa đơn:</dt>
+                    <dt>{salesReturn ? 'Mã phiếu trả:' : 'Mã hóa đơn:'}</dt>
                     <dd>#{invoiceNo}</dd>
                   </div>
                   <div>
-                    <dt>Ngày tạo:</dt>
+                    <dt>{salesReturn ? 'Ngày trả:' : 'Ngày tạo:'}</dt>
                     <dd>{formatDateTime(order.sold_at)}</dd>
                   </div>
-                  <div>
-                    <dt>Thu ngân:</dt>
-                    <dd>{order.cashier?.full_name ?? '---'}</dd>
-                  </div>
+                  {salesReturn ? (
+                    <div>
+                      <dt>Trạng thái:</dt>
+                      <dd>{getReturnStatusLabel(salesReturn.status)}</dd>
+                    </div>
+                  ) : (
+                    <div>
+                      <dt>Thu ngân:</dt>
+                      <dd>{order.cashier?.full_name ?? '---'}</dd>
+                    </div>
+                  )}
                 </dl>
               </div>
             </section>
@@ -586,40 +702,40 @@ export function Invoice() {
 
           <section className="invoice-summary" data-measure="summary">
             <div className="invoice-summary-row">
-              <span>Tổng tiền hàng:</span>
+              <span>{salesReturn ? 'Tổng tiền hàng trả:' : 'Tổng tiền hàng:'}</span>
               <strong>{formatCurrency(subtotal)} đ</strong>
             </div>
-            {!shouldHideDiscount ? (
+            {!salesReturn && !shouldHideDiscount ? (
               <div className="invoice-summary-row">
                 <span>Chiết khấu / Giảm giá:</span>
                 <strong>{discountAmount ? `- ${formatCurrency(discountAmount)} đ` : '0 đ'}</strong>
               </div>
             ) : null}
-            {shippingFee > 0 ? (
+            {!salesReturn && shippingFee > 0 ? (
               <div className="invoice-summary-row">
                 <span>Phí giao hàng:</span>
                 <strong>{formatCurrency(shippingFee)} đ</strong>
               </div>
             ) : null}
-            {taxAmount > 0 ? (
+            {!salesReturn && taxAmount > 0 ? (
               <div className="invoice-summary-row">
                 <span>Thuế:</span>
                 <strong>{formatCurrency(taxAmount)} đ</strong>
               </div>
             ) : null}
             <div className="invoice-grand-total">
-              <span>TỔNG CỘNG:</span>
+              <span>{salesReturn ? 'TIỀN HOÀN:' : 'TỔNG CỘNG:'}</span>
               <strong>{formatCurrency(totalAmount)} đ</strong>
             </div>
           </section>
 
           <section className="invoice-signatures" data-measure="signatures">
             <div>
-              <strong>NGƯỜI MUA HÀNG</strong>
+              <strong>{salesReturn ? 'NGƯỜI TRẢ HÀNG' : 'NGƯỜI MUA HÀNG'}</strong>
               <span>(Ký, ghi rõ họ tên)</span>
             </div>
             <div>
-              <strong>NGƯỜI BÁN HÀNG</strong>
+              <strong>{salesReturn ? 'NGƯỜI NHẬN HÀNG' : 'NGƯỜI BÁN HÀNG'}</strong>
               <span>(Ký, ghi rõ họ tên)</span>
             </div>
           </section>

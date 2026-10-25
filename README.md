@@ -62,12 +62,14 @@ This project is locked to the following architecture:
 
 1. Install dependencies:
    `npm install`
-2. Backend env:
-   copy `backend/.env.example` to `backend/.env` and set your Supabase project URL and service role key
-3. Start the frontend and backend together:
-   `npm run dev`
-
-The frontend runs at `http://localhost:3000` and proxies `/api` requests to the backend on port `4000`.
+2. Frontend env:
+   copy `frontend/.env.example` to `frontend/.env` if needed
+3. Backend env:
+   copy `backend/.env.example` to `.env` if needed
+4. Run frontend:
+   `npm run dev:frontend`
+5. Run backend locally when needed:
+   `npm run dev:backend`
 
 ## Folder Purpose
 

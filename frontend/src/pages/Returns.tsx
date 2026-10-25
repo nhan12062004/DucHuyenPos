@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Loader2,
   PackageCheck,
+  Printer,
   RotateCcw,
   Search,
   X,
@@ -21,6 +22,7 @@ import { ToastBridge } from '../components/Toast';
 type ReturnsRouteState = {
   orderId?: string;
   orderNo?: string;
+  selectedReturnId?: string;
 } | null;
 
 function formatCurrency(value: number) {
@@ -101,6 +103,9 @@ export function Returns() {
         }
         setOrders(loadedOrders);
         setReturns(returnsResponse.data);
+        if (routeState?.selectedReturnId) {
+          setSelectedReturnId(routeState.selectedReturnId);
+        }
         const routedOrder = loadedOrders.find((order) => order.id === routeState?.orderId);
         if (routeState?.orderId && !routedOrder) {
           setShowCreateModal(false);
@@ -554,6 +559,16 @@ export function Returns() {
               </div>
 
               <div className="grid gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const params = new URLSearchParams({ returnId: selectedReturn.id, autoPrint: '1' });
+                    window.location.assign(`/invoice?${params.toString()}`);
+                  }}
+                  className="flex h-9 items-center justify-center gap-2 border border-[#0088FF] bg-white text-[13px] font-medium text-[#0088FF] hover:bg-blue-50"
+                >
+                  <Printer size={15} /> In phiếu trả
+                </button>
                 {selectedReturn.status === 'pending' ? (
                   <button
                     type="button"
