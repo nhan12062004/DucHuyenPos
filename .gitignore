@@ -8,3 +8,4 @@ database/backups/
 *.log
 .env*
 !.env.example
+.vercel
