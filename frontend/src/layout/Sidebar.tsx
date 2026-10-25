@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { preloadRoute } from '../routeModules';
+import { prefetchRouteData } from '../routePrefetch';
 
 interface SidebarProps {
   expanded: boolean;
@@ -127,6 +128,7 @@ function SidebarLabel({ expanded, children }: { expanded: boolean; children: Rea
 
 export function Sidebar({ expanded, setExpanded }: SidebarProps) {
   const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>({});
+  const prefetchTimerRef = React.useRef<number | null>(null);
   const location = useLocation();
   const isSettingsActive = location.pathname === '/settings' || location.pathname.startsWith('/settings/');
 
@@ -155,6 +157,29 @@ export function Sidebar({ expanded, setExpanded }: SidebarProps) {
 
     setOpenGroups((prev) => ({ ...prev, [groupName]: !prev[groupName] }));
   };
+
+  const cancelScheduledPrefetch = () => {
+    if (prefetchTimerRef.current !== null) {
+      window.clearTimeout(prefetchTimerRef.current);
+      prefetchTimerRef.current = null;
+    }
+  };
+
+  const prepareRoute = (path: string, immediate = false) => {
+    if (location.pathname === path) return;
+    preloadRoute(path);
+    cancelScheduledPrefetch();
+    if (immediate) {
+      prefetchRouteData(path);
+    } else {
+      prefetchTimerRef.current = window.setTimeout(() => {
+        prefetchRouteData(path);
+        prefetchTimerRef.current = null;
+      }, 120);
+    }
+  };
+
+  React.useEffect(() => cancelScheduledPrefetch, []);
 
   return (
     <motion.aside
@@ -288,9 +313,11 @@ export function Sidebar({ expanded, setExpanded }: SidebarProps) {
                             <motion.li key={child.path} variants={SUBMENU_ITEM_VARIANTS}>
                               <NavLink
                                 to={child.path}
-                                onPointerEnter={() => preloadRoute(child.path)}
-                                onFocus={() => preloadRoute(child.path)}
-                                onTouchStart={() => preloadRoute(child.path)}
+                                onPointerEnter={() => prepareRoute(child.path)}
+                                onPointerLeave={cancelScheduledPrefetch}
+                                onFocus={() => prepareRoute(child.path, true)}
+                                onTouchStart={() => prepareRoute(child.path, true)}
+                                onClick={() => prepareRoute(child.path, true)}
                                 className={cn(
                                   'block truncate px-4 py-2.5 pl-12 text-[14.5px] font-medium transition-colors',
                                   isActive ? ACTIVE_SUBITEM_CLASSES : DEFAULT_SUBITEM_CLASSES

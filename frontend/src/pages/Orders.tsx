@@ -61,6 +61,23 @@ type OrdersRouteState = {
 
 const ORDER_FILTERS_KEY = 'duc-huyen-pos.orders.filters';
 
+function readSavedOrderFilters() {
+  const defaults = { activeTab: 'all' as OrderTab, searchTerm: '', isProcessingHidden: false };
+  try {
+    const saved = window.localStorage.getItem(ORDER_FILTERS_KEY);
+    if (!saved) return defaults;
+    const parsed = JSON.parse(saved) as Partial<typeof defaults>;
+    return {
+      activeTab: parsed.activeTab === 'trading' ? 'trading' as OrderTab : 'all' as OrderTab,
+      searchTerm: typeof parsed.searchTerm === 'string' ? parsed.searchTerm : '',
+      isProcessingHidden: typeof parsed.isProcessingHidden === 'boolean' ? parsed.isProcessingHidden : false,
+    };
+  } catch {
+    window.localStorage.removeItem(ORDER_FILTERS_KEY);
+    return defaults;
+  }
+}
+
 const EMPTY_PROCESSING_SUMMARY: SalesOrdersProcessingSummary = {
   days: 90,
   pending: { count: 0, total_amount: 0 },
@@ -486,10 +503,14 @@ async function loadAllSalesOrders(query: SalesOrdersQuery) {
 }
 
 export function Orders() {
-  const [activeTab, setActiveTab] = useState<OrderTab>('all');
+  const location = useLocation();
+  const initialRouteState = location.state as OrdersRouteState;
+  const [savedFilters] = useState(readSavedOrderFilters);
+  const initialSearchTerm = initialRouteState?.searchTerm ?? savedFilters.searchTerm;
+  const [activeTab, setActiveTab] = useState<OrderTab>(initialRouteState?.activeTab ?? savedFilters.activeTab);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(initialSearchTerm);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [ordersRefreshVersion, setOrdersRefreshVersion] = useState(0);
@@ -506,12 +527,14 @@ export function Orders() {
   const [listError, setListError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
-  const [isProcessingHidden, setIsProcessingHidden] = useState(false);
+  const [isProcessingHidden, setIsProcessingHidden] = useState(
+    initialRouteState?.filters?.onlyProcessing ? false : savedFilters.isProcessingHidden,
+  );
   const [processingWindowDays, setProcessingWindowDays] = useState<7 | 30 | 90>(90);
   const [showProcessingWindowMenu, setShowProcessingWindowMenu] = useState(false);
   const [showPrintMenu, setShowPrintMenu] = useState(false);
   const [showCustomerExtra, setShowCustomerExtra] = useState(false);
-  const [dashboardFilter, setDashboardFilter] = useState<DashboardOrderFilter | null>(null);
+  const [dashboardFilter, setDashboardFilter] = useState<DashboardOrderFilter | null>(initialRouteState?.filters ?? null);
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportScope, setExportScope] = useState<ExportScope>('all');
   const [orderExportType, setOrderExportType] = useState<OrderExportType>('orders');
@@ -521,34 +544,6 @@ export function Orders() {
   const processingWindowRef = useRef<HTMLDivElement | null>(null);
   const printMenuRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
-  const location = useLocation();
-
-  useEffect(() => {
-    try {
-      const savedFilters = window.localStorage.getItem(ORDER_FILTERS_KEY);
-      if (!savedFilters) {
-        return;
-      }
-
-      const parsed = JSON.parse(savedFilters) as {
-        activeTab?: OrderTab;
-        searchTerm?: string;
-        isProcessingHidden?: boolean;
-      };
-
-      if (parsed.activeTab === 'all' || parsed.activeTab === 'trading') {
-        setActiveTab(parsed.activeTab);
-      }
-      if (typeof parsed.searchTerm === 'string') {
-        setSearchTerm(parsed.searchTerm);
-      }
-      if (typeof parsed.isProcessingHidden === 'boolean') {
-        setIsProcessingHidden(parsed.isProcessingHidden);
-      }
-    } catch {
-      window.localStorage.removeItem(ORDER_FILTERS_KEY);
-    }
-  }, []);
 
   useEffect(() => {
     const routeState = location.state as OrdersRouteState;

@@ -9,10 +9,29 @@ import type { User } from '@supabase/supabase-js';
 const _apiUrl = import.meta.env.VITE_API_URL as string | undefined;
 const BASE_URL = (_apiUrl && _apiUrl.trim()) ? _apiUrl.trim() : '/api';
 const REQUEST_TIMEOUT_MS = 30_000;
+const PREFETCH_TTL_MS = 10_000;
+const MAX_PREFETCHED_GETS = 40;
 let actorUser: User | null | undefined;
+const inFlightGets = new Map<string, Promise<unknown>>();
+const prefetchedGets = new Map<string, { promise: Promise<unknown>; expiresAt: number }>();
+
+function invalidatePrefetchedGets() {
+  prefetchedGets.clear();
+  inFlightGets.clear();
+}
 
 export function setApiActorUser(user: User | null) {
+  if (actorUser?.id !== user?.id) invalidatePrefetchedGets();
   actorUser = user;
+}
+
+function getRequestKey(path: string, params?: Record<string, string | number | boolean | undefined>) {
+  const query = new URLSearchParams();
+  Object.entries(params ?? {})
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .sort(([left], [right]) => left.localeCompare(right))
+    .forEach(([key, value]) => query.set(key, String(value)));
+  return `${path}?${query.toString()}`;
 }
 
 export class ApiError extends Error {
@@ -104,11 +123,55 @@ async function request<T>(
   return res.json() as Promise<T>;
 }
 
+function getRequest<T>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
+  const key = getRequestKey(path, params);
+  const prefetched = prefetchedGets.get(key);
+  if (prefetched) {
+    if (prefetched.expiresAt > Date.now()) return prefetched.promise as Promise<T>;
+    prefetchedGets.delete(key);
+  }
+
+  const inFlight = inFlightGets.get(key);
+  if (inFlight) return inFlight as Promise<T>;
+
+  const pending = request<T>('GET', path, undefined, params).finally(() => {
+    if (inFlightGets.get(key) === pending) inFlightGets.delete(key);
+  });
+  inFlightGets.set(key, pending);
+  return pending;
+}
+
+function prefetchGet<T>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
+  const key = getRequestKey(path, params);
+  const existing = prefetchedGets.get(key);
+  if (existing && existing.expiresAt > Date.now()) return existing.promise as Promise<T>;
+
+  const promise = getRequest<T>(path, params);
+  prefetchedGets.delete(key);
+  prefetchedGets.set(key, { promise, expiresAt: Date.now() + PREFETCH_TTL_MS });
+
+  while (prefetchedGets.size > MAX_PREFETCHED_GETS) {
+    const oldestKey = prefetchedGets.keys().next().value;
+    if (oldestKey) prefetchedGets.delete(oldestKey);
+  }
+
+  void promise.catch(() => {
+    if (prefetchedGets.get(key)?.promise === promise) prefetchedGets.delete(key);
+  });
+  return promise;
+}
+
+function mutate<T>(method: string, path: string, body?: unknown): Promise<T> {
+  invalidatePrefetchedGets();
+  return request<T>(method, path, body).finally(invalidatePrefetchedGets);
+}
+
 export const api = {
   get: <T>(path: string, params?: Record<string, string | number | boolean | undefined>) =>
-    request<T>('GET', path, undefined, params),
-  post: <T>(path: string, body: unknown) => request<T>('POST', path, body),
-  put: <T>(path: string, body: unknown) => request<T>('PUT', path, body),
-  patch: <T>(path: string, body: unknown) => request<T>('PATCH', path, body),
-  delete: <T>(path: string) => request<T>('DELETE', path),
+    getRequest<T>(path, params),
+  prefetchGet,
+  post: <T>(path: string, body: unknown) => mutate<T>('POST', path, body),
+  put: <T>(path: string, body: unknown) => mutate<T>('PUT', path, body),
+  patch: <T>(path: string, body: unknown) => mutate<T>('PATCH', path, body),
+  delete: <T>(path: string) => mutate<T>('DELETE', path),
 };

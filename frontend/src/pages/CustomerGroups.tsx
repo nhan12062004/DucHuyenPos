@@ -3,7 +3,6 @@ import { Plus, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   customersService,
-  type Customer,
   type CustomerGroup,
 } from '../services/customersService';
 import { PageLoader } from '../components/PageLoader';
@@ -30,7 +29,8 @@ function formatDate(value?: string) {
 export function CustomerGroups() {
   const navigate = useNavigate();
   const [groups, setGroups] = useState<CustomerGroup[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [groupCounts, setGroupCounts] = useState<Record<string, number> | null>(null);
+  const [countLoadFailed, setCountLoadFailed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -46,35 +46,40 @@ export function CustomerGroups() {
       setError(null);
 
       try {
-        const [groupList, firstCustomerPage] = await Promise.all([
-          customersService.getGroups(),
-          customersService.getAll({ page: 1, limit: 200 }),
-        ]);
+        const groupList = await customersService.getGroups();
+        if (!active) return;
+        setGroups(groupList);
+      } catch (loadError: any) {
+        if (active) setError(loadError?.message ?? 'Không tải được nhóm khách hàng.');
+        return;
+      } finally {
+        if (active) setIsLoading(false);
+      }
 
-        const pages = [firstCustomerPage];
-        if (firstCustomerPage.totalPages > 1) {
-          const remaining = await Promise.all(
-            Array.from({ length: firstCustomerPage.totalPages - 1 }, (_, index) =>
+      // Counts can finish later; the group list is already usable.
+      try {
+        const firstPage = await customersService.getAll({ page: 1, limit: 200 });
+        const remaining = firstPage.totalPages > 1
+          ? await Promise.all(
+            Array.from({ length: firstPage.totalPages - 1 }, (_, index) =>
               customersService.getAll({ page: index + 2, limit: 200 }),
             ),
-          );
-          pages.push(...remaining);
-        }
+          )
+          : [];
+        if (!active) return;
 
-        if (!active) {
-          return;
-        }
-
-        setGroups(groupList);
-        setCustomers(pages.flatMap((item) => item.data));
+        const counts = [firstPage, ...remaining].flatMap((pageResult) => pageResult.data)
+          .reduce<Record<string, number>>((acc, customer) => {
+            if (customer.customer_group_id) {
+              acc[customer.customer_group_id] = (acc[customer.customer_group_id] ?? 0) + 1;
+            }
+            return acc;
+          }, {});
+        setGroupCounts(counts);
       } catch (loadError: any) {
-        if (!active) {
-          return;
-        }
-        setError(loadError?.message ?? 'Không tải được nhóm khách hàng.');
-      } finally {
         if (active) {
-          setIsLoading(false);
+          setCountLoadFailed(true);
+          setError(loadError?.message ?? 'Không tải được số lượng khách hàng theo nhóm.');
         }
       }
     }
@@ -87,24 +92,16 @@ export function CustomerGroups() {
   }, []);
 
   const rows = useMemo<GroupRow[]>(() => {
-    const counts = customers.reduce<Record<string, number>>((acc, customer) => {
-      if (!customer.customer_group_id) {
-        return acc;
-      }
-      acc[customer.customer_group_id] = (acc[customer.customer_group_id] ?? 0) + 1;
-      return acc;
-    }, {});
-
     return [...groups]
       .map((group) => ({
         ...group,
-        count: counts[group.id] ?? 0,
+        count: groupCounts?.[group.id] ?? 0,
       }))
       .sort((left, right) => {
         const compare = left.name.localeCompare(right.name, 'vi');
         return sortOrder === 'asc' ? compare : -compare;
       });
-  }, [customers, groups, sortOrder]);
+  }, [groupCounts, groups, sortOrder]);
 
   const totalPages = Math.max(1, Math.ceil((rows.length || 1) / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -228,7 +225,7 @@ export function CustomerGroups() {
                     <td className="px-6 py-4 uppercase">{group.code}</td>
                     <td className="px-6 py-4">{group.group_type === 'fixed' ? 'Cố định' : 'Động'}</td>
                     <td className="px-6 py-4 text-slate-500">{group.description || ''}</td>
-                    <td className="px-6 py-4 text-right">{group.count}</td>
+                    <td className="px-6 py-4 text-right">{groupCounts ? group.count : countLoadFailed ? '---' : '...'}</td>
                     <td className="px-6 py-4 text-right">{formatDate(group.created_at)}</td>
                   </tr>
                 ))

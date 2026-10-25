@@ -8,6 +8,7 @@ import {
   Filter,
   Printer,
   ImageIcon,
+  Loader2,
   Settings,
 } from 'lucide-react';
 import {
@@ -50,11 +51,18 @@ function formatDate(value?: string) {
 export function InventoryManagement() {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [products, setProducts] = useState<Product[]>([]);
   const [stockMap, setStockMap] = useState<Record<string, ProductStockSummary>>({});
   const [isListLoading, setIsListLoading] = useState(true);
+  const [hasLoadedList, setHasLoadedList] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearchTerm(searchTerm), 250);
+    return () => window.clearTimeout(timer);
+  }, [searchTerm]);
 
   useEffect(() => {
     let active = true;
@@ -67,7 +75,7 @@ export function InventoryManagement() {
           productsService.getAll({
             page: 1,
             limit: 200,
-            search: searchTerm || undefined,
+            search: debouncedSearchTerm || undefined,
           }),
           productsService.getStockSummary(),
         ]);
@@ -89,6 +97,7 @@ export function InventoryManagement() {
       } finally {
         if (active) {
           setIsListLoading(false);
+          setHasLoadedList(true);
         }
       }
     }
@@ -98,7 +107,7 @@ export function InventoryManagement() {
     return () => {
       active = false;
     };
-  }, [searchTerm]);
+  }, [debouncedSearchTerm]);
 
   const visibleProducts = useMemo(() => {
     return products.map((product) => {
@@ -118,12 +127,17 @@ export function InventoryManagement() {
   const pagedProducts = visibleProducts.slice((safePage - 1) * pageSize, safePage * pageSize);
   const pageStart = pagedProducts.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const pageEnd = pagedProducts.length === 0 ? 0 : pageStart + pagedProducts.length - 1;
-  if (isListLoading) {
+  if (isListLoading && !hasLoadedList) {
     return <PageLoader text="Đang tải quản lý kho..." fullScreen />;
   }
 
   return (
     <div className="flex flex-col gap-4">
+      {isListLoading ? (
+        <div className="flex items-center gap-2 text-[12px] text-slate-500">
+          <Loader2 size={14} className="animate-spin" /> Đang cập nhật danh sách sản phẩm...
+        </div>
+      ) : null}
 
 
       <div className="list-toolbar">
