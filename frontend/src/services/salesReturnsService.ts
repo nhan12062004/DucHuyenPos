@@ -76,6 +76,9 @@ export const salesReturnsService = {
   getAll: (params?: SalesReturnsQuery) =>
     api.get<PaginatedResult<SalesReturn>>('/sales-returns', params as any),
 
+  getReturnedQuantities: (orderId: string) =>
+    api.get<Record<string, number>>(`/sales-returns/order/${orderId}/quantities`),
+
   getOne: (id: string) =>
     api.get<SalesReturn>(`/sales-returns/${id}`),
 

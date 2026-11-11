@@ -15,6 +15,11 @@ export class SalesReturnsController {
     return this.salesReturnsService.findAll(query);
   }
 
+  @Get('order/:orderId/quantities')
+  findReturnedQuantities(@Param('orderId') orderId: string) {
+    return this.salesReturnsService.findReturnedQuantities(orderId);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.salesReturnsService.findOne(id);

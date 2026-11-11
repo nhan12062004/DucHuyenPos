@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   CheckCircle,
@@ -63,7 +63,12 @@ export function Returns() {
   const navigate = useNavigate();
   const location = useLocation();
   const routeState = location.state as ReturnsRouteState;
+  const initialRouteState = useRef(routeState).current;
   const [orders, setOrders] = useState<SalesOrder[]>([]);
+  const [searchedOrders, setSearchedOrders] = useState<SalesOrder[]>([]);
+  const [orderSearch, setOrderSearch] = useState('');
+  const [isSearchingOrders, setIsSearchingOrders] = useState(false);
+  const [orderSearchError, setOrderSearchError] = useState<string | null>(null);
   const [returns, setReturns] = useState<SalesReturn[]>([]);
   const [selectedReturnId, setSelectedReturnId] = useState('');
   const [query, setQuery] = useState('');
@@ -74,6 +79,10 @@ export function Returns() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState('');
   const [returnQuantities, setReturnQuantities] = useState<Record<string, number>>({});
+  const [returnedQuantities, setReturnedQuantities] = useState<Record<string, number>>({});
+  const [checkedOrderId, setCheckedOrderId] = useState('');
+  const [isLoadingReturnedQuantities, setIsLoadingReturnedQuantities] = useState(false);
+  const [returnedQuantitiesError, setReturnedQuantitiesError] = useState<string | null>(null);
   const [reason, setReason] = useState('Khách trả hàng');
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -93,24 +102,25 @@ export function Returns() {
         ]);
         if (!active) return;
         let loadedOrders = ordersResponse.data;
-        if (routeState?.orderId && !loadedOrders.some((order) => order.id === routeState.orderId)) {
+        if (initialRouteState?.orderId && !loadedOrders.some((order) => order.id === initialRouteState.orderId)) {
           try {
-            const routedOrder = await salesOrdersService.getOne(routeState.orderId);
+            const routedOrder = await salesOrdersService.getOne(initialRouteState.orderId);
             loadedOrders = [...loadedOrders, routedOrder];
           } catch {
             // The order may have expired or been deleted.
           }
         }
+        if (!active) return;
         setOrders(loadedOrders);
         setReturns(returnsResponse.data);
-        if (routeState?.selectedReturnId) {
-          setSelectedReturnId(routeState.selectedReturnId);
+        if (initialRouteState?.selectedReturnId) {
+          setSelectedReturnId(initialRouteState.selectedReturnId);
         }
-        const routedOrder = loadedOrders.find((order) => order.id === routeState?.orderId);
-        if (routeState?.orderId && !routedOrder) {
+        const routedOrder = loadedOrders.find((order) => order.id === initialRouteState?.orderId);
+        if (initialRouteState?.orderId && !routedOrder) {
           setShowCreateModal(false);
           setError('Không tìm thấy đơn hàng gốc để trả hàng.');
-        } else if (routeState?.orderId && routedOrder?.status !== 'completed') {
+        } else if (initialRouteState?.orderId && routedOrder?.status !== 'completed') {
           setShowCreateModal(false);
           setError('Chỉ có thể tạo phiếu trả cho đơn đã hoàn thành.');
         }
@@ -123,8 +133,8 @@ export function Returns() {
 
     loadData();
 
-    if (routeState?.orderId) {
-      setSelectedOrderId(routeState.orderId);
+    if (initialRouteState?.orderId) {
+      setSelectedOrderId(initialRouteState.orderId);
       setShowCreateModal(true);
       navigate('/returns', { replace: true, state: null });
     }
@@ -132,15 +142,88 @@ export function Returns() {
     return () => {
       active = false;
     };
-  }, [navigate, routeState?.orderId]);
+  }, [navigate, initialRouteState]);
+
+  useEffect(() => {
+    const search = orderSearch.trim();
+    if (!showCreateModal || !search) {
+      setSearchedOrders([]);
+      setIsSearchingOrders(false);
+      setOrderSearchError(null);
+      return;
+    }
+
+    let active = true;
+    setIsSearchingOrders(true);
+    setOrderSearchError(null);
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const response = await salesOrdersService.getAll({
+          page: 1,
+          limit: 50,
+          search,
+          status: 'completed',
+        });
+        if (!active) return;
+        setSearchedOrders(response.data);
+        setOrders((current) => [
+          ...current,
+          ...response.data.filter((order) => !current.some((existing) => existing.id === order.id)),
+        ]);
+      } catch (nextError: any) {
+        if (active) setOrderSearchError(nextError?.message ?? 'Không tìm được đơn hàng.');
+      } finally {
+        if (active) setIsSearchingOrders(false);
+      }
+    }, 300);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [orderSearch, showCreateModal]);
+
+  useEffect(() => {
+    if (!selectedOrderId) {
+      setReturnedQuantities({});
+      setCheckedOrderId('');
+      setReturnedQuantitiesError(null);
+      setIsLoadingReturnedQuantities(false);
+      return;
+    }
+
+    let active = true;
+    setReturnedQuantities({});
+    setCheckedOrderId('');
+    setReturnedQuantitiesError(null);
+    setIsLoadingReturnedQuantities(true);
+    salesReturnsService.getReturnedQuantities(selectedOrderId)
+      .then((quantities) => {
+        if (active) {
+          setReturnedQuantities(quantities);
+          setCheckedOrderId(selectedOrderId);
+        }
+      })
+      .catch((nextError: any) => {
+        if (active) setReturnedQuantitiesError(nextError?.message ?? 'Không kiểm tra được số lượng đã trả.');
+      })
+      .finally(() => {
+        if (active) setIsLoadingReturnedQuantities(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedOrderId]);
 
   useEffect(() => {
     const selectedOrder = orders.find((order) => order.id === selectedOrderId);
-    const nextQuantities = (selectedOrder?.sales_order_items ?? []).reduce<Record<string, number>>((acc, item) => {
-      acc[item.id] = 0;
-      return acc;
-    }, {});
-    setReturnQuantities(nextQuantities);
+    setReturnQuantities((current) =>
+      (selectedOrder?.sales_order_items ?? []).reduce<Record<string, number>>((acc, item) => {
+        acc[item.id] = current[item.id] ?? 0;
+        return acc;
+      }, {}),
+    );
   }, [orders, selectedOrderId]);
 
   const filteredReturns = useMemo(() => {
@@ -160,18 +243,12 @@ export function Returns() {
   const selectedReturn = returns.find((item) => item.id === selectedReturnId) ?? filteredReturns[0] ?? null;
   const selectedOrder = orders.find((order) => order.id === selectedOrderId) ?? null;
   const selectedOrderItems = selectedOrder?.sales_order_items ?? [];
-  const returnedQuantities = useMemo(() => {
-    const quantities: Record<string, number> = {};
-    returns
-      .filter((item) => item.sales_order_id === selectedOrderId && item.status !== 'cancelled')
-      .flatMap((item) => item.sales_return_items ?? [])
-      .forEach((item) => {
-        if (item.sales_order_item_id) {
-          quantities[item.sales_order_item_id] = (quantities[item.sales_order_item_id] ?? 0) + Number(item.quantity ?? 0);
-        }
-      });
-    return quantities;
-  }, [returns, selectedOrderId]);
+  const visibleOrders = orderSearch.trim()
+    ? searchedOrders.filter((order) => order.status === 'completed')
+    : orders.filter((order) => order.status === 'completed');
+  if (selectedOrder?.status === 'completed' && !visibleOrders.some((order) => order.id === selectedOrder.id)) {
+    visibleOrders.unshift(selectedOrder);
+  }
   const returnItemsPreview = selectedOrderItems
     .map((item) => {
       const quantity = Number(returnQuantities[item.id] ?? 0);
@@ -204,6 +281,10 @@ export function Returns() {
   };
 
   const handleCreateReturn = async () => {
+    if (selectedOrderId && (checkedOrderId !== selectedOrderId || returnedQuantitiesError)) {
+      setInfoMessage('Chưa kiểm tra được số lượng hàng đã trả. Vui lòng thử lại.');
+      return;
+    }
     if (!selectedOrder) {
       setInfoMessage('Vui lòng chọn đơn hàng cần trả.');
       return;
@@ -296,6 +377,13 @@ export function Returns() {
               <div className="space-y-4">
                 <div>
                   <label className="mb-2 block text-[13px] font-medium text-slate-600">Đơn hàng gốc</label>
+                  <input
+                    type="search"
+                    value={orderSearch}
+                    onChange={(event) => setOrderSearch(event.target.value)}
+                    placeholder="Tìm mã đơn hoặc tên khách hàng"
+                    className="mb-2 h-9 w-full border border-slate-300 bg-white px-3 text-[13px] outline-none focus:border-[#0088FF]"
+                  />
                   <div className="relative">
                     <select
                       value={selectedOrderId}
@@ -303,16 +391,21 @@ export function Returns() {
                       className="h-9 w-full appearance-none border border-slate-300 bg-white px-3 pr-8 text-[13px] outline-none focus:border-[#0088FF]"
                     >
                       <option value="">Chọn đơn hàng</option>
-                      {orders
-                        .filter((order) => order.status === 'completed')
-                        .map((order) => (
-                          <option key={order.id} value={order.id}>
-                            {order.order_no} - {order.customers?.full_name ?? 'Khách lẻ'}
-                          </option>
-                        ))}
+                      {visibleOrders.map((order) => (
+                        <option key={order.id} value={order.id}>
+                          {order.order_no} - {order.customers?.full_name ?? 'Khách lẻ'}
+                        </option>
+                      ))}
                     </select>
                     <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   </div>
+                  {isSearchingOrders ? <p className="mt-2 text-[12px] text-slate-500">Đang tìm đơn hàng...</p> : null}
+                  {orderSearchError ? <p className="mt-2 text-[12px] text-red-600">{orderSearchError}</p> : null}
+                  {orderSearch.trim() && !isSearchingOrders && !orderSearchError && searchedOrders.length === 0 ? (
+                    <p className="mt-2 text-[12px] text-slate-500">Không tìm thấy đơn đã hoàn thành.</p>
+                  ) : null}
+                  {isLoadingReturnedQuantities ? <p className="mt-2 text-[12px] text-slate-500">Đang kiểm tra số lượng đã trả...</p> : null}
+                  {returnedQuantitiesError ? <p className="mt-2 text-[12px] text-red-600">{returnedQuantitiesError}</p> : null}
                 </div>
 
                 <div>
@@ -378,6 +471,7 @@ export function Returns() {
                                 max={remainingQuantity}
                                 value={returnQuantities[item.id] ?? 0}
                                 onChange={(event) => handleQuantityChange(item, Number(event.target.value))}
+                                disabled={checkedOrderId !== selectedOrderId || !!returnedQuantitiesError}
                                 className="h-8 w-20 border border-slate-300 px-2 text-right outline-none focus:border-[#0088FF]"
                               />
                               {remainingQuantity === 0 ? <div className="mt-1 text-[11px] text-slate-500">Đã trả đủ</div> : null}
@@ -388,7 +482,7 @@ export function Returns() {
                       ) : (
                         <tr>
                           <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
-                            Chọn đơn hàng để xem sản phẩm.
+                            {selectedOrder ? 'Đơn hàng này không có dữ liệu sản phẩm để trả.' : 'Chọn đơn hàng để xem sản phẩm.'}
                           </td>
                         </tr>
                       )}
@@ -409,7 +503,7 @@ export function Returns() {
               <button
                 type="button"
                 onClick={handleCreateReturn}
-                disabled={isCreating}
+                disabled={isCreating || (selectedOrderId !== '' && checkedOrderId !== selectedOrderId) || !!returnedQuantitiesError}
                 className="flex h-9 items-center gap-2 bg-[#0088FF] px-5 text-[13px] font-medium text-white hover:bg-blue-700 disabled:bg-slate-300"
               >
                 {isCreating ? <Loader2 size={15} className="animate-spin" /> : <RotateCcw size={15} />}

@@ -274,6 +274,10 @@ export class SalesReturnsService {
     return quantities;
   }
 
+  async findReturnedQuantities(orderId: string): Promise<Record<string, number>> {
+    return Object.fromEntries(await this.getReturnedQuantities(orderId));
+  }
+
   private async applyReturnStock(returnRecord: any) {
     if (returnRecord.sales_order_id) {
       const { data: saleTransactions, error: saleTransactionsError } = await this.supabase
