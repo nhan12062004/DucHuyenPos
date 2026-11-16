@@ -107,7 +107,7 @@ export function Returns() {
             const routedOrder = await salesOrdersService.getOne(initialRouteState.orderId);
             loadedOrders = [...loadedOrders, routedOrder];
           } catch {
-            // The order may have expired or been deleted.
+            // The order may have been deleted.
           }
         }
         if (!active) return;
